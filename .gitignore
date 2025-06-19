@@ -1,0 +1,7 @@
+# Ignorer tout par défaut
+*
+
+# Sauf les scripts Python, requirements.txt et .gitignore
+!*.py
+!requirements.txt
+!.gitignore 
