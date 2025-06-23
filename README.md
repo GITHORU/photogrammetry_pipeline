@@ -1,7 +1,7 @@
 # Photogrammetry Pipeline
 
 <p align="center">
-  <img src="logo.png" alt="Logo Photogrammetry Pipeline" height="120"/>
+  <img src="logo.png" alt="Logo Photogrammetry Pipeline" height="240"/>
 </p>
 
 Ce projet propose un pipeline photogrammétrique automatisé en Python, s'appuyant sur MicMac pour la reconstruction 3D dense à partir d'un jeu d'images DNG. Il est conçu pour les chercheurs, ingénieurs et étudiants en géodésie, topographie ou vision par ordinateur.
