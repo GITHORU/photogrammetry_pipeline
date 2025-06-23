@@ -1,8 +1,9 @@
 # Ignorer tout par défaut
 *
 
-# Sauf les scripts Python, requirements.txt, README.md et .gitignore
+# Sauf les scripts Python, requirements.txt, README.md, .gitignore et logo.png
 !*.py
 !requirements.txt
 !README.md
-!.gitignore 
+!.gitignore
+!logo.png 
