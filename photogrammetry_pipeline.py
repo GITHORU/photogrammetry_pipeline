@@ -4,13 +4,7 @@ import sys
 from pathlib import Path
 import logging
 
-# Vérification des dépendances pour la conversion DNG -> TIF
-try:
-    import rawpy
-    import imageio
-except ImportError:
-    print("Erreur : les modules rawpy et imageio sont nécessaires pour la conversion DNG -> TIF.\nInstallez-les avec : pip install rawpy imageio")
-    sys.exit(1)
+# Vérification des dépendances pour la conversion DNG -> TIF (SUPPRIMÉE)
 
 def setup_logger(log_path):
     logger = logging.getLogger("PhotogrammetryPipeline")
@@ -34,9 +28,7 @@ def setup_logger(log_path):
 def run_command(cmd, logger, cwd=None):
     logger.info(f"Commande lancée : {' '.join(cmd)}")
     try:
-        # Affiche la sortie en temps réel dans le terminal
         result = subprocess.run(cmd, check=True, cwd=cwd, text=True, stdout=sys.stdout, stderr=sys.stderr)
-        # On ne logge plus la sortie ici car elle est déjà affichée
     except subprocess.CalledProcessError as e:
         logger.error(f"Erreur lors de l'exécution de la commande : {' '.join(cmd)}")
         logger.error(f"Code retour : {e.returncode}")
@@ -44,42 +36,15 @@ def run_command(cmd, logger, cwd=None):
         logger.error(f"Sortie erreur : voir terminal ci-dessus")
         raise
 
-def convert_dng_to_tif(input_dir, output_dir, logger):
-    os.makedirs(output_dir, exist_ok=True)
-    for dng_file in Path(input_dir).glob('*.DNG'):
-        tif_file = Path(output_dir) / (dng_file.stem + '.tif')
-        logger.info(f"Conversion {dng_file} -> {tif_file} avec rawpy")
-        try:
-            with rawpy.imread(str(dng_file)) as raw:
-                rgb = raw.postprocess()
-            imageio.imwrite(str(tif_file), rgb)
-            if tif_file.exists():
-                logger.info(f"Fichier généré : {tif_file}")
-            else:
-                logger.error(f"La conversion a échoué pour {dng_file}")
-        except Exception as e:
-            logger.error(f"Erreur lors de la conversion de {dng_file} : {e}")
-
-def run_micmac_tapioca(image_dir, logger, dng_dir=None):
-    # Si un dossier DNG est fourni et contient des DNG, utiliser ces images pour Tapioca
-    if dng_dir is not None and any(Path(dng_dir).glob('*.DNG')):
-        abs_dng_dir = os.path.abspath(dng_dir)
-        pattern = '.*.DNG'
-        logger.info(f"Tapioca va utiliser les DNG originaux dans {abs_dng_dir} ...")
-        cmd = [
-            'mm3d', 'Tapioca', 'MulScale', pattern, '500', '2700'
-        ]
-        run_command(cmd, logger, cwd=abs_dng_dir)
-        homol_dir = Path(abs_dng_dir) / 'Homol'
-    else:
-        abs_image_dir = os.path.abspath(image_dir)
-        pattern = '.*.tif'
-        logger.info(f"Tapioca va utiliser les TIFF dans {abs_image_dir} ...")
-        cmd = [
-            'mm3d', 'Tapioca', 'MulScale', pattern, '500', '2700'
-        ]
-        run_command(cmd, logger, cwd=abs_image_dir)
-        homol_dir = Path(abs_image_dir) / 'Homol'
+def run_micmac_tapioca(input_dir, logger):
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*.DNG'
+    logger.info(f"Tapioca va utiliser les DNG dans {abs_input_dir} avec le motif {pattern} ...")
+    cmd = [
+        'mm3d', 'Tapioca', 'MulScale', pattern, '500', '2700', 'ExpTxt=1'
+    ]
+    run_command(cmd, logger, cwd=abs_input_dir)
+    homol_dir = Path(abs_input_dir) / 'Homol'
     if homol_dir.exists() and any(homol_dir.iterdir()):
         logger.info(f"Dossier Homol généré : {homol_dir}")
     else:
@@ -87,39 +52,33 @@ def run_micmac_tapioca(image_dir, logger, dng_dir=None):
         raise RuntimeError("Le dossier Homol n'a pas été généré par Tapioca.")
     logger.info("Tapioca terminé.")
 
-def run_micmac_tapas(image_dir, logger, dng_dir=None):
-    abs_image_dir = os.path.abspath(image_dir)
-    # Si un dossier DNG est fourni et contient des DNG, utiliser ces images pour Tapas
-    if dng_dir is not None and any(Path(dng_dir).glob('*.DNG')):
-        abs_dng_dir = os.path.abspath(dng_dir)
-        pattern = '.*.DNG'
-        logger.info(f"Tapas va utiliser les DNG originaux dans {abs_dng_dir} ...")
-        cmd = [
-            'mm3d', 'Tapas', 'Fraser', pattern, 'Out=Fraser', 'ExpTxt=1'
-        ]
-        run_command(cmd, logger, cwd=abs_dng_dir)
-    else:
-        # Sinon, fallback sur les TIFF
-        pattern = '.*.tif'
-        logger.info(f"Tapas va utiliser les TIFF dans {abs_image_dir} ...")
-        cmd = [
-            'mm3d', 'Tapas', 'Fraser', pattern, 'Out=Fraser', 'ExpTxt=1'
-        ]
-        run_command(cmd, logger, cwd=abs_image_dir)
+def run_micmac_tapas(input_dir, logger):
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*.DNG'
+    logger.info(f"Tapas va utiliser les DNG dans {abs_input_dir} avec le motif {pattern} ...")
+    cmd = [
+        'mm3d', 'Tapas', 'Fraser', pattern, 'Out=Fraser', 'ExpTxt=1'
+    ]
+    run_command(cmd, logger, cwd=abs_input_dir)
     logger.info("Tapas terminé.")
 
-def run_micmac_c3dc(image_dir, logger):
-    abs_image_dir = os.path.abspath(image_dir)
+def run_micmac_c3dc(input_dir, logger):
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*.DNG'
+    logger.info(f"Lancement de C3DC (densification du nuage de points) dans {abs_input_dir} avec le motif {pattern} ...")
     cmd = [
-        'mm3d', 'C3DC', 'QuickMac', '.*.tif', 'Fraser', 'ExpTxt=1'
+        'mm3d', 'C3DC', 'QuickMac', pattern, 'Fraser', 'ExpTxt=1', 'ZoomF=1'
     ]
-    logger.info(f"Lancement de C3DC (densification du nuage de points) dans {abs_image_dir} ...")
-    run_command(cmd, logger, cwd=abs_image_dir)
-    mec_dir = Path(abs_image_dir) / 'MEC-QuickMac'
+    run_command(cmd, logger, cwd=abs_input_dir)
+    mec_dir = Path(abs_input_dir) / 'MEC-QuickMac'
     if mec_dir.exists():
         logger.info(f"Nuage dense généré dans : {mec_dir}")
     else:
-        logger.error("Le dossier du nuage dense n'a pas été trouvé après C3DC.")
+        mec_dir_alt = Path(abs_input_dir) / 'MEC-QuickMac'
+        if mec_dir_alt.exists():
+            logger.info(f"Nuage dense généré dans : {mec_dir_alt}")
+        else:
+            logger.error("Le dossier du nuage dense n'a pas été trouvé après C3DC.")
 
 def main():
     if len(sys.argv) == 2:
@@ -127,25 +86,21 @@ def main():
     else:
         input_dir = 'short_dataset'
         print("Aucun dossier d'images spécifié, utilisation du dossier par défaut : short_dataset")
-    tif_dir = os.path.join(input_dir, 'tif')
     log_path = os.path.join(input_dir, 'photogrammetry_pipeline.log')
     logger = setup_logger(log_path)
     logger.info(f"Début du pipeline photogrammétrique pour le dossier : {input_dir}")
 
     try:
-        # 1. Conversion DNG -> TIF (désactivée temporairement pour accélérer les tests)
-        # convert_dng_to_tif(input_dir, tif_dir, logger)
+        # 1. Points homologues sur DNG
+        run_micmac_tapioca(input_dir, logger)
 
-        # 2. Points homologues sur DNG si possible, sinon TIFF
-        run_micmac_tapioca(tif_dir, logger, dng_dir=input_dir)
+        # 2. Orientation sur DNG
+        run_micmac_tapas(input_dir, logger)
 
-        # 3. Orientation sur DNG si possible, sinon TIFF
-        run_micmac_tapas(tif_dir, logger, dng_dir=input_dir)
+        # 3. Densification sur DNG
+        run_micmac_c3dc(input_dir, logger)
 
-        # 4. Densification sur TIFF
-        run_micmac_c3dc(tif_dir, logger)
-
-        logger.info("Traitement terminé ! Le nuage dense est dans le dossier 'tif/MEC-QuickMac'.")
+        logger.info("Traitement terminé ! Le nuage dense est dans le dossier 'MEC-QuickMac'.")
     except Exception as e:
         logger.error(f"Erreur critique : {e}")
         logger.info("Arrêt du pipeline suite à une erreur.")
