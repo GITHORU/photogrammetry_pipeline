@@ -3,18 +3,16 @@
 Ce projet propose un pipeline photogrammétrique automatisé en Python, s'appuyant sur MicMac pour la reconstruction 3D dense à partir d'un jeu d'images DNG. Il est conçu pour les chercheurs, ingénieurs et étudiants en géodésie, topographie ou vision par ordinateur.
 
 ## Fonctionnalités principales
-- Conversion automatique des images DNG en TIFF (optionnel)
 - Détection des points homologues (Tapioca)
 - Calibration et orientation (Tapas)
 - Densification du nuage de points (C3DC)
 - Logs détaillés (console et fichier)
 - Compatible cluster de calcul (environnement Python isolé)
+- Parallélisation configurable (nombre de processeurs)
 
 ## Prérequis
 - **Python 3.8+**
 - **MicMac** installé et accessible via la commande `mm3d`
-- **rawpy** et **imageio** pour la conversion DNG → TIFF
-- (Optionnel) [ImageMagick](https://imagemagick.org/) ou [exiftool](https://exiftool.org/) pour manipuler les métadonnées
 
 ## Installation
 1. Clonez le dépôt :
@@ -37,13 +35,22 @@ Ce projet propose un pipeline photogrammétrique automatisé en Python, s'appuya
 
 ## Utilisation
 1. Placez vos images DNG dans un dossier (ex : `short_dataset/`).
-2. Lancez le pipeline :
+2. Lancez le pipeline avec la commande suivante :
    ```bash
-   python photogrammetry_pipeline.py short_dataset
+   python photogrammetry_pipeline.py <dossier_images> [--mode QuickMac|BigMac] [--zoomf 1] [--nb-proc 8]
    ```
-   - Par défaut, le script traite le dossier `short_dataset`.
-   - Les logs détaillés sont enregistrés dans `short_dataset/photogrammetry_pipeline.log`.
-3. Les résultats (nuage dense) sont générés dans `short_dataset/tif/MEC-QuickMac/`.
+   - `<dossier_images>` : dossier contenant les images DNG à traiter (par défaut : `short_dataset`)
+   - `--mode` : mode de densification C3DC (`QuickMac` ou `BigMac`, défaut : `QuickMac`)
+   - `--zoomf` : facteur de zoom/résolution pour C3DC (défaut : 1)
+   - `--nb-proc` : nombre de processeurs à utiliser pour Tapioca et C3DC (défaut : 8)
+
+   **Exemple :**
+   ```bash
+   python photogrammetry_pipeline.py short_dataset --mode QuickMac --zoomf 1 --nb-proc 16
+   ```
+   - Les logs détaillés sont enregistrés dans `<dossier_images>/photogrammetry_pipeline.log`.
+   - Un résumé synthétique est disponible dans `<dossier_images>/photogrammetry_pipeline_summary.log`.
+   - Les résultats (nuage dense) sont générés dans `<dossier_images>/PIMs-QuickMac/` ou `<dossier_images>/C3DC_QuickMac.ply` (selon le mode).
 
 ## Structure du projet
 ```
@@ -58,6 +65,7 @@ short_dataset/              # Exemple de dossier d'images (à créer)
 - Clonez le dépôt et installez les dépendances comme ci-dessus.
 - Vérifiez que MicMac est installé sur le cluster et accessible dans le PATH.
 - Utilisez un environnement virtuel pour isoler les dépendances Python.
+- Adaptez le paramètre `--nb-proc` selon les ressources disponibles.
 
 ## Contact
 Pour toute question, suggestion ou contribution :
