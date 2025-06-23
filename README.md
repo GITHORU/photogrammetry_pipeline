@@ -1,79 +1,101 @@
-# Photogrammetry Pipeline
+# PhotoGeoAlign
 
-<p align="center">
-  <img src="logo.png" alt="Logo Photogrammetry Pipeline" height="240"/>
-</p>
+![PhotoGeoAlign Logo](logo.png)
 
-Ce projet propose un pipeline photogrammétrique automatisé en Python, s'appuyant sur MicMac pour la reconstruction 3D dense à partir d'un jeu d'images DNG. Il est conçu pour les chercheurs, ingénieurs et étudiants en géodésie, topographie ou vision par ordinateur.
+**PhotoGeoAlign** est un pipeline photogrammétrique automatisé développé pour la recherche en géodésie. Il permet de traiter des images DNG pour générer des nuages de points denses avec une précision centimétrique.
 
-## Fonctionnalités principales
-- Détection des points homologues (Tapioca)
-- Calibration et orientation (Tapas)
-- Densification du nuage de points (C3DC)
-- Logs détaillés (console et fichier)
-- Compatible cluster de calcul (environnement Python isolé)
+## 🎯 Fonctionnalités
 
-## Prérequis
-- **Python 3.8+**
-- **MicMac** installé et accessible via la commande `mm3d`
+- **Interface graphique intuitive** avec PySide6
+- **Pipeline automatisé** basé sur MicMac (Tapioca, Tapas, C3DC)
+- **Support GPU** pour accélérer les calculs
+- **Mode console** pour l'intégration dans des scripts
+- **Logs en temps réel** dans l'interface
+- **Packaging Windows** automatisé avec PyInstaller
 
-## Installation
-1. Clonez le dépôt :
-   ```bash
-   git clone https://github.com/GITHORU/photogrammetry_pipeline.git
-   cd photogrammetry_pipeline
-   ```
-2. Créez et activez un environnement virtuel :
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   # ou
-   .\venv\Scripts\activate  # Windows
-   ```
-3. Installez les dépendances Python :
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Vérifiez que la commande `mm3d` fonctionne dans votre terminal.
+## 🚀 Installation
 
-## Utilisation
-1. Placez vos images DNG dans un dossier (ex : `short_dataset/`).
-2. Lancez le pipeline avec la commande suivante :
-   ```bash
-   python photogrammetry_pipeline.py <dossier_images> [--mode QuickMac|BigMac] [--zoomf 1]
-   ```
-   - `<dossier_images>` : dossier contenant les images DNG à traiter (par défaut : `short_dataset`)
-   - `--mode` : mode de densification C3DC (`QuickMac` ou `BigMac`, défaut : `QuickMac`)
-   - `--zoomf` : facteur de zoom/résolution pour C3DC (défaut : 1)
+### Prérequis
 
-   **Exemple :**
-   ```bash
-   python photogrammetry_pipeline.py short_dataset --mode QuickMac --zoomf 1
-   ```
-   - Les logs détaillés sont enregistrés dans `<dossier_images>/photogrammetry_pipeline.log`.
-   - Un résumé synthétique est disponible dans `<dossier_images>/photogrammetry_pipeline_summary.log`.
-   - Les résultats (nuage dense) sont générés dans `<dossier_images>/PIMs-QuickMac/` ou `<dossier_images>/C3DC_QuickMac.ply` (selon le mode).
+- Python 3.8+
+- MicMac installé et configuré dans le PATH
+- PySide6 pour l'interface graphique
 
-## Structure du projet
-```
-photogrammetry_pipeline.py   # Script principal
-photogrammetry_gui.py        # Interface graphique
-requirements.txt             # Dépendances Python
-.gitignore                  # Fichiers ignorés par git
-README.md                   # Ce fichier
-logo.png                    # Logo du projet
-short_dataset/              # Exemple de dossier d'images (à créer)
+### Installation des dépendances
+
+```bash
+pip install -r requirements.txt
 ```
 
-## Conseils pour le cluster
-- Clonez le dépôt et installez les dépendances comme ci-dessus.
-- Vérifiez que MicMac est installé sur le cluster et accessible dans le PATH.
-- Utilisez un environnement virtuel pour isoler les dépendances Python.
+## 📖 Utilisation
 
-## Contact
-Pour toute question, suggestion ou contribution :
-- Auteur : **Hugo R.**
-- Dépôt : [github.com/GITHORU/photogrammetry_pipeline](https://github.com/GITHORU/photogrammetry_pipeline)
+### Interface graphique
 
----
-**Bon traitement photogrammétrique !** 
+```bash
+python photogeoalign.py
+```
+
+### Mode console
+
+```bash
+python photogeoalign.py --no-gui --input /chemin/vers/images --output /chemin/vers/sortie --nb-proc 4 --gpu
+```
+
+### Options disponibles
+
+- `--no-gui` : Mode console sans interface graphique
+- `--input` : Dossier contenant les images DNG
+- `--output` : Dossier de sortie pour les résultats
+- `--nb-proc` : Nombre de processus (défaut: 4)
+- `--gpu` : Utiliser le GPU si disponible
+
+## 🔧 Pipeline photogrammétrique
+
+Le pipeline PhotoGeoAlign exécute automatiquement les étapes suivantes :
+
+1. **Tapioca** : Détection des points d'intérêt et mise en correspondance
+2. **Tapas** : Calcul de l'orientation des caméras
+3. **C3DC** : Génération du nuage de points dense
+
+## 🏗️ Build Windows
+
+Pour créer un exécutable Windows autonome :
+
+```bash
+build_exe.bat
+```
+
+L'exécutable sera généré dans le dossier `dist/` avec le logo intégré.
+
+## 📁 Structure du projet
+
+```
+photogeoalign/
+├── photogeoalign.py      # Application principale
+├── build_exe.bat         # Script de build Windows
+├── requirements.txt      # Dépendances Python
+├── logo.png             # Logo de l'application
+└── README.md            # Documentation
+```
+
+## 🎨 Interface utilisateur
+
+L'interface PhotoGeoAlign propose :
+
+- **Sélection des dossiers** d'entrée et de sortie
+- **Configuration** du nombre de processus et GPU
+- **Suivi en temps réel** de l'exécution
+- **Logs détaillés** de chaque étape
+- **Barre de progression** visuelle
+
+## 🔍 Précision
+
+PhotoGeoAlign est optimisé pour atteindre une **précision centimétrique** dans la génération de nuages de points, adapté aux besoins de la recherche en géodésie.
+
+## 📝 Licence
+
+Développé pour la recherche en géodésie - Tous droits réservés.
+
+## 🤝 Contribution
+
+Ce projet est développé dans le cadre de recherches en géodésie. Pour toute question ou contribution, veuillez contacter l'équipe de développement. 

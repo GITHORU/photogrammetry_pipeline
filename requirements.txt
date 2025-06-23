@@ -1,2 +1,2 @@
-rawpy
-imageio 
+# PhotoGeoAlign - Dépendances Python
+PySide6>=6.0.0 
