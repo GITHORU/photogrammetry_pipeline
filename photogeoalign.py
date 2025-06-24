@@ -55,13 +55,15 @@ def run_command(cmd, logger, cwd=None):
         logger.error(f"Code retour : {e.returncode}")
         raise
 
-def run_micmac_tapioca(input_dir, logger):
+def run_micmac_tapioca(input_dir, logger, extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*.DNG'
     logger.info(f"Tapioca va utiliser les DNG dans {abs_input_dir} avec le motif {pattern} ...")
     cmd = [
         'mm3d', 'Tapioca', 'MulScale', pattern, '500', '2700'
     ]
+    if extra_params:
+        cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
     homol_dir = Path(abs_input_dir) / 'Homol'
     if homol_dir.exists() and any(homol_dir.iterdir()):
@@ -71,23 +73,27 @@ def run_micmac_tapioca(input_dir, logger):
         raise RuntimeError("Le dossier Homol n'a pas été généré par Tapioca.")
     logger.info("Tapioca terminé.")
 
-def run_micmac_tapas(input_dir, logger):
+def run_micmac_tapas(input_dir, logger, tapas_model="Fraser", extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*.DNG'
     logger.info(f"Tapas va utiliser les DNG dans {abs_input_dir} avec le motif {pattern} ...")
     cmd = [
-        'mm3d', 'Tapas', 'Fraser', pattern, 'Out=Fraser'
+        'mm3d', 'Tapas', tapas_model, pattern, f'Out={tapas_model}'
     ]
+    if extra_params:
+        cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
     logger.info("Tapas terminé.")
 
-def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1):
+def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1, tapas_model='Fraser', extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*.DNG'
     logger.info(f"Lancement de C3DC ({mode}) dans {abs_input_dir} avec le motif {pattern} ...")
     cmd = [
-        'mm3d', 'C3DC', mode, pattern, 'Fraser', f'ZoomF={zoomf}'
+        'mm3d', 'C3DC', mode, pattern, tapas_model, f'ZoomF={zoomf}'
     ]
+    if extra_params:
+        cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
     logger.info(f"Nuage dense généré par C3DC {mode} (voir dossier PIMs-{mode}/ ou fichier C3DC_{mode}.ply)")
 
@@ -103,11 +109,15 @@ class PipelineThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, mode, zoomf):
+    def __init__(self, input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra):
         super().__init__()
         self.input_dir = input_dir
         self.mode = mode
         self.zoomf = zoomf
+        self.tapas_model = tapas_model
+        self.tapioca_extra = tapioca_extra
+        self.tapas_extra = tapas_extra
+        self.c3dc_extra = c3dc_extra
 
     def run(self):
         # Logger pour la GUI : uniquement dans la zone de logs
@@ -120,11 +130,11 @@ class PipelineThread(QThread):
         logger.addHandler(qt_handler)
         try:
             self.log_signal.emit("Démarrage du pipeline...\n")
-            run_micmac_tapioca(self.input_dir, logger)
+            run_micmac_tapioca(self.input_dir, logger, self.tapioca_extra)
             self.log_signal.emit("Tapioca terminé.\n")
-            run_micmac_tapas(self.input_dir, logger)
+            run_micmac_tapas(self.input_dir, logger, self.tapas_model, self.tapas_extra)
             self.log_signal.emit("Tapas terminé.\n")
-            run_micmac_c3dc(self.input_dir, logger, mode=self.mode, zoomf=self.zoomf)
+            run_micmac_c3dc(self.input_dir, logger, mode=self.mode, zoomf=self.zoomf, tapas_model=self.tapas_model, extra_params=self.c3dc_extra)
             self.log_signal.emit("C3DC terminé.\n")
             self.finished_signal.emit(True, "Pipeline terminé avec succès !")
         except Exception as e:
@@ -169,7 +179,8 @@ class PhotogrammetryGUI(QWidget):
         # Mode
         mode_layout = QHBoxLayout()
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["QuickMac", "BigMac"])
+        self.mode_combo.addItems(["QuickMac", "BigMac", "MicMac"])
+        self.mode_combo.setCurrentText("BigMac")
         mode_layout.addWidget(QLabel("Mode C3DC :"))
         mode_layout.addWidget(self.mode_combo)
         layout.addLayout(mode_layout)
@@ -184,10 +195,60 @@ class PhotogrammetryGUI(QWidget):
         zoom_layout.addWidget(self.zoom_spin)
         layout.addLayout(zoom_layout)
 
+        # Modèle Tapas
+        tapas_model_layout = QHBoxLayout()
+        self.tapas_model_combo = QComboBox()
+        self.tapas_model_combo.addItems([
+            "Fraser", "RadialBasic", "RadialStd", "RadialExtended", "FishEyeBasic", "FishEyeEqui", "Four15", "AddPoly", "AddFour", "AddDist", "AddAuto", "AddInv", "AddBrown", "AddC2M", "AddC2M2", "AddC2M3", "AddC2M4", "AddC2M5", "AddC2M6", "AddC2M7", "AddC2M8", "AddC2M9", "AddC2M10", "AddC2M11", "AddC2M12", "AddC2M13", "AddC2M14", "AddC2M15", "AddC2M16", "AddC2M17", "AddC2M18", "AddC2M19", "AddC2M20"
+        ])
+        self.tapas_model_combo.setCurrentText("Fraser")
+        tapas_model_layout.addWidget(QLabel("Modèle Tapas :"))
+        tapas_model_layout.addWidget(self.tapas_model_combo)
+        layout.addLayout(tapas_model_layout)
+
+        # Paramètres supplémentaires MicMac
+        extra_layout = QVBoxLayout()
+        self.tapioca_extra = QLineEdit()
+        self.tapioca_extra.setPlaceholderText("Paramètres supplémentaires pour Tapioca (optionnel)")
+        extra_layout.addWidget(self.tapioca_extra)
+        self.tapas_extra = QLineEdit()
+        self.tapas_extra.setPlaceholderText("Paramètres supplémentaires pour Tapas (optionnel)")
+        extra_layout.addWidget(self.tapas_extra)
+        self.c3dc_extra = QLineEdit()
+        self.c3dc_extra.setPlaceholderText("Paramètres supplémentaires pour C3DC (optionnel)")
+        extra_layout.addWidget(self.c3dc_extra)
+        layout.addLayout(extra_layout)
+
         # Bouton lancer
         self.run_btn = QPushButton("Lancer le pipeline")
+        self.run_btn.setStyleSheet("""
+            QPushButton:enabled {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+            }
+            QPushButton:enabled:hover {
+                background-color: #388E3C;
+            }
+        """)
         self.run_btn.clicked.connect(self.launch_pipeline)
         layout.addWidget(self.run_btn)
+
+        # Bouton arrêter
+        self.stop_btn = QPushButton("Arrêter")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.setStyleSheet("""
+            QPushButton:enabled {
+                background-color: #f44336;
+                color: white;
+                font-weight: bold;
+            }
+            QPushButton:enabled:hover {
+                background-color: #b71c1c;
+            }
+        """)
+        self.stop_btn.clicked.connect(self.stop_pipeline)
+        layout.addWidget(self.stop_btn)
 
         # Logs
         layout.addWidget(QLabel("Logs :"))
@@ -213,10 +274,15 @@ class PhotogrammetryGUI(QWidget):
             return
         mode = self.mode_combo.currentText()
         zoomf = self.zoom_spin.value()
+        tapas_model = self.tapas_model_combo.currentText()
+        tapioca_extra = self.tapioca_extra.text().strip()
+        tapas_extra = self.tapas_extra.text().strip()
+        c3dc_extra = self.c3dc_extra.text().strip()
         self.log_text.clear()
         self.summary_label.setText("")
         self.run_btn.setEnabled(False)
-        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf)
+        self.stop_btn.setEnabled(True)
+        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra)
         self.pipeline_thread.log_signal.connect(self.append_log)
         self.pipeline_thread.finished_signal.connect(self.pipeline_finished)
         self.pipeline_thread.start()
@@ -224,12 +290,21 @@ class PhotogrammetryGUI(QWidget):
     def append_log(self, text):
         self.log_text.append(text)
 
+    def stop_pipeline(self):
+        if self.pipeline_thread and self.pipeline_thread.isRunning():
+            self.pipeline_thread.terminate()
+            self.pipeline_thread.wait()
+            self.append_log("<span style='color:red'>Pipeline arrêté par l'utilisateur.</span>")
+            self.run_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+
     def pipeline_finished(self, success, message):
         if success:
             self.summary_label.setText(f"<span style='color:green'>{message}</span>")
         else:
             self.summary_label.setText(f"<span style='color:red'>{message}</span>")
         self.run_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
@@ -245,8 +320,12 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="Photogrammetry Pipeline (MicMac)")
         parser.add_argument('--no-gui', action='store_true', help='Lancer en mode console (sans interface graphique)')
         parser.add_argument('input_dir', nargs='?', default=None, help="Dossier d'images à traiter")
-        parser.add_argument('--mode', default='QuickMac', choices=['QuickMac', 'BigMac'], help='Mode de densification C3DC')
+        parser.add_argument('--mode', default='BigMac', choices=['QuickMac', 'BigMac', 'MicMac'], help='Mode de densification C3DC (défaut: BigMac)')
         parser.add_argument('--zoomf', type=int, default=1, help='Facteur de zoom (résolution) pour C3DC (1=max)')
+        parser.add_argument('--tapas-model', default='Fraser', help='Modèle Tapas à utiliser (défaut: Fraser)')
+        parser.add_argument('--tapioca-extra', default='', help='Paramètres supplémentaires pour Tapioca (optionnel)')
+        parser.add_argument('--tapas-extra', default='', help='Paramètres supplémentaires pour Tapas (optionnel)')
+        parser.add_argument('--c3dc-extra', default='', help='Paramètres supplémentaires pour C3DC (optionnel)')
         args = parser.parse_args()
         if args.no_gui:
             if not args.input_dir or not os.path.isdir(args.input_dir):
@@ -256,9 +335,10 @@ if __name__ == "__main__":
             logger = setup_logger(log_path)
             print(f"Début du pipeline photogrammétrique pour le dossier : {args.input_dir}")
             try:
-                run_micmac_tapioca(args.input_dir, logger)
-                run_micmac_tapas(args.input_dir, logger)
-                run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf)
+                tapas_model = args.tapas_model
+                run_micmac_tapioca(args.input_dir, logger, args.tapioca_extra)
+                run_micmac_tapas(args.input_dir, logger, tapas_model, args.tapas_extra)
+                run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf, tapas_model=tapas_model, extra_params=args.c3dc_extra)
                 print("Pipeline terminé avec succès !")
             except Exception as e:
                 print(f"Erreur lors de l'exécution du pipeline : {e}")
