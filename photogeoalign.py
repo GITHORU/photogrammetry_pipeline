@@ -3,14 +3,15 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
-    QMessageBox
+    QMessageBox, QSplashScreen
 )
 from PySide6.QtCore import QThread, Signal, Qt, QTimer
-from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtGui import QPixmap, QIcon, QMovie
 import subprocess
 import logging
 import argparse
 import time
+from time import sleep
 from pathlib import Path
 import re
 
@@ -168,16 +169,6 @@ class PhotogrammetryGUI(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-
-        # Logo en haut, centré
-        logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
-        if os.path.exists(logo_path):
-            logo_label = QLabel()
-            pixmap = QPixmap(logo_path)
-            pixmap = pixmap.scaledToHeight(120, Qt.TransformationMode.SmoothTransformation)
-            logo_label.setPixmap(pixmap)
-            logo_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-            layout.addWidget(logo_label)
 
         # Sélection dossier
         dir_layout = QHBoxLayout()
@@ -405,7 +396,7 @@ class PhotogrammetryGUI(QWidget):
 
 def check_micmac_or_quit():
     try:
-        result = subprocess.run(["mm3da"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(["mm3d"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if result.returncode != 0 and "usage" not in result.stdout.lower() and "usage" not in result.stderr.lower():
             raise FileNotFoundError
     except Exception:
@@ -424,16 +415,37 @@ def check_micmac_or_quit():
         msg.exec()
         sys.exit(1)
 
+main_window = None  # Variable globale pour conserver la fenêtre principale
+
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         check_micmac_or_quit()
         # Lancement GUI pur (aucun argument)
         app = QApplication(sys.argv)
+        # Splash screen statique avec le logo
+        splash = QLabel()
+        splash.setWindowFlags(Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint)
+        splash.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        splash.setStyleSheet("background: transparent; border: none;")
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
-        if os.path.exists(logo_path):
-            app.setWindowIcon(QIcon(logo_path))
-        gui = PhotogrammetryGUI()
-        gui.show()
+        pixmap = QPixmap(logo_path)
+        # Redimensionne le logo à 300px de large (hauteur ajustée automatiquement)
+        target_width = 300
+        scaled_pixmap = pixmap.scaledToWidth(target_width, Qt.TransformationMode.SmoothTransformation)
+        splash.setPixmap(scaled_pixmap)
+        splash.setFixedSize(scaled_pixmap.size())
+        splash.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        splash.show()
+        app.processEvents()
+        def show_main():
+            global main_window
+            logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+            if os.path.exists(logo_path):
+                app.setWindowIcon(QIcon(logo_path))
+            main_window = PhotogrammetryGUI()
+            main_window.show()
+            splash.close()
+        QTimer.singleShot(3000, show_main)
         sys.exit(app.exec())
     else:
         parser = argparse.ArgumentParser(description="Photogrammetry Pipeline (MicMac)")
