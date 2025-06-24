@@ -38,7 +38,11 @@ def setup_logger(log_path=None):
 def run_command(cmd, logger, cwd=None):
     logger.info(f"Commande lancée : {' '.join(cmd)}")
     try:
-        process = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True)
+        creationflags = 0
+        if os.name == 'nt':
+            import subprocess as sp
+            creationflags = sp.CREATE_NO_WINDOW
+        process = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True, creationflags=creationflags)
         if process.stdout is not None:
             for line in process.stdout:
                 logger.info(line.rstrip())
@@ -228,32 +232,42 @@ class PhotogrammetryGUI(QWidget):
         self.run_btn.setEnabled(True)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Photogrammetry Pipeline (MicMac)")
-    parser.add_argument('--no-gui', action='store_true', help='Lancer en mode console (sans interface graphique)')
-    parser.add_argument('input_dir', nargs='?', default=None, help="Dossier d'images à traiter")
-    parser.add_argument('--mode', default='QuickMac', choices=['QuickMac', 'BigMac'], help='Mode de densification C3DC')
-    parser.add_argument('--zoomf', type=int, default=1, help='Facteur de zoom (résolution) pour C3DC (1=max)')
-    args = parser.parse_args()
-    if args.no_gui:
-        if not args.input_dir or not os.path.isdir(args.input_dir):
-            print("Erreur : veuillez spécifier un dossier d'images valide.")
-            sys.exit(1)
-        log_path = os.path.join(args.input_dir, 'photogrammetry_pipeline.log')
-        logger = setup_logger(log_path)
-        print(f"Début du pipeline photogrammétrique pour le dossier : {args.input_dir}")
-        try:
-            run_micmac_tapioca(args.input_dir, logger)
-            run_micmac_tapas(args.input_dir, logger)
-            run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf)
-            print("Pipeline terminé avec succès !")
-        except Exception as e:
-            print(f"Erreur lors de l'exécution du pipeline : {e}")
-            sys.exit(1)
-    else:
+    if len(sys.argv) == 1:
+        # Lancement GUI pur (aucun argument)
         app = QApplication(sys.argv)
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
         if os.path.exists(logo_path):
             app.setWindowIcon(QIcon(logo_path))
         gui = PhotogrammetryGUI()
         gui.show()
-        sys.exit(app.exec()) 
+        sys.exit(app.exec())
+    else:
+        parser = argparse.ArgumentParser(description="Photogrammetry Pipeline (MicMac)")
+        parser.add_argument('--no-gui', action='store_true', help='Lancer en mode console (sans interface graphique)')
+        parser.add_argument('input_dir', nargs='?', default=None, help="Dossier d'images à traiter")
+        parser.add_argument('--mode', default='QuickMac', choices=['QuickMac', 'BigMac'], help='Mode de densification C3DC')
+        parser.add_argument('--zoomf', type=int, default=1, help='Facteur de zoom (résolution) pour C3DC (1=max)')
+        args = parser.parse_args()
+        if args.no_gui:
+            if not args.input_dir or not os.path.isdir(args.input_dir):
+                print("Erreur : veuillez spécifier un dossier d'images valide.")
+                sys.exit(1)
+            log_path = os.path.join(args.input_dir, 'photogrammetry_pipeline.log')
+            logger = setup_logger(log_path)
+            print(f"Début du pipeline photogrammétrique pour le dossier : {args.input_dir}")
+            try:
+                run_micmac_tapioca(args.input_dir, logger)
+                run_micmac_tapas(args.input_dir, logger)
+                run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf)
+                print("Pipeline terminé avec succès !")
+            except Exception as e:
+                print(f"Erreur lors de l'exécution du pipeline : {e}")
+                sys.exit(1)
+        else:
+            app = QApplication(sys.argv)
+            logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+            if os.path.exists(logo_path):
+                app.setWindowIcon(QIcon(logo_path))
+            gui = PhotogrammetryGUI()
+            gui.show()
+            sys.exit(app.exec()) 
