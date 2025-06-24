@@ -12,6 +12,11 @@ import argparse
 import time
 from pathlib import Path
 
+# Protection freeze_support pour Windows/pyinstaller
+if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
+
 def setup_logger(log_path=None):
     logger = logging.getLogger("PhotogrammetryPipeline")
     logger.setLevel(logging.DEBUG)
