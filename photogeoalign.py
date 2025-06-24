@@ -11,6 +11,7 @@ import logging
 import argparse
 import time
 from pathlib import Path
+import re
 
 # Protection freeze_support pour Windows/pyinstaller
 if __name__ == "__main__":
@@ -42,10 +43,22 @@ def run_command(cmd, logger, cwd=None):
         if os.name == 'nt':
             import subprocess as sp
             creationflags = sp.CREATE_NO_WINDOW
-        process = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True, creationflags=creationflags)
+        process = subprocess.Popen(
+            cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1, universal_newlines=True,
+            creationflags=creationflags,
+            stdin=subprocess.PIPE
+        )
         if process.stdout is not None:
             for line in process.stdout:
                 logger.info(line.rstrip())
+                if 'Warn tape enter to continue' in line:
+                    try:
+                        if process.stdin is not None:
+                            process.stdin.write('\n')
+                            process.stdin.flush()
+                    except Exception:
+                        pass
         process.wait()
         if process.returncode != 0:
             logger.error(f"Erreur lors de l'exécution de la commande : {' '.join(cmd)} (code {process.returncode})")
@@ -199,7 +212,36 @@ class PhotogrammetryGUI(QWidget):
         tapas_model_layout = QHBoxLayout()
         self.tapas_model_combo = QComboBox()
         self.tapas_model_combo.addItems([
-            "Fraser", "RadialBasic", "RadialStd", "RadialExtended", "FishEyeBasic", "FishEyeEqui", "Four15", "AddPoly", "AddFour", "AddDist", "AddAuto", "AddInv", "AddBrown", "AddC2M", "AddC2M2", "AddC2M3", "AddC2M4", "AddC2M5", "AddC2M6", "AddC2M7", "AddC2M8", "AddC2M9", "AddC2M10", "AddC2M11", "AddC2M12", "AddC2M13", "AddC2M14", "AddC2M15", "AddC2M16", "AddC2M17", "AddC2M18", "AddC2M19", "AddC2M20"
+            "RadialBasic",
+            "RadialExtended",
+            "Fraser",
+            "FishEyeEqui",
+            "AutoCal",
+            "Figee",
+            "HemiEqui",
+            "RadialStd",
+            "FraserBasic",
+            "FishEyeBasic",
+            "FE_EquiSolBasic",
+            "Four7x2",
+            "Four11x2",
+            "Four15x2",
+            "Four19x2",
+            "AddFour7x2",
+            "AddFour11x2",
+            "AddFour15x2",
+            "AddFour19x2",
+            "AddPolyDeg0",
+            "AddPolyDeg1",
+            "AddPolyDeg2",
+            "AddPolyDeg3",
+            "AddPolyDeg4",
+            "AddPolyDeg5",
+            "AddPolyDeg6",
+            "AddPolyDeg7",
+            "Ebner",
+            "Brown",
+            "FishEyeStereo"
         ])
         self.tapas_model_combo.setCurrentText("Fraser")
         tapas_model_layout.addWidget(QLabel("Modèle Tapas :"))
@@ -260,7 +302,42 @@ class PhotogrammetryGUI(QWidget):
         self.summary_label = QLabel("")
         layout.addWidget(self.summary_label)
 
+        # Ligne de commande équivalente (non éditable)
+        self.cmd_label = QLabel("Ligne de commande CLI équivalente :")
+        layout.addWidget(self.cmd_label)
+        self.cmd_line = QLineEdit()
+        self.cmd_line.setReadOnly(True)
+        self.cmd_line.setStyleSheet("font-family: monospace;")
+        layout.addWidget(self.cmd_line)
+
         self.setLayout(layout)
+
+        # Connecte les changements de paramètres à la mise à jour de la ligne de commande
+        self.dir_edit.textChanged.connect(self.update_cmd_line)
+        self.mode_combo.currentTextChanged.connect(self.update_cmd_line)
+        self.zoom_spin.valueChanged.connect(self.update_cmd_line)
+        self.tapas_model_combo.currentTextChanged.connect(self.update_cmd_line)
+        self.tapioca_extra.textChanged.connect(self.update_cmd_line)
+        self.tapas_extra.textChanged.connect(self.update_cmd_line)
+        self.c3dc_extra.textChanged.connect(self.update_cmd_line)
+        self.update_cmd_line()
+
+    def update_cmd_line(self):
+        input_dir = self.dir_edit.text().strip() or "<dossier_images>"
+        mode = self.mode_combo.currentText()
+        zoomf = self.zoom_spin.value()
+        tapas_model = self.tapas_model_combo.currentText()
+        tapioca_extra = self.tapioca_extra.text().strip()
+        tapas_extra = self.tapas_extra.text().strip()
+        c3dc_extra = self.c3dc_extra.text().strip()
+        cmd = ["python photogeoalign.py", "--no-gui", f'"{input_dir}"', f"--mode {mode}", f"--tapas-model {tapas_model}", f"--zoomf {zoomf}"]
+        if tapioca_extra:
+            cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
+        if tapas_extra:
+            cmd.append(f"--tapas-extra \"{tapas_extra}\"")
+        if c3dc_extra:
+            cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
+        self.cmd_line.setText(" ".join(cmd))
 
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'images")
@@ -288,7 +365,26 @@ class PhotogrammetryGUI(QWidget):
         self.pipeline_thread.start()
 
     def append_log(self, text):
-        self.log_text.append(text)
+        # Recherche du format : '2025-06-24 13:11:38,200 - INFO - message'
+        m = re.match(r"^(.*? - )([A-Z]+)( - )(.*)$", text)
+        if m:
+            timestamp = m.group(1)
+            level = m.group(2)
+            sep = m.group(3)
+            message = m.group(4)
+            if level == "INFO":
+                color = "#1565c0"  # bleu
+            elif level in ("WARNING", "WARN"): 
+                color = "#ff9800"  # orange
+            elif level == "ERROR":
+                color = "#d32f2f"  # rouge
+            else:
+                color = "#8e24aa"  # violet
+            html = f"<span>{timestamp}</span><span style='color:{color};'>{level}</span><span>{sep}</span><span style='font-weight:bold;color:{color};'>{message}</span>"
+        else:
+            # Pas de format reconnu, affiche en violet
+            html = f"<span style='font-weight:bold;color:#8e24aa'>{text}</span>"
+        self.log_text.append(html)
 
     def stop_pipeline(self):
         if self.pipeline_thread and self.pipeline_thread.isRunning():
