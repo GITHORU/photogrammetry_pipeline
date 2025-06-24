@@ -1,101 +1,72 @@
 # PhotoGeoAlign
 
-![PhotoGeoAlign Logo](logo.png)
+<p align="center">
+  <img src="logo.png" alt="Logo PhotoGeoAlign" height="300"/>
+</p>
 
-**PhotoGeoAlign** est un pipeline photogrammétrique automatisé développé pour la recherche en géodésie. Il permet de traiter des images DNG pour générer des nuages de points denses avec une précision centimétrique.
+PhotoGeoAlign est un pipeline photogrammétrique automatisé et personnalisable basé sur MicMac, utilisable en interface graphique (GUI) ou en ligne de commande (CLI). Il fonctionne sous Windows, Linux et macOS.
 
-## 🎯 Fonctionnalités
+## Fonctionnalités principales
+- Interface graphique moderne (PySide6)
+- Pipeline automatisé (Tapioca, Tapas, C3DC)
+- Choix du modèle Tapas parmi de nombreux modèles (Fraser, RadialBasic, etc.)
+- Modes C3DC : QuickMac, BigMac, MicMac
+- Paramètres personnalisés pour chaque étape (Tapioca, Tapas, C3DC)
+- Logs détaillés et colorés dans l'interface
+- Affichage dynamique de la ligne de commande CLI équivalente
+- Arrêt du pipeline à tout moment
+- Compatible Windows, Linux, macOS
 
-- **Interface graphique intuitive** avec PySide6
-- **Pipeline automatisé** basé sur MicMac (Tapioca, Tapas, C3DC)
-- **Support GPU** pour accélérer les calculs
-- **Mode console** pour l'intégration dans des scripts
-- **Logs en temps réel** dans l'interface
-- **Packaging Windows** automatisé avec PyInstaller
+## Utilisation
 
-## 🚀 Installation
-
-### Prérequis
-
-- Python 3.8+
-- MicMac installé et configuré dans le PATH
-- PySide6 pour l'interface graphique
-
-### Installation des dépendances
-
-```bash
-pip install -r requirements.txt
-```
-
-## 📖 Utilisation
-
-### Interface graphique
-
+### Interface graphique (recommandée)
 ```bash
 python photogeoalign.py
 ```
+- Sélectionnez le dossier d'images DNG
+- Choisissez le mode C3DC et le modèle Tapas
+- (Optionnel) Ajoutez des paramètres personnalisés pour chaque étape
+- La ligne de commande CLI équivalente s'affiche dynamiquement
+- Cliquez sur "Lancer le pipeline"
 
-### Mode console
-
-```bash
-python photogeoalign.py --no-gui --input /chemin/vers/images --output /chemin/vers/sortie --nb-proc 4 --gpu
-```
-
-### Options disponibles
-
-- `--no-gui` : Mode console sans interface graphique
-- `--input` : Dossier contenant les images DNG
-- `--output` : Dossier de sortie pour les résultats
-- `--nb-proc` : Nombre de processus (défaut: 4)
-- `--gpu` : Utiliser le GPU si disponible
-
-## 🔧 Pipeline photogrammétrique
-
-Le pipeline PhotoGeoAlign exécute automatiquement les étapes suivantes :
-
-1. **Tapioca** : Détection des points d'intérêt et mise en correspondance
-2. **Tapas** : Calcul de l'orientation des caméras
-3. **C3DC** : Génération du nuage de points dense
-
-## 🏗️ Build Windows
-
-Pour créer un exécutable Windows autonome :
+### Ligne de commande (mode console)
+Vous pouvez lancer le pipeline sans interface graphique :
 
 ```bash
-build_exe.bat
+python photogeoalign.py --no-gui <dossier_images> [options]
 ```
 
-L'exécutable sera généré dans le dossier `dist/` avec le logo intégré.
+Ou, si vous avez généré un exécutable Windows (PyInstaller) :
 
-## 📁 Structure du projet
-
-```
-photogeoalign/
-├── photogeoalign.py      # Application principale
-├── build_exe.bat         # Script de build Windows
-├── requirements.txt      # Dépendances Python
-├── logo.png             # Logo de l'application
-└── README.md            # Documentation
+```bash
+photogeoalign.exe --no-gui <dossier_images> [options]
 ```
 
-## 🎨 Interface utilisateur
+#### Options disponibles
+- `--mode` : QuickMac, BigMac, MicMac (défaut : BigMac)
+- `--tapas-model` : Modèle Tapas (défaut : Fraser)
+- `--zoomf` : Facteur de zoom pour C3DC (défaut : 1)
+- `--tapioca-extra` : Paramètres supplémentaires pour Tapioca (ex : "NbMin=3")
+- `--tapas-extra` : Paramètres supplémentaires pour Tapas (ex : "ExpTxt=1")
+- `--c3dc-extra` : Paramètres supplémentaires pour C3DC (ex : "EZA=1")
 
-L'interface PhotoGeoAlign propose :
+#### Exemple complet
+```bash
+photogeoalign.exe --no-gui "C:\chemin\vers\images" --mode QuickMac --tapas-model RadialBasic --zoomf 2 --tapioca-extra "NbMin=3" --tapas-extra "ExpTxt=1" --c3dc-extra "EZA=1"
+```
 
-- **Sélection des dossiers** d'entrée et de sortie
-- **Configuration** du nombre de processus et GPU
-- **Suivi en temps réel** de l'exécution
-- **Logs détaillés** de chaque étape
-- **Barre de progression** visuelle
+## Structure du projet
+```
+photogeoalign.py         # Script principal (GUI + CLI)
+logo.png                # Logo de l'application
+requirements.txt        # Dépendances Python
+README.md               # Documentation
+```
 
-## 🔍 Précision
+## Prérequis
+- Python 3.8+
+- MicMac installé et accessible via la commande `mm3d`
+- PySide6 (`pip install -r requirements.txt`)
 
-PhotoGeoAlign est optimisé pour atteindre une **précision centimétrique** dans la génération de nuages de points, adapté aux besoins de la recherche en géodésie.
-
-## 📝 Licence
-
-Développé pour la recherche en géodésie - Tous droits réservés.
-
-## 🤝 Contribution
-
-Ce projet est développé dans le cadre de recherches en géodésie. Pour toute question ou contribution, veuillez contacter l'équipe de développement. 
+## Contact
+Pour toute question, suggestion ou contribution : hugor[at]protonmail.com 
