@@ -2,9 +2,10 @@ import sys
 import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit
+    QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
+    QMessageBox
 )
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal, Qt, QTimer
 from PySide6.QtGui import QPixmap, QIcon
 import subprocess
 import logging
@@ -402,8 +403,30 @@ class PhotogrammetryGUI(QWidget):
         self.run_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
 
+def check_micmac_or_quit():
+    try:
+        result = subprocess.run(["mm3da"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0 and "usage" not in result.stdout.lower() and "usage" not in result.stderr.lower():
+            raise FileNotFoundError
+    except Exception:
+        app = QApplication(sys.argv)
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Critical)
+        logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+        if os.path.exists(logo_path):
+            msg.setWindowIcon(QIcon(logo_path))
+            msg.setIconPixmap(QPixmap(logo_path).scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        msg.setWindowTitle("MicMac non détecté")
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        msg.setText("Le logiciel MicMac (mm3d) n'est pas installé ou n'est pas accessible dans le PATH système.<br><br>Veuillez suivre la documentation d'installation :<br><a href='https://micmac.ensg.eu/index.php/Install'>https://micmac.ensg.eu/index.php/Install</a><br><br>Projet GitHub officiel :<br><a href='https://github.com/micmacIGN/micmac'>https://github.com/micmacIGN/micmac</a>")
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
+        sys.exit(1)
+
 if __name__ == "__main__":
     if len(sys.argv) == 1:
+        check_micmac_or_quit()
         # Lancement GUI pur (aucun argument)
         app = QApplication(sys.argv)
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
@@ -424,6 +447,7 @@ if __name__ == "__main__":
         parser.add_argument('--c3dc-extra', default='', help='Paramètres supplémentaires pour C3DC (optionnel)')
         args = parser.parse_args()
         if args.no_gui:
+            check_micmac_or_quit()
             if not args.input_dir or not os.path.isdir(args.input_dir):
                 print("Erreur : veuillez spécifier un dossier d'images valide.")
                 sys.exit(1)
@@ -440,6 +464,7 @@ if __name__ == "__main__":
                 print(f"Erreur lors de l'exécution du pipeline : {e}")
                 sys.exit(1)
         else:
+            check_micmac_or_quit()
             app = QApplication(sys.argv)
             logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
             if os.path.exists(logo_path):
