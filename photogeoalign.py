@@ -125,7 +125,7 @@ class PipelineThread(QThread):
 class PhotogrammetryGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Photogrammetry Pipeline (MicMac)")
+        self.setWindowTitle("PhotoGeoAlign")
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
