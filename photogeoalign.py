@@ -416,7 +416,12 @@ def check_micmac_or_quit():
         msg.setWindowTitle("MicMac non détecté")
         msg.setTextFormat(Qt.TextFormat.RichText)
         msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
-        msg.setText("Le logiciel MicMac (mm3d) n'est pas installé ou n'est pas accessible dans le PATH système.<br><br>Veuillez suivre la documentation d'installation :<br><a href='https://micmac.ensg.eu/index.php/Install'>https://micmac.ensg.eu/index.php/Install</a><br><br>Projet GitHub officiel :<br><a href='https://github.com/micmacIGN/micmac'>https://github.com/micmacIGN/micmac</a>")
+        msg.setText("Le logiciel MicMac (mm3d) n'est pas installé ou n'est pas accessible dans le PATH système.<br><br>" +
+                   "<b>Si vous êtes sous Linux, il est recommandé de lancer PhotoGeoAlign depuis un terminal pour garantir que mm3d soit bien trouvé dans le PATH.</b><br><br>" +
+                   "Veuillez suivre la documentation d'installation :<br>"
+                   "<a href='https://micmac.ensg.eu/index.php/Install'>https://micmac.ensg.eu/index.php/Install</a><br><br>"
+                   "Projet GitHub officiel :<br>"
+                   "<a href='https://github.com/micmacIGN/micmac'>https://github.com/micmacIGN/micmac</a>")
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
         sys.exit(1)
