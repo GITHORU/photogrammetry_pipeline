@@ -156,11 +156,17 @@ class PipelineThread(QThread):
             self.log_signal.emit(f"Erreur : {e}\n")
             self.finished_signal.emit(False, f"Erreur lors de l'exécution du pipeline : {e}")
 
+def resource_path(relative_path):
+    """Trouve le chemin absolu d'une ressource, compatible PyInstaller."""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(__file__), relative_path)
+
 class PhotogrammetryGUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PhotoGeoAlign")
-        logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+        logo_path = resource_path("logo.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
         self.setMinimumWidth(600)
@@ -403,7 +409,7 @@ def check_micmac_or_quit():
         app = QApplication(sys.argv)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
-        logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+        logo_path = resource_path("logo.png")
         if os.path.exists(logo_path):
             msg.setWindowIcon(QIcon(logo_path))
             msg.setIconPixmap(QPixmap(logo_path).scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
@@ -427,7 +433,7 @@ if __name__ == "__main__":
         splash.setWindowFlags(Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint)
         splash.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         splash.setStyleSheet("background: transparent; border: none;")
-        logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+        logo_path = resource_path("logo.png")
         pixmap = QPixmap(logo_path)
         # Redimensionne le logo à 300px de large (hauteur ajustée automatiquement)
         target_width = 300
@@ -439,7 +445,7 @@ if __name__ == "__main__":
         app.processEvents()
         def show_main():
             global main_window
-            logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+            logo_path = resource_path("logo.png")
             if os.path.exists(logo_path):
                 app.setWindowIcon(QIcon(logo_path))
             main_window = PhotogrammetryGUI()
@@ -478,7 +484,7 @@ if __name__ == "__main__":
         else:
             check_micmac_or_quit()
             app = QApplication(sys.argv)
-            logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+            logo_path = resource_path("logo.png")
             if os.path.exists(logo_path):
                 app.setWindowIcon(QIcon(logo_path))
             gui = PhotogrammetryGUI()
