@@ -300,6 +300,14 @@ class PhotogrammetryGUI(QWidget):
         self.summary_label = QLabel("")
         layout.addWidget(self.summary_label)
 
+        # Sélecteur d'interpréteur Python (placé ici, juste avant la ligne de commande)
+        python_layout = QHBoxLayout()
+        self.python_selector = QComboBox()
+        self.python_selector.addItems(["python", "python3"])
+        python_layout.addWidget(QLabel("Interpréteur Python :"))
+        python_layout.addWidget(self.python_selector)
+        layout.addLayout(python_layout)
+
         # Ligne de commande équivalente (non éditable)
         self.cmd_label = QLabel("Ligne de commande CLI équivalente :")
         layout.addWidget(self.cmd_label)
@@ -318,6 +326,7 @@ class PhotogrammetryGUI(QWidget):
         self.tapioca_extra.textChanged.connect(self.update_cmd_line)
         self.tapas_extra.textChanged.connect(self.update_cmd_line)
         self.c3dc_extra.textChanged.connect(self.update_cmd_line)
+        self.python_selector.currentTextChanged.connect(self.update_cmd_line)
         self.update_cmd_line()
 
     def update_cmd_line(self):
@@ -328,14 +337,16 @@ class PhotogrammetryGUI(QWidget):
         tapioca_extra = self.tapioca_extra.text().strip()
         tapas_extra = self.tapas_extra.text().strip()
         c3dc_extra = self.c3dc_extra.text().strip()
-        cmd = ["python photogeoalign.py", "--no-gui", f'"{input_dir}"', f"--mode {mode}", f"--tapas-model {tapas_model}", f"--zoomf {zoomf}"]
+        base_cmd = ["photogeoalign.py", "--no-gui", f'\"{input_dir}\"', f"--mode {mode}", f"--tapas-model {tapas_model}", f"--zoomf {zoomf}"]
         if tapioca_extra:
-            cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
+            base_cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
         if tapas_extra:
-            cmd.append(f"--tapas-extra \"{tapas_extra}\"")
+            base_cmd.append(f"--tapas-extra \"{tapas_extra}\"")
         if c3dc_extra:
-            cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
-        self.cmd_line.setText(" ".join(cmd))
+            base_cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
+        python_cmd = self.python_selector.currentText()
+        cmd = python_cmd + " " + " ".join(base_cmd)
+        self.cmd_line.setText(cmd)
 
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'images")
