@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QSplashScreen
+    QMessageBox, QSplashScreen, QTabWidget
 )
 from PySide6.QtCore import QThread, Signal, Qt, QTimer
 from PySide6.QtGui import QPixmap, QIcon, QMovie
@@ -174,8 +174,11 @@ class PhotogrammetryGUI(QWidget):
         self.pipeline_thread = None
 
     def init_ui(self):
-        layout = QVBoxLayout()
+        tabs = QTabWidget()
 
+        # Onglet 1 : paramètres, boutons, sélecteur python, ligne de commande, résumé
+        param_tab = QWidget()
+        param_layout = QVBoxLayout(param_tab)
         # Sélection dossier
         dir_layout = QHBoxLayout()
         self.dir_edit = QLineEdit()
@@ -185,8 +188,7 @@ class PhotogrammetryGUI(QWidget):
         dir_layout.addWidget(QLabel("Dossier d'images :"))
         dir_layout.addWidget(self.dir_edit)
         dir_layout.addWidget(browse_btn)
-        layout.addLayout(dir_layout)
-
+        param_layout.addLayout(dir_layout)
         # Mode
         mode_layout = QHBoxLayout()
         self.mode_combo = QComboBox()
@@ -194,8 +196,7 @@ class PhotogrammetryGUI(QWidget):
         self.mode_combo.setCurrentText("BigMac")
         mode_layout.addWidget(QLabel("Mode C3DC :"))
         mode_layout.addWidget(self.mode_combo)
-        layout.addLayout(mode_layout)
-
+        param_layout.addLayout(mode_layout)
         # ZoomF
         zoom_layout = QHBoxLayout()
         self.zoom_spin = QSpinBox()
@@ -204,8 +205,7 @@ class PhotogrammetryGUI(QWidget):
         self.zoom_spin.setValue(1)
         zoom_layout.addWidget(QLabel("Facteur de zoom (ZoomF) :"))
         zoom_layout.addWidget(self.zoom_spin)
-        layout.addLayout(zoom_layout)
-
+        param_layout.addLayout(zoom_layout)
         # Modèle Tapas
         tapas_model_layout = QHBoxLayout()
         self.tapas_model_combo = QComboBox()
@@ -244,8 +244,7 @@ class PhotogrammetryGUI(QWidget):
         self.tapas_model_combo.setCurrentText("Fraser")
         tapas_model_layout.addWidget(QLabel("Modèle Tapas :"))
         tapas_model_layout.addWidget(self.tapas_model_combo)
-        layout.addLayout(tapas_model_layout)
-
+        param_layout.addLayout(tapas_model_layout)
         # Paramètres supplémentaires MicMac
         extra_layout = QVBoxLayout()
         self.tapioca_extra = QLineEdit()
@@ -257,8 +256,7 @@ class PhotogrammetryGUI(QWidget):
         self.c3dc_extra = QLineEdit()
         self.c3dc_extra.setPlaceholderText("Paramètres supplémentaires pour C3DC (optionnel)")
         extra_layout.addWidget(self.c3dc_extra)
-        layout.addLayout(extra_layout)
-
+        param_layout.addLayout(extra_layout)
         # Bouton lancer
         self.run_btn = QPushButton("Lancer le pipeline")
         self.run_btn.setStyleSheet("""
@@ -272,8 +270,7 @@ class PhotogrammetryGUI(QWidget):
             }
         """)
         self.run_btn.clicked.connect(self.launch_pipeline)
-        layout.addWidget(self.run_btn)
-
+        param_layout.addWidget(self.run_btn)
         # Bouton arrêter
         self.stop_btn = QPushButton("Arrêter")
         self.stop_btn.setEnabled(False)
@@ -288,37 +285,41 @@ class PhotogrammetryGUI(QWidget):
             }
         """)
         self.stop_btn.clicked.connect(self.stop_pipeline)
-        layout.addWidget(self.stop_btn)
-
-        # Logs
-        layout.addWidget(QLabel("Logs :"))
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        layout.addWidget(self.log_text)
-
+        param_layout.addWidget(self.stop_btn)
         # Résumé
         self.summary_label = QLabel("")
-        layout.addWidget(self.summary_label)
-
-        # Sélecteur d'interpréteur Python (placé ici, juste avant la ligne de commande)
+        param_layout.addWidget(self.summary_label)
+        # Ajoute un stretch pour pousser les widgets suivants en bas
+        param_layout.addStretch(1)
+        # Sélecteur d'interpréteur Python
         python_layout = QHBoxLayout()
         self.python_selector = QComboBox()
         self.python_selector.addItems(["python", "python3"])
         python_layout.addWidget(QLabel("Interpréteur Python :"))
         python_layout.addWidget(self.python_selector)
-        layout.addLayout(python_layout)
-
-        # Ligne de commande équivalente (non éditable)
+        param_layout.addLayout(python_layout)
+        # Ligne de commande équivalente
         self.cmd_label = QLabel("Ligne de commande CLI équivalente :")
-        layout.addWidget(self.cmd_label)
+        param_layout.addWidget(self.cmd_label)
         self.cmd_line = QLineEdit()
         self.cmd_line.setReadOnly(True)
         self.cmd_line.setStyleSheet("font-family: monospace;")
-        layout.addWidget(self.cmd_line)
+        param_layout.addWidget(self.cmd_line)
+        tabs.addTab(param_tab, "Paramètres")
 
-        self.setLayout(layout)
+        # Onglet 2 : logs
+        log_tab = QWidget()
+        log_layout = QVBoxLayout(log_tab)
+        log_layout.addWidget(QLabel("Logs :"))
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        log_layout.addWidget(self.log_text)
+        tabs.addTab(log_tab, "Logs")
 
-        # Connecte les changements de paramètres à la mise à jour de la ligne de commande
+        self.setLayout(QVBoxLayout())
+        self.layout().addWidget(tabs)
+
+        # Connexions
         self.dir_edit.textChanged.connect(self.update_cmd_line)
         self.mode_combo.currentTextChanged.connect(self.update_cmd_line)
         self.zoom_spin.valueChanged.connect(self.update_cmd_line)
