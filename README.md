@@ -39,7 +39,13 @@ python photogeoalign.py --no-gui <dossier_images> [options]
 Ou, si vous avez généré un exécutable Windows (PyInstaller) :
 
 ```bash
-photogeoalign.exe --no-gui <dossier_images> [options]
+photogeoalign_windows.exe --no-gui <dossier_images> [options]
+```
+
+Ou, si vous avez généré un exécutable Linux (PyInstaller) :
+
+```bash
+./photogeoalign_linux.sh --no-gui <dossier_images> [options]
 ```
 
 #### Options disponibles
@@ -52,7 +58,7 @@ photogeoalign.exe --no-gui <dossier_images> [options]
 
 #### Exemple complet
 ```bash
-photogeoalign.exe --no-gui "C:\chemin\vers\images" --mode QuickMac --tapas-model RadialBasic --zoomf 2 --tapioca-extra "NbMin=3" --tapas-extra "ExpTxt=1" --c3dc-extra "EZA=1"
+photogeoalign_windows.exe --no-gui "C:\chemin\vers\images" --mode QuickMac --tapas-model RadialBasic --zoomf 2 --tapioca-extra "NbMin=3" --tapas-extra "ExpTxt=1" --c3dc-extra "EZA=1"
 ```
 
 ## Structure du projet

@@ -316,9 +316,9 @@ class PhotogrammetryGUI(QWidget):
         log_layout.addWidget(self.log_text)
         tabs.addTab(log_tab, "Logs")
 
-        self.setLayout(QVBoxLayout())
-        self.layout().addWidget(tabs)
-
+        layout = QVBoxLayout()
+        layout.addWidget(tabs)
+        self.setLayout(layout)
         # Connexions
         self.dir_edit.textChanged.connect(self.update_cmd_line)
         self.mode_combo.currentTextChanged.connect(self.update_cmd_line)

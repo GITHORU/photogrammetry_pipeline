@@ -7,4 +7,5 @@
 !README.md
 !.gitignore
 !logo.png 
-!build_sh.sh 
+!build_sh.sh
+!build_exe.bat 
