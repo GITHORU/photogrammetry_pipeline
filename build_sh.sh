@@ -7,9 +7,14 @@ rm -rf build dist photogeoalign.spec
 
 SCRIPT=photogeoalign.py
 ICON=logo.png
+NAME=photogeoalign_linux.sh
 
 # Construction de l'exécutable principal
-pyinstaller --noconfirm --onefile --windowed --icon=$ICON --add-data "logo.png:." $SCRIPT
+pyinstaller --noconfirm --onefile --windowed --icon=$ICON --add-data "logo.png:." --name $NAME $SCRIPT
 
 echo
-echo "Compilation terminée. L'exécutable se trouve dans le dossier dist/" 
+if [ -f dist/$NAME ]; then
+    echo "Compilation terminée. L'exécutable se trouve dans le dossier dist/ sous le nom $NAME"
+else
+    echo "Erreur : l'exécutable n'a pas été généré."
+fi 

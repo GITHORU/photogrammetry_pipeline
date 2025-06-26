@@ -70,3 +70,41 @@ README.md               # Documentation
 
 ## Contact
 Pour toute question, suggestion ou contribution : hugor[at]protonmail.com 
+
+## Exécution de l'exécutable Windows
+
+Après compilation ou téléchargement, l'exécutable Windows se nomme :
+
+```
+photogeoalign_windows.exe
+```
+
+Lancez-le depuis l'explorateur ou un terminal :
+
+```
+photogeoalign_windows.exe --no-gui <dossier_images> [options]
+```
+
+---
+
+## Exécution de l'exécutable Linux
+
+Après compilation ou téléchargement, l'exécutable Linux se nomme :
+
+```
+photogeoalign_linux.sh
+```
+
+Il est nécessaire de lui donner les droits d'exécution avant de pouvoir le lancer :
+
+```bash
+chmod +x photogeoalign_linux.sh
+```
+
+Ensuite, lancez-le avec :
+
+```bash
+./photogeoalign_linux.sh --no-gui <dossier_images> [options]
+```
+
+Ceci est une mesure de sécurité standard sous Linux : tout fichier téléchargé n'est pas exécutable par défaut. 
