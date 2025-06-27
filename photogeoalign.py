@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QSplashScreen, QTabWidget
+    QMessageBox, QSplashScreen, QTabWidget, QCheckBox
 )
 from PySide6.QtCore import QThread, Signal, Qt, QTimer
 from PySide6.QtGui import QPixmap, QIcon, QMovie
@@ -124,7 +124,7 @@ class PipelineThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra):
+    def __init__(self, input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, run_tapioca=True, run_tapas=True, run_c3dc=True):
         super().__init__()
         self.input_dir = input_dir
         self.mode = mode
@@ -133,24 +133,28 @@ class PipelineThread(QThread):
         self.tapioca_extra = tapioca_extra
         self.tapas_extra = tapas_extra
         self.c3dc_extra = c3dc_extra
+        self.run_tapioca = run_tapioca
+        self.run_tapas = run_tapas
+        self.run_c3dc = run_c3dc
 
     def run(self):
-        # Logger pour la GUI : uniquement dans la zone de logs
         logger = logging.getLogger(f"PhotogrammetryPipeline_{id(self)}")
         logger.setLevel(logging.DEBUG)
-        # Supprime les handlers existants (évite les doublons)
         logger.handlers = []
         qt_handler = QtLogHandler(self.log_signal)
         qt_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logger.addHandler(qt_handler)
         try:
             self.log_signal.emit("Démarrage du pipeline...\n")
-            run_micmac_tapioca(self.input_dir, logger, self.tapioca_extra)
-            self.log_signal.emit("Tapioca terminé.\n")
-            run_micmac_tapas(self.input_dir, logger, self.tapas_model, self.tapas_extra)
-            self.log_signal.emit("Tapas terminé.\n")
-            run_micmac_c3dc(self.input_dir, logger, mode=self.mode, zoomf=self.zoomf, tapas_model=self.tapas_model, extra_params=self.c3dc_extra)
-            self.log_signal.emit("C3DC terminé.\n")
+            if self.run_tapioca:
+                run_micmac_tapioca(self.input_dir, logger, self.tapioca_extra)
+                self.log_signal.emit("Tapioca terminé.\n")
+            if self.run_tapas:
+                run_micmac_tapas(self.input_dir, logger, self.tapas_model, self.tapas_extra)
+                self.log_signal.emit("Tapas terminé.\n")
+            if self.run_c3dc:
+                run_micmac_c3dc(self.input_dir, logger, mode=self.mode, zoomf=self.zoomf, tapas_model=self.tapas_model, extra_params=self.c3dc_extra)
+                self.log_signal.emit("C3DC terminé.\n")
             self.finished_signal.emit(True, "Pipeline terminé avec succès !")
         except Exception as e:
             self.log_signal.emit(f"Erreur : {e}\n")
@@ -257,6 +261,19 @@ class PhotogrammetryGUI(QWidget):
         self.c3dc_extra.setPlaceholderText("Paramètres supplémentaires pour C3DC (optionnel)")
         extra_layout.addWidget(self.c3dc_extra)
         param_layout.addLayout(extra_layout)
+        # Étapes à exécuter
+        steps_layout = QHBoxLayout()
+        self.tapioca_cb = QCheckBox("Tapioca")
+        self.tapioca_cb.setChecked(True)
+        self.tapas_cb = QCheckBox("Tapas")
+        self.tapas_cb.setChecked(True)
+        self.c3dc_cb = QCheckBox("C3DC")
+        self.c3dc_cb.setChecked(True)
+        steps_layout.addWidget(QLabel("Étapes à exécuter :"))
+        steps_layout.addWidget(self.tapioca_cb)
+        steps_layout.addWidget(self.tapas_cb)
+        steps_layout.addWidget(self.c3dc_cb)
+        param_layout.addLayout(steps_layout)
         # Bouton lancer
         self.run_btn = QPushButton("Lancer le pipeline")
         self.run_btn.setStyleSheet("""
@@ -328,6 +345,9 @@ class PhotogrammetryGUI(QWidget):
         self.tapas_extra.textChanged.connect(self.update_cmd_line)
         self.c3dc_extra.textChanged.connect(self.update_cmd_line)
         self.python_selector.currentTextChanged.connect(self.update_cmd_line)
+        self.tapioca_cb.stateChanged.connect(self.update_cmd_line)
+        self.tapas_cb.stateChanged.connect(self.update_cmd_line)
+        self.c3dc_cb.stateChanged.connect(self.update_cmd_line)
         self.update_cmd_line()
 
     def update_cmd_line(self):
@@ -345,6 +365,13 @@ class PhotogrammetryGUI(QWidget):
             base_cmd.append(f"--tapas-extra \"{tapas_extra}\"")
         if c3dc_extra:
             base_cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
+        # Ajout des options de skip
+        if not self.tapioca_cb.isChecked():
+            base_cmd.append("--skip-tapioca")
+        if not self.tapas_cb.isChecked():
+            base_cmd.append("--skip-tapas")
+        if not self.c3dc_cb.isChecked():
+            base_cmd.append("--skip-c3dc")
         python_cmd = self.python_selector.currentText()
         cmd = python_cmd + " " + " ".join(base_cmd)
         self.cmd_line.setText(cmd)
@@ -365,11 +392,19 @@ class PhotogrammetryGUI(QWidget):
         tapioca_extra = self.tapioca_extra.text().strip()
         tapas_extra = self.tapas_extra.text().strip()
         c3dc_extra = self.c3dc_extra.text().strip()
+        run_tapioca = self.tapioca_cb.isChecked()
+        run_tapas = self.tapas_cb.isChecked()
+        run_c3dc = self.c3dc_cb.isChecked()
+        # Avertissement si incohérence
+        if run_c3dc and not run_tapas:
+            self.log_text.append("<span style='color:orange'>Attention : lancer C3DC sans Tapas n'a pas de sens !</span>")
+        if run_tapas and not run_tapioca:
+            self.log_text.append("<span style='color:orange'>Attention : lancer Tapas sans Tapioca n'a pas de sens !</span>")
         self.log_text.clear()
         self.summary_label.setText("")
         self.run_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra)
+        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, run_tapioca, run_tapas, run_c3dc)
         self.pipeline_thread.log_signal.connect(self.append_log)
         self.pipeline_thread.finished_signal.connect(self.pipeline_finished)
         self.pipeline_thread.start()
@@ -480,6 +515,9 @@ if __name__ == "__main__":
         parser.add_argument('--tapioca-extra', default='', help='Paramètres supplémentaires pour Tapioca (optionnel)')
         parser.add_argument('--tapas-extra', default='', help='Paramètres supplémentaires pour Tapas (optionnel)')
         parser.add_argument('--c3dc-extra', default='', help='Paramètres supplémentaires pour C3DC (optionnel)')
+        parser.add_argument('--skip-tapioca', action='store_true', help='Ne pas exécuter Tapioca')
+        parser.add_argument('--skip-tapas', action='store_true', help='Ne pas exécuter Tapas')
+        parser.add_argument('--skip-c3dc', action='store_true', help='Ne pas exécuter C3DC')
         args = parser.parse_args()
         if args.no_gui:
             check_micmac_or_quit()
@@ -491,9 +529,12 @@ if __name__ == "__main__":
             print(f"Début du pipeline photogrammétrique pour le dossier : {args.input_dir}")
             try:
                 tapas_model = args.tapas_model
-                run_micmac_tapioca(args.input_dir, logger, args.tapioca_extra)
-                run_micmac_tapas(args.input_dir, logger, tapas_model, args.tapas_extra)
-                run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf, tapas_model=tapas_model, extra_params=args.c3dc_extra)
+                if not args.skip_tapioca:
+                    run_micmac_tapioca(args.input_dir, logger, args.tapioca_extra)
+                if not args.skip_tapas:
+                    run_micmac_tapas(args.input_dir, logger, tapas_model, args.tapas_extra)
+                if not args.skip_c3dc:
+                    run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf, tapas_model=tapas_model, extra_params=args.c3dc_extra)
                 print("Pipeline terminé avec succès !")
             except Exception as e:
                 print(f"Erreur lors de l'exécution du pipeline : {e}")
