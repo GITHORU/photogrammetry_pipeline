@@ -75,7 +75,7 @@ README.md               # Documentation
 - PySide6 (`pip install -r requirements.txt`)
 
 ## Contact
-Pour toute question, suggestion ou contribution : hugor[at]protonmail.com 
+Pour toute question, suggestion ou contribution : reveneau@ipgp.fr
 
 ## Exécution de l'exécutable Windows
 
@@ -114,3 +114,9 @@ Ensuite, lancez-le avec :
 ```
 
 Ceci est une mesure de sécurité standard sous Linux : tout fichier téléchargé n'est pas exécutable par défaut. 
+
+---
+
+## Note de développement
+
+Cette application a été développée avec l'aide d'une Intelligence Artificielle (IA) pour assister dans la conception, l'implémentation et l'optimisation du code. 
