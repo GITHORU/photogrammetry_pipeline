@@ -120,3 +120,57 @@ Ceci est une mesure de sécurité standard sous Linux : tout fichier télécharg
 ## Note de développement
 
 Cette application a été développée avec l'aide d'une Intelligence Artificielle (IA) pour assister dans la conception, l'implémentation et l'optimisation du code. 
+
+## Pipeline photogrammétrique complet
+
+Le pipeline PhotoGeoAlign intègre désormais la gestion avancée des points d'appui et du recalage absolu :
+
+1. **SaisieAppuisInitQT** (optionnelle)
+   - Saisie manuelle initiale de quelques points d'appui.
+   - Utilise l'orientation Tapas choisie (ex : `RadialBasic`).
+   - Fichier d'appuis : fichier TXT (converti automatiquement en XML).
+   - Fichier de sortie : `PtsImgInit.xml` (et `PtsImgInit-S2D.xml` généré par MicMac).
+
+2. **GCPBascule (init)** (automatique si Init cochée)
+   - Recalage absolu initial.
+   - Entrée : orientation Tapas (ex : `RadialBasic`).
+   - Sortie : orientation recalée (ex : `RadialBasic_abs_init`).
+   - Fichier d'appuis : XML issu du TXT.
+   - Fichier de points : `PtsImgInit-S2D.xml`.
+
+3. **SaisieAppuisPredicQT** (optionnelle)
+   - Saisie assistée de tous les points, sur la base du recalage initial.
+   - Utilise l'orientation recalée (ex : `RadialBasic_abs_init`).
+   - Fichier d'appuis : XML issu du TXT.
+   - Fichier de sortie : `PtsImgPredic.xml` (et `PtsImgPredic-S2D.xml` généré par MicMac).
+
+4. **GCPBascule (predic)** (automatique si Predic cochée)
+   - Recalage absolu final sur tous les points.
+   - Entrée : orientation recalée (ex : `RadialBasic_abs_init`).
+   - Sortie : orientation finale (ex : `RadialBasic_abs`).
+   - Fichier d'appuis : XML issu du TXT.
+   - Fichier de points : `PtsImgPredic-S2D.xml`.
+
+5. **C3DC**
+   - Densification du nuage de points, utilisant l'orientation finale (ex : `RadialBasic_abs`).
+
+### Exemple de séquence complète
+
+1. Cochez "SaisieAppuisInitQT" et "SaisieAppuisPredicQT" dans l'interface (ou utilisez les options CLI correspondantes).
+2. Sélectionnez le fichier TXT d'appuis GNSS.
+3. Le pipeline exécutera automatiquement :
+   - SaisieAppuisInitQT
+   - GCPBascule (init)
+   - SaisieAppuisPredicQT
+   - GCPBascule (predic)
+   - C3DC (si activé)
+
+### Options CLI associées
+- `--skip-saisieappuisinit` : ne pas exécuter SaisieAppuisInitQT
+- `--skip-saisieappuispredic` : ne pas exécuter SaisieAppuisPredicQT
+- `--saisieappuisinit-pt <fichier.txt>` : fichier de points d'appui TXT (obligatoire pour les étapes d'appuis)
+
+### Remarques
+- Les étapes GCPBascule sont automatiques et gérées par le pipeline.
+- Les fichiers intermédiaires sont générés et utilisés automatiquement.
+- Les logs détaillent chaque étape et les fichiers utilisés. 
