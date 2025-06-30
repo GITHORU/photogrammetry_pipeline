@@ -3,10 +3,10 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QSplashScreen, QTabWidget, QCheckBox
+    QMessageBox, QSplashScreen, QTabWidget, QCheckBox, QToolBar
 )
-from PySide6.QtCore import QThread, Signal, Qt, QTimer
-from PySide6.QtGui import QPixmap, QIcon, QMovie
+from PySide6.QtCore import QThread, Signal, Qt, QTimer, QPoint
+from PySide6.QtGui import QPixmap, QIcon, QMovie, QAction, QPainter, QColor, QBrush
 import subprocess
 import logging
 import argparse
@@ -115,7 +115,7 @@ def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1, tapas_model='Fr
 def to_micmac_path(path):
     return path.replace("\\", "/")
 
-def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_file=None):
+def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_file=None, extra_params=""):
     import shutil
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*DNG'
@@ -148,6 +148,8 @@ def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_
     cmd = [
         'mm3d', 'SaisieAppuisInitQT', pattern, ori, xml_file_rel, 'PtsImgInit.xml'
     ]
+    if extra_params:
+        cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
     logger.info("SaisieAppuisInitQT terminé.")
     return os.path.join(abs_input_dir, "PtsImgInit.xml")
@@ -173,7 +175,7 @@ def run_micmac_gcpbascule_init(input_dir, logger, tapas_model="Fraser", appuis_f
     logger.info("GCPBascule (init) terminé.")
     return ori_out
 
-def run_micmac_saisieappuispredic(input_dir, logger, tapas_model="Fraser", ori_abs_init=None, appuis_file=None):
+def run_micmac_saisieappuispredic(input_dir, logger, tapas_model="Fraser", ori_abs_init=None, appuis_file=None, extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*DNG'
     ori = ori_abs_init or f"{tapas_model}_abs_init"  # Utilise l'orientation de sortie de GCPBascule
@@ -188,6 +190,8 @@ def run_micmac_saisieappuispredic(input_dir, logger, tapas_model="Fraser", ori_a
     cmd = [
         'mm3d', 'SaisieAppuisPredicQT', pattern, ori, xml_file_rel, 'PtsImgPredic.xml'
     ]
+    if extra_params:
+        cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
     logger.info("SaisieAppuisPredicQT terminé.")
     return ptsimgpredic_file
@@ -225,7 +229,7 @@ class PipelineThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca=True, run_tapas=True, run_saisieappuisinit=True, run_saisieappuispredic=True, run_c3dc=True):
+    def __init__(self, input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, saisieappuisinit_extra, saisieappuispredic_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca=True, run_tapas=True, run_saisieappuisinit=True, run_saisieappuispredic=True, run_c3dc=True):
         super().__init__()
         self.input_dir = input_dir
         self.mode = mode
@@ -233,6 +237,8 @@ class PipelineThread(QThread):
         self.tapas_model = tapas_model
         self.tapioca_extra = tapioca_extra
         self.tapas_extra = tapas_extra
+        self.saisieappuisinit_extra = saisieappuisinit_extra
+        self.saisieappuispredic_extra = saisieappuispredic_extra
         self.c3dc_extra = c3dc_extra
         self.saisieappuisinit_pt = saisieappuisinit_pt
         self.run_tapioca = run_tapioca
@@ -258,15 +264,13 @@ class PipelineThread(QThread):
                 self.log_signal.emit("Tapas terminé.\n")
             ori_abs_init = None
             if self.run_saisieappuisinit:
-                run_micmac_saisieappuisinit(self.input_dir, logger, self.tapas_model, self.saisieappuisinit_pt)
+                run_micmac_saisieappuisinit(self.input_dir, logger, self.tapas_model, self.saisieappuisinit_pt, self.saisieappuisinit_extra)
                 self.log_signal.emit("SaisieAppuisInitQT terminé.\n")
-                # GCPBascule (init) uniquement si Init est lancée
                 ori_abs_init = run_micmac_gcpbascule_init(self.input_dir, logger, self.tapas_model, self.saisieappuisinit_pt)
                 self.log_signal.emit("GCPBascule (init) terminé.\n")
             if self.run_saisieappuispredic:
-                run_micmac_saisieappuispredic(self.input_dir, logger, self.tapas_model, ori_abs_init, self.saisieappuisinit_pt)
+                run_micmac_saisieappuispredic(self.input_dir, logger, self.tapas_model, ori_abs_init, self.saisieappuisinit_pt, self.saisieappuispredic_extra)
                 self.log_signal.emit("SaisieAppuisPredicQT terminé.\n")
-                # GCPBascule (predic) uniquement si Predic est lancée
                 run_micmac_gcpbascule_predic(self.input_dir, logger, self.tapas_model, self.saisieappuisinit_pt)
                 self.log_signal.emit("GCPBascule (predic) terminé.\n")
             if self.run_c3dc:
@@ -291,16 +295,55 @@ class PhotogrammetryGUI(QWidget):
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
         self.setMinimumWidth(600)
-        self.init_ui()
         self.pipeline_thread = None
+        self.init_ui()
 
     def init_ui(self):
+        main_layout = QVBoxLayout()
+        # Barre d'outils
+        toolbar = QToolBar()
+        # Icône flèche verte pour Lancer
+        pixmap_run = QPixmap(24, 24)
+        pixmap_run.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_run)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QBrush(QColor(76, 175, 80)))  # vert
+        painter.setPen(Qt.GlobalColor.transparent)
+        points = [
+            pixmap_run.rect().topLeft() + QPoint(6, 4),
+            pixmap_run.rect().bottomLeft() + QPoint(6, -4),
+            pixmap_run.rect().center() + QPoint(6, 0)
+        ]
+        painter.drawPolygon(points)
+        painter.end()
+        icon_run = QIcon(pixmap_run)
+        action_run = QAction(icon_run, "Lancer le pipeline", self)
+        action_run.triggered.connect(self.launch_pipeline)
+        toolbar.addAction(action_run)
+        self.action_run = action_run
+        # Icône rond rouge pour Arrêter
+        pixmap_stop = QPixmap(24, 24)
+        pixmap_stop.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_stop)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QBrush(QColor(211, 47, 47)))  # rouge
+        painter.setPen(Qt.GlobalColor.transparent)
+        # Cercle plus petit (diamètre 12px, centré)
+        painter.drawEllipse(6, 6, 12, 12)
+        painter.end()
+        icon_stop = QIcon(pixmap_stop)
+        action_stop = QAction(icon_stop, "Arrêter", self)
+        action_stop.triggered.connect(self.stop_pipeline)
+        toolbar.addAction(action_stop)
+        self.action_stop = action_stop
+        self.action_stop.setEnabled(False)
+        main_layout.addWidget(toolbar)
+        # Tabs
         tabs = QTabWidget()
-
         # Onglet 1 : paramètres, boutons, sélecteur python, ligne de commande, résumé
         param_tab = QWidget()
         param_layout = QVBoxLayout(param_tab)
-        # Sélection dossier
+        # 1. Dossier image
         dir_layout = QHBoxLayout()
         self.dir_edit = QLineEdit()
         self.dir_edit.setPlaceholderText("Dossier d'images DNG à traiter")
@@ -310,7 +353,7 @@ class PhotogrammetryGUI(QWidget):
         dir_layout.addWidget(self.dir_edit)
         dir_layout.addWidget(browse_btn)
         param_layout.addLayout(dir_layout)
-        # Mode
+        # 2. Mode
         mode_layout = QHBoxLayout()
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(["QuickMac", "BigMac", "MicMac"])
@@ -318,7 +361,7 @@ class PhotogrammetryGUI(QWidget):
         mode_layout.addWidget(QLabel("Mode C3DC :"))
         mode_layout.addWidget(self.mode_combo)
         param_layout.addLayout(mode_layout)
-        # ZoomF
+        # 3. Facteur de zoom
         zoom_layout = QHBoxLayout()
         self.zoom_spin = QSpinBox()
         self.zoom_spin.setMinimum(1)
@@ -327,7 +370,7 @@ class PhotogrammetryGUI(QWidget):
         zoom_layout.addWidget(QLabel("Facteur de zoom (ZoomF) :"))
         zoom_layout.addWidget(self.zoom_spin)
         param_layout.addLayout(zoom_layout)
-        # Modèle Tapas
+        # 4. Modèle Tapas
         tapas_model_layout = QHBoxLayout()
         self.tapas_model_combo = QComboBox()
         self.tapas_model_combo.addItems([
@@ -366,38 +409,7 @@ class PhotogrammetryGUI(QWidget):
         tapas_model_layout.addWidget(QLabel("Modèle Tapas :"))
         tapas_model_layout.addWidget(self.tapas_model_combo)
         param_layout.addLayout(tapas_model_layout)
-        # Paramètres supplémentaires MicMac
-        extra_layout = QVBoxLayout()
-        self.tapioca_extra = QLineEdit()
-        self.tapioca_extra.setPlaceholderText("Paramètres supplémentaires pour Tapioca (optionnel)")
-        extra_layout.addWidget(self.tapioca_extra)
-        self.tapas_extra = QLineEdit()
-        self.tapas_extra.setPlaceholderText("Paramètres supplémentaires pour Tapas (optionnel)")
-        extra_layout.addWidget(self.tapas_extra)
-        self.c3dc_extra = QLineEdit()
-        self.c3dc_extra.setPlaceholderText("Paramètres supplémentaires pour C3DC (optionnel)")
-        extra_layout.addWidget(self.c3dc_extra)
-        param_layout.addLayout(extra_layout)
-        # Étapes à exécuter
-        steps_layout = QHBoxLayout()
-        self.tapioca_cb = QCheckBox("Tapioca")
-        self.tapioca_cb.setChecked(True)
-        self.tapas_cb = QCheckBox("Tapas")
-        self.tapas_cb.setChecked(True)
-        self.saisieappuisinit_cb = QCheckBox("SaisieAppuisInit")
-        self.saisieappuisinit_cb.setChecked(True)
-        self.saisieappuispredic_cb = QCheckBox("SaisieAppuisPredic")
-        self.saisieappuispredic_cb.setChecked(True)
-        self.c3dc_cb = QCheckBox("C3DC")
-        self.c3dc_cb.setChecked(True)
-        steps_layout.addWidget(QLabel("Étapes à exécuter :"))
-        steps_layout.addWidget(self.tapioca_cb)
-        steps_layout.addWidget(self.tapas_cb)
-        steps_layout.addWidget(self.saisieappuisinit_cb)
-        steps_layout.addWidget(self.saisieappuispredic_cb)
-        steps_layout.addWidget(self.c3dc_cb)
-        param_layout.addLayout(steps_layout)
-        # Chemin du fichier de points d'appui
+        # 5. Fichier d'appuis
         pt_layout = QHBoxLayout()
         self.pt_lineedit = QLineEdit()
         self.pt_lineedit.setPlaceholderText("Chemin du fichier d'appuis (.txt uniquement)")
@@ -408,54 +420,77 @@ class PhotogrammetryGUI(QWidget):
         pt_layout.addWidget(self.pt_lineedit)
         pt_layout.addWidget(pt_browse_btn)
         param_layout.addLayout(pt_layout)
-        # Bouton lancer
-        self.run_btn = QPushButton("Lancer le pipeline")
-        self.run_btn.setStyleSheet("""
-            QPushButton:enabled {
-                background-color: #4CAF50;
-                color: white;
-                font-weight: bold;
-            }
-            QPushButton:enabled:hover {
-                background-color: #388E3C;
-            }
-        """)
-        self.run_btn.clicked.connect(self.launch_pipeline)
-        param_layout.addWidget(self.run_btn)
-        # Bouton arrêter
-        self.stop_btn = QPushButton("Arrêter")
-        self.stop_btn.setEnabled(False)
-        self.stop_btn.setStyleSheet("""
-            QPushButton:enabled {
-                background-color: #f44336;
-                color: white;
-                font-weight: bold;
-            }
-            QPushButton:enabled:hover {
-                background-color: #b71c1c;
-            }
-        """)
-        self.stop_btn.clicked.connect(self.stop_pipeline)
-        param_layout.addWidget(self.stop_btn)
-        # Résumé
-        self.summary_label = QLabel("")
-        param_layout.addWidget(self.summary_label)
-        # Ajoute un stretch pour pousser les widgets suivants en bas
-        param_layout.addStretch(1)
-        # Sélecteur d'interpréteur Python
+        # 6. Paramètres supplémentaires + cases à cocher associées
+        # Largeur fixe pour alignement harmonieux des cases à cocher
+        checkbox_width = 140
+        # Tapioca
+        tapioca_line = QHBoxLayout()
+        self.tapioca_cb = QCheckBox("Tapioca")
+        self.tapioca_cb.setChecked(True)
+        self.tapioca_cb.setMinimumWidth(checkbox_width)
+        self.tapioca_extra = QLineEdit()
+        self.tapioca_extra.setPlaceholderText("Paramètres supplémentaires pour Tapioca (optionnel)")
+        tapioca_line.addWidget(self.tapioca_cb)
+        tapioca_line.addWidget(self.tapioca_extra)
+        param_layout.addLayout(tapioca_line)
+        # Tapas
+        tapas_line = QHBoxLayout()
+        self.tapas_cb = QCheckBox("Tapas")
+        self.tapas_cb.setChecked(True)
+        self.tapas_cb.setMinimumWidth(checkbox_width)
+        self.tapas_extra = QLineEdit()
+        self.tapas_extra.setPlaceholderText("Paramètres supplémentaires pour Tapas (optionnel)")
+        tapas_line.addWidget(self.tapas_cb)
+        tapas_line.addWidget(self.tapas_extra)
+        param_layout.addLayout(tapas_line)
+        # SaisieAppuisInitQT
+        saisieappuisinit_line = QHBoxLayout()
+        self.saisieappuisinit_cb = QCheckBox("SaisieAppuisInit")
+        self.saisieappuisinit_cb.setChecked(True)
+        self.saisieappuisinit_cb.setMinimumWidth(checkbox_width)
+        self.saisieappuisinit_extra = QLineEdit()
+        self.saisieappuisinit_extra.setPlaceholderText("Paramètres supplémentaires pour SaisieAppuisInitQT (optionnel)")
+        saisieappuisinit_line.addWidget(self.saisieappuisinit_cb)
+        saisieappuisinit_line.addWidget(self.saisieappuisinit_extra)
+        param_layout.addLayout(saisieappuisinit_line)
+        # SaisieAppuisPredicQT
+        saisieappuispredic_line = QHBoxLayout()
+        self.saisieappuispredic_cb = QCheckBox("SaisieAppuisPredic")
+        self.saisieappuispredic_cb.setChecked(True)
+        self.saisieappuispredic_cb.setMinimumWidth(checkbox_width)
+        self.saisieappuispredic_extra = QLineEdit()
+        self.saisieappuispredic_extra.setPlaceholderText("Paramètres supplémentaires pour SaisieAppuisPredicQT (optionnel)")
+        saisieappuispredic_line.addWidget(self.saisieappuispredic_cb)
+        saisieappuispredic_line.addWidget(self.saisieappuispredic_extra)
+        param_layout.addLayout(saisieappuispredic_line)
+        # C3DC
+        c3dc_line = QHBoxLayout()
+        self.c3dc_cb = QCheckBox("C3DC")
+        self.c3dc_cb.setChecked(True)
+        self.c3dc_cb.setMinimumWidth(checkbox_width)
+        self.c3dc_extra = QLineEdit()
+        self.c3dc_extra.setPlaceholderText("Paramètres supplémentaires pour C3DC (optionnel)")
+        c3dc_line.addWidget(self.c3dc_cb)
+        c3dc_line.addWidget(self.c3dc_extra)
+        param_layout.addLayout(c3dc_line)
+        # 9. Interpréteur Python
         python_layout = QHBoxLayout()
         self.python_selector = QComboBox()
         self.python_selector.addItems(["python", "python3"])
         python_layout.addWidget(QLabel("Interpréteur Python :"))
         python_layout.addWidget(self.python_selector)
         param_layout.addLayout(python_layout)
-        # Ligne de commande équivalente
+        # 10. Ligne de commande CLI équivalente
         self.cmd_label = QLabel("Ligne de commande CLI équivalente :")
         param_layout.addWidget(self.cmd_label)
         self.cmd_line = QLineEdit()
         self.cmd_line.setReadOnly(True)
         self.cmd_line.setStyleSheet("font-family: monospace;")
         param_layout.addWidget(self.cmd_line)
+        # 11. Résumé et stretch
+        self.summary_label = QLabel("")
+        param_layout.addWidget(self.summary_label)
+        param_layout.addStretch(1)
         tabs.addTab(param_tab, "Paramètres")
 
         # Onglet 2 : logs
@@ -469,7 +504,8 @@ class PhotogrammetryGUI(QWidget):
 
         layout = QVBoxLayout()
         layout.addWidget(tabs)
-        self.setLayout(layout)
+        main_layout.addLayout(layout)
+        self.setLayout(main_layout)
         # Connexions
         self.dir_edit.textChanged.connect(self.update_cmd_line)
         self.mode_combo.currentTextChanged.connect(self.update_cmd_line)
@@ -496,6 +532,8 @@ class PhotogrammetryGUI(QWidget):
         tapas_extra = self.tapas_extra.text().strip()
         c3dc_extra = self.c3dc_extra.text().strip()
         saisieappuisinit_pt = self.pt_lineedit.text().strip()
+        saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
+        saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
         base_cmd = ["photogeoalign.py", "--no-gui", f'\"{input_dir}\"', f"--mode {mode}", f"--tapas-model {tapas_model}", f"--zoomf {zoomf}"]
         if tapioca_extra:
             base_cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
@@ -505,6 +543,10 @@ class PhotogrammetryGUI(QWidget):
             base_cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
         if saisieappuisinit_pt:
             base_cmd.append(f"--saisieappuisinit-pt \"{saisieappuisinit_pt}\"")
+        if saisieappuisinit_extra:
+            base_cmd.append(f"--saisieappuisinit-extra \"{saisieappuisinit_extra}\"")
+        if saisieappuispredic_extra:
+            base_cmd.append(f"--saisieappuispredic-extra \"{saisieappuispredic_extra}\"")
         # Ajout des options de skip
         if not self.tapioca_cb.isChecked():
             base_cmd.append("--skip-tapioca")
@@ -542,6 +584,8 @@ class PhotogrammetryGUI(QWidget):
         tapas_extra = self.tapas_extra.text().strip()
         c3dc_extra = self.c3dc_extra.text().strip()
         saisieappuisinit_pt = self.pt_lineedit.text().strip()
+        saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
+        saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
         run_tapioca = self.tapioca_cb.isChecked()
         run_tapas = self.tapas_cb.isChecked()
         run_saisieappuisinit = self.saisieappuisinit_cb.isChecked()
@@ -554,9 +598,9 @@ class PhotogrammetryGUI(QWidget):
             self.log_text.append("<span style='color:orange'>Attention : lancer Tapas sans Tapioca n'a pas de sens !</span>")
         self.log_text.clear()
         self.summary_label.setText("")
-        self.run_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca, run_tapas, run_saisieappuisinit, run_saisieappuispredic, run_c3dc)
+        self.action_run.setEnabled(False)
+        self.action_stop.setEnabled(True)
+        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, saisieappuisinit_extra, saisieappuispredic_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca, run_tapas, run_saisieappuisinit, run_saisieappuispredic, run_c3dc)
         self.pipeline_thread.log_signal.connect(self.append_log)
         self.pipeline_thread.finished_signal.connect(self.pipeline_finished)
         self.pipeline_thread.start()
@@ -588,16 +632,16 @@ class PhotogrammetryGUI(QWidget):
             self.pipeline_thread.terminate()
             self.pipeline_thread.wait()
             self.append_log("<span style='color:red'>Pipeline arrêté par l'utilisateur.</span>")
-            self.run_btn.setEnabled(True)
-            self.stop_btn.setEnabled(False)
+        self.action_run.setEnabled(True)
+        self.action_stop.setEnabled(False)
 
     def pipeline_finished(self, success, message):
         if success:
             self.summary_label.setText(f"<span style='color:green'>{message}</span>")
         else:
             self.summary_label.setText(f"<span style='color:red'>{message}</span>")
-        self.run_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
+        self.action_run.setEnabled(True)
+        self.action_stop.setEnabled(False)
 
 def check_micmac_or_quit():
     try:
@@ -668,6 +712,8 @@ if __name__ == "__main__":
         parser.add_argument('--tapas-extra', default='', help='Paramètres supplémentaires pour Tapas (optionnel)')
         parser.add_argument('--c3dc-extra', default='', help='Paramètres supplémentaires pour C3DC (optionnel)')
         parser.add_argument('--saisieappuisinit-pt', default='', help='Chemin du fichier de points d\'appui pour SaisieAppuisInit (optionnel)')
+        parser.add_argument('--saisieappuisinit-extra', default='', help='Paramètres supplémentaires pour SaisieAppuisInitQT (optionnel)')
+        parser.add_argument('--saisieappuispredic-extra', default='', help='Paramètres supplémentaires pour SaisieAppuisPredicQT (optionnel)')
         parser.add_argument('--skip-saisieappuisinit', action='store_true', help='Ne pas exécuter SaisieAppuisInit')
         parser.add_argument('--skip-saisieappuispredic', action='store_true', help='Ne pas exécuter SaisieAppuisPredic')
         parser.add_argument('--skip-tapioca', action='store_true', help='Ne pas exécuter Tapioca')
@@ -685,6 +731,8 @@ if __name__ == "__main__":
             try:
                 tapas_model = args.tapas_model
                 saisieappuisinit_pt = args.saisieappuisinit_pt or None
+                saisieappuisinit_extra = args.saisieappuisinit_extra
+                saisieappuispredic_extra = args.saisieappuispredic_extra
                 run_saisieappuisinit = not args.skip_saisieappuisinit
                 run_saisieappuispredic = not args.skip_saisieappuispredic
                 if not args.skip_tapioca:
@@ -692,9 +740,9 @@ if __name__ == "__main__":
                 if not args.skip_tapas:
                     run_micmac_tapas(args.input_dir, logger, tapas_model, args.tapas_extra)
                 if run_saisieappuisinit:
-                    run_micmac_saisieappuisinit(args.input_dir, logger, tapas_model, saisieappuisinit_pt)
+                    run_micmac_saisieappuisinit(args.input_dir, logger, tapas_model, saisieappuisinit_pt, saisieappuisinit_extra)
                 if run_saisieappuispredic:
-                    run_micmac_saisieappuispredic(args.input_dir, logger, tapas_model, saisieappuisinit_pt)
+                    run_micmac_saisieappuispredic(args.input_dir, logger, tapas_model, saisieappuisinit_pt, saisieappuispredic_extra)
                 if not args.skip_c3dc:
                     run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf, tapas_model=tapas_model, extra_params=args.c3dc_extra)
                 print("Pipeline terminé avec succès !")
