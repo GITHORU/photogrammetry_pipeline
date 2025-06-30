@@ -48,18 +48,60 @@ Ou, si vous avez généré un exécutable Linux (PyInstaller) :
 ./photogeoalign_linux.sh --no-gui <dossier_images> [options]
 ```
 
-#### Options disponibles
-- `--mode` : QuickMac, BigMac, MicMac (défaut : BigMac)
-- `--tapas-model` : Modèle Tapas (défaut : Fraser)
-- `--zoomf` : Facteur de zoom pour C3DC (défaut : 1)
-- `--tapioca-extra` : Paramètres supplémentaires pour Tapioca (ex : "NbMin=3")
-- `--tapas-extra` : Paramètres supplémentaires pour Tapas (ex : "ExpTxt=1")
-- `--c3dc-extra` : Paramètres supplémentaires pour C3DC (ex : "EZA=1")
+## Paramètres de la ligne de commande (CLI)
 
-#### Exemple complet
+Voici la liste des paramètres disponibles pour lancer le pipeline en mode console :
+
+### Paramètres principaux
+- `input_dir`  
+  **(positionnel)**  
+  Dossier contenant les images à traiter.
+- `--no-gui`  
+  Lance le pipeline en mode console (sans interface graphique).
+- `--mode`  
+  Mode de densification C3DC (`QuickMac`, `BigMac`, `MicMac`).  
+  **Défaut** : `BigMac`
+- `--zoomf`  
+  Facteur de zoom pour C3DC (1 = max résolution).  
+  **Défaut** : `1`
+- `--tapas-model`  
+  Modèle Tapas à utiliser (ex : `Fraser`, `RadialBasic`, etc.).  
+  **Défaut** : `Fraser`
+
+### Paramètres supplémentaires pour chaque étape
+- `--tapioca-extra`  
+  Paramètres supplémentaires pour Tapioca (ex : `"NbMin=3"`)
+- `--tapas-extra`  
+  Paramètres supplémentaires pour Tapas (ex : `"ExpTxt=1"`)
+- `--c3dc-extra`  
+  Paramètres supplémentaires pour C3DC (ex : `"EZA=1"`)
+
+### Contrôle des étapes du pipeline
+- `--skip-tapioca`  
+  Ne pas exécuter Tapioca
+- `--skip-tapas`  
+  Ne pas exécuter Tapas
+- `--skip-c3dc`  
+  Ne pas exécuter C3DC
+- `--skip-saisieappuisinit`  
+  Ne pas exécuter SaisieAppuisInitQT
+- `--skip-saisieappuispredic`  
+  Ne pas exécuter SaisieAppuisPredicQT
+
+### Paramètres pour les points d'appui
+- `--saisieappuisinit-pt <fichier.txt>`  
+  Chemin du fichier de points d'appui (format TXT, obligatoire pour les étapes d'appuis et GCPBascule).
+
+### Exemple de commande complète
+
 ```bash
-photogeoalign_windows.exe --no-gui "C:\chemin\vers\images" --mode QuickMac --tapas-model RadialBasic --zoomf 2 --tapioca-extra "NbMin=3" --tapas-extra "ExpTxt=1" --c3dc-extra "EZA=1"
+python photogeoalign.py --no-gui "C:/chemin/vers/images" --mode BigMac --tapas-model RadialBasic --zoomf 2 --saisieappuisinit-pt "GNSS_STA_ITRF2020.txt" --tapioca-extra "NbMin=3" --tapas-extra "ExpTxt=1" --c3dc-extra "EZA=1"
 ```
+
+**Remarques** :
+- Les étapes GCPBascule (init et predic) sont automatiques si les étapes Init ou Predic sont activées.
+- Les fichiers intermédiaires sont gérés automatiquement.
+- Les logs détaillent chaque étape et les fichiers utilisés.
 
 ## Structure du projet
 ```
