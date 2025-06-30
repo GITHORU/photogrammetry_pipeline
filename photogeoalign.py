@@ -112,6 +112,46 @@ def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1, tapas_model='Fr
     run_command(cmd, logger, cwd=abs_input_dir)
     logger.info(f"Nuage dense généré par C3DC {mode} (voir dossier PIMs-{mode}/ ou fichier C3DC_{mode}.ply)")
 
+def to_micmac_path(path):
+    return path.replace("\\", "/")
+
+def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_file=None):
+    import shutil
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*DNG'
+    ori = tapas_model
+    if not appuis_file:
+        logger.error("Aucun fichier d'appuis fourni pour SaisieAppuisInitQT.")
+        raise RuntimeError("Aucun fichier d'appuis fourni pour SaisieAppuisInitQT.")
+    appuis_file = os.path.abspath(appuis_file)
+    if not os.path.exists(appuis_file):
+        logger.error(f"Fichier d'appuis introuvable : {appuis_file}")
+        raise RuntimeError(f"Fichier d'appuis introuvable : {appuis_file}")
+    if not appuis_file.lower().endswith('.txt'):
+        logger.error("Le fichier d'appuis doit être au format .txt")
+        raise RuntimeError("Le fichier d'appuis doit être au format .txt")
+    # Conversion systématique en xml
+    xml_file = os.path.splitext(appuis_file)[0] + '.xml'
+    logger.info(f"Conversion du fichier d'appuis TXT en XML avec GCPConvert : {appuis_file} -> {xml_file}")
+    cmd_gcp = ['mm3d', 'GCPConvert', 'AppInFile', to_micmac_path(appuis_file)]
+    run_command(cmd_gcp, logger, cwd=abs_input_dir)
+    if not os.path.exists(xml_file):
+        xml_file_candidate = os.path.join(abs_input_dir, os.path.basename(xml_file))
+        if os.path.exists(xml_file_candidate):
+            xml_file = xml_file_candidate
+        else:
+            logger.error(f"Le fichier XML n'a pas été généré par GCPConvert : {xml_file}")
+            raise RuntimeError(f"Le fichier XML n'a pas été généré par GCPConvert : {xml_file}")
+    # Calcul du chemin relatif du fichier XML par rapport au dossier d'images
+    xml_file_rel = os.path.relpath(xml_file, abs_input_dir)
+    ptsimginit_file = os.path.join(abs_input_dir, "PtsImgInit.xml")
+    logger.info(f"Lancement de SaisieAppuisInitQT dans {abs_input_dir} sur {pattern} avec Ori={ori}, appuis={xml_file_rel}, sortie={ptsimginit_file} ...")
+    cmd = [
+        'mm3d', 'SaisieAppuisInitQT', pattern, ori, xml_file_rel, 'PtsImgInit.xml'
+    ]
+    run_command(cmd, logger, cwd=abs_input_dir)
+    logger.info("SaisieAppuisInitQT terminé.")
+
 class QtLogHandler(logging.Handler):
     def __init__(self, signal):
         super().__init__()
@@ -124,7 +164,7 @@ class PipelineThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, run_tapioca=True, run_tapas=True, run_c3dc=True):
+    def __init__(self, input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca=True, run_tapas=True, run_saisieappuisinit=True, run_c3dc=True):
         super().__init__()
         self.input_dir = input_dir
         self.mode = mode
@@ -133,8 +173,10 @@ class PipelineThread(QThread):
         self.tapioca_extra = tapioca_extra
         self.tapas_extra = tapas_extra
         self.c3dc_extra = c3dc_extra
+        self.saisieappuisinit_pt = saisieappuisinit_pt
         self.run_tapioca = run_tapioca
         self.run_tapas = run_tapas
+        self.run_saisieappuisinit = run_saisieappuisinit
         self.run_c3dc = run_c3dc
 
     def run(self):
@@ -152,6 +194,9 @@ class PipelineThread(QThread):
             if self.run_tapas:
                 run_micmac_tapas(self.input_dir, logger, self.tapas_model, self.tapas_extra)
                 self.log_signal.emit("Tapas terminé.\n")
+            if self.run_saisieappuisinit:
+                run_micmac_saisieappuisinit(self.input_dir, logger, self.tapas_model, self.saisieappuisinit_pt)
+                self.log_signal.emit("SaisieAppuisInitQT terminé.\n")
             if self.run_c3dc:
                 run_micmac_c3dc(self.input_dir, logger, mode=self.mode, zoomf=self.zoomf, tapas_model=self.tapas_model, extra_params=self.c3dc_extra)
                 self.log_signal.emit("C3DC terminé.\n")
@@ -267,13 +312,27 @@ class PhotogrammetryGUI(QWidget):
         self.tapioca_cb.setChecked(True)
         self.tapas_cb = QCheckBox("Tapas")
         self.tapas_cb.setChecked(True)
+        self.saisieappuisinit_cb = QCheckBox("SaisieAppuisInitQT")
+        self.saisieappuisinit_cb.setChecked(True)
         self.c3dc_cb = QCheckBox("C3DC")
         self.c3dc_cb.setChecked(True)
         steps_layout.addWidget(QLabel("Étapes à exécuter :"))
         steps_layout.addWidget(self.tapioca_cb)
         steps_layout.addWidget(self.tapas_cb)
+        steps_layout.addWidget(self.saisieappuisinit_cb)
         steps_layout.addWidget(self.c3dc_cb)
         param_layout.addLayout(steps_layout)
+        # Chemin du fichier de points d'appui
+        pt_layout = QHBoxLayout()
+        self.pt_lineedit = QLineEdit()
+        self.pt_lineedit.setPlaceholderText("Chemin du fichier d'appuis (.txt uniquement)")
+        self.pt_lineedit.setText("")
+        pt_browse_btn = QPushButton("Parcourir…")
+        pt_browse_btn.clicked.connect(self.browse_pt_file)
+        pt_layout.addWidget(QLabel("Fichier d'appuis :"))
+        pt_layout.addWidget(self.pt_lineedit)
+        pt_layout.addWidget(pt_browse_btn)
+        param_layout.addLayout(pt_layout)
         # Bouton lancer
         self.run_btn = QPushButton("Lancer le pipeline")
         self.run_btn.setStyleSheet("""
@@ -348,6 +407,8 @@ class PhotogrammetryGUI(QWidget):
         self.tapioca_cb.stateChanged.connect(self.update_cmd_line)
         self.tapas_cb.stateChanged.connect(self.update_cmd_line)
         self.c3dc_cb.stateChanged.connect(self.update_cmd_line)
+        self.saisieappuisinit_cb.stateChanged.connect(self.update_cmd_line)
+        self.pt_lineedit.textChanged.connect(self.update_cmd_line)
         self.update_cmd_line()
 
     def update_cmd_line(self):
@@ -358,6 +419,7 @@ class PhotogrammetryGUI(QWidget):
         tapioca_extra = self.tapioca_extra.text().strip()
         tapas_extra = self.tapas_extra.text().strip()
         c3dc_extra = self.c3dc_extra.text().strip()
+        saisieappuisinit_pt = self.pt_lineedit.text().strip()
         base_cmd = ["photogeoalign.py", "--no-gui", f'\"{input_dir}\"', f"--mode {mode}", f"--tapas-model {tapas_model}", f"--zoomf {zoomf}"]
         if tapioca_extra:
             base_cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
@@ -365,11 +427,15 @@ class PhotogrammetryGUI(QWidget):
             base_cmd.append(f"--tapas-extra \"{tapas_extra}\"")
         if c3dc_extra:
             base_cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
+        if saisieappuisinit_pt:
+            base_cmd.append(f"--saisieappuisinit-pt \"{saisieappuisinit_pt}\"")
         # Ajout des options de skip
         if not self.tapioca_cb.isChecked():
             base_cmd.append("--skip-tapioca")
         if not self.tapas_cb.isChecked():
             base_cmd.append("--skip-tapas")
+        if not self.saisieappuisinit_cb.isChecked():
+            base_cmd.append("--skip-saisieappuisinit")
         if not self.c3dc_cb.isChecked():
             base_cmd.append("--skip-c3dc")
         python_cmd = self.python_selector.currentText()
@@ -380,6 +446,11 @@ class PhotogrammetryGUI(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'images")
         if folder:
             self.dir_edit.setText(folder)
+
+    def browse_pt_file(self):
+        pt_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier d'appuis (.txt)", "", "Fichiers d'appuis (*.txt)")
+        if pt_file:
+            self.pt_lineedit.setText(pt_file)
 
     def launch_pipeline(self):
         input_dir = self.dir_edit.text().strip()
@@ -392,8 +463,10 @@ class PhotogrammetryGUI(QWidget):
         tapioca_extra = self.tapioca_extra.text().strip()
         tapas_extra = self.tapas_extra.text().strip()
         c3dc_extra = self.c3dc_extra.text().strip()
+        saisieappuisinit_pt = self.pt_lineedit.text().strip()
         run_tapioca = self.tapioca_cb.isChecked()
         run_tapas = self.tapas_cb.isChecked()
+        run_saisieappuisinit = self.saisieappuisinit_cb.isChecked()
         run_c3dc = self.c3dc_cb.isChecked()
         # Avertissement si incohérence
         if run_c3dc and not run_tapas:
@@ -404,7 +477,7 @@ class PhotogrammetryGUI(QWidget):
         self.summary_label.setText("")
         self.run_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, run_tapioca, run_tapas, run_c3dc)
+        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca, run_tapas, run_saisieappuisinit, run_c3dc)
         self.pipeline_thread.log_signal.connect(self.append_log)
         self.pipeline_thread.finished_signal.connect(self.pipeline_finished)
         self.pipeline_thread.start()
@@ -515,6 +588,8 @@ if __name__ == "__main__":
         parser.add_argument('--tapioca-extra', default='', help='Paramètres supplémentaires pour Tapioca (optionnel)')
         parser.add_argument('--tapas-extra', default='', help='Paramètres supplémentaires pour Tapas (optionnel)')
         parser.add_argument('--c3dc-extra', default='', help='Paramètres supplémentaires pour C3DC (optionnel)')
+        parser.add_argument('--saisieappuisinit-pt', default='', help='Chemin du fichier de points d\'appui pour SaisieAppuisInitQT (optionnel)')
+        parser.add_argument('--skip-saisieappuisinit', action='store_true', help='Ne pas exécuter SaisieAppuisInitQT')
         parser.add_argument('--skip-tapioca', action='store_true', help='Ne pas exécuter Tapioca')
         parser.add_argument('--skip-tapas', action='store_true', help='Ne pas exécuter Tapas')
         parser.add_argument('--skip-c3dc', action='store_true', help='Ne pas exécuter C3DC')
@@ -529,10 +604,13 @@ if __name__ == "__main__":
             print(f"Début du pipeline photogrammétrique pour le dossier : {args.input_dir}")
             try:
                 tapas_model = args.tapas_model
+                saisieappuisinit_pt = args.saisieappuisinit_pt or None
                 if not args.skip_tapioca:
                     run_micmac_tapioca(args.input_dir, logger, args.tapioca_extra)
                 if not args.skip_tapas:
                     run_micmac_tapas(args.input_dir, logger, tapas_model, args.tapas_extra)
+                if not args.skip_saisieappuisinit:
+                    run_micmac_saisieappuisinit(args.input_dir, logger, tapas_model, saisieappuisinit_pt)
                 if not args.skip_c3dc:
                     run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf, tapas_model=tapas_model, extra_params=args.c3dc_extra)
                 print("Pipeline terminé avec succès !")
