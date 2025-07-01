@@ -15,6 +15,7 @@ from time import sleep
 from pathlib import Path
 import re
 import platform
+import shutil
 
 # Protection freeze_support pour Windows/pyinstaller
 if __name__ == "__main__":
@@ -118,14 +119,20 @@ def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1, tapas_model='Fr
 def to_micmac_path(path):
     return path.replace("\\", "/")
 
+def micmac_command_exists(cmd):
+    try:
+        result = subprocess.run(['mm3d', cmd, '--help'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return result.returncode == 0 or b'usage' in result.stdout.lower() or b'usage' in result.stderr.lower()
+    except Exception:
+        return False
+
 def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_file=None, extra_params=""):
-    import shutil
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*DNG'
     ori = tapas_model
     if not appuis_file:
-        logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisInitQT.")
-        raise RuntimeError("Aucun fichier de coordonnées fourni pour SaisieAppuisInitQT.")
+        logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisInit.")
+        raise RuntimeError("Aucun fichier de coordonnées fourni pour SaisieAppuisInit.")
     appuis_file = os.path.abspath(appuis_file)
     if not os.path.exists(appuis_file):
         logger.error(f"Fichier de coordonnées introuvable : {appuis_file}")
@@ -147,14 +154,19 @@ def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_
             raise RuntimeError(f"Le fichier XML n'a pas été généré par GCPConvert : {xml_file}")
     # Chemin relatif pour MicMac
     xml_file_rel = os.path.relpath(xml_file, abs_input_dir)
-    logger.info(f"Lancement de SaisieAppuisInitQT dans {abs_input_dir} sur {pattern} avec Ori={ori}, appuis={xml_file_rel}, sortie=PtsImgInit.xml ...")
+    # Détection de la commande à utiliser
+    if micmac_command_exists('SaisieAppuisInitQT'):
+        cmd_name = 'SaisieAppuisInitQT'
+    else:
+        cmd_name = 'SaisieAppuisInit'
+    logger.info(f"Lancement de {cmd_name} dans {abs_input_dir} sur {pattern} avec Ori={ori}, appuis={xml_file_rel}, sortie=PtsImgInit.xml ...")
     cmd = [
-        'mm3d', 'SaisieAppuisInitQT', pattern, ori, xml_file_rel, 'PtsImgInit.xml'
+        'mm3d', cmd_name, pattern, ori, xml_file_rel, 'PtsImgInit.xml'
     ]
     if extra_params:
         cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
-    logger.info("SaisieAppuisInitQT terminé.")
+    logger.info(f"{cmd_name} terminé.")
     return os.path.join(abs_input_dir, "PtsImgInit.xml")
 
 def run_micmac_gcpbascule_init(input_dir, logger, tapas_model="Fraser", appuis_file=None):
@@ -183,20 +195,25 @@ def run_micmac_saisieappuispredic(input_dir, logger, tapas_model="Fraser", ori_a
     pattern = '.*DNG'
     ori = ori_abs_init or f"{tapas_model}_abs_init"  # Utilise l'orientation de sortie de GCPBascule
     if not appuis_file:
-        logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisPredicQT.")
-        raise RuntimeError("Aucun fichier de coordonnées fourni pour SaisieAppuisPredicQT.")
+        logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisPredic.")
+        raise RuntimeError("Aucun fichier de coordonnées fourni pour SaisieAppuisPredic.")
     appuis_file = os.path.abspath(appuis_file)
     xml_file = os.path.splitext(appuis_file)[0] + '.xml'
     ptsimgpredic_file = os.path.join(abs_input_dir, "PtsImgPredic.xml")
     xml_file_rel = os.path.relpath(xml_file, abs_input_dir)
-    logger.info(f"Lancement de SaisieAppuisPredicQT dans {abs_input_dir} sur {pattern} avec Ori={ori}, appuis={xml_file_rel}, sortie=PtsImgPredic.xml ...")
+    # Détection de la commande à utiliser
+    if micmac_command_exists('SaisieAppuisPredicQT'):
+        cmd_name = 'SaisieAppuisPredicQT'
+    else:
+        cmd_name = 'SaisieAppuisPredic'
+    logger.info(f"Lancement de {cmd_name} dans {abs_input_dir} sur {pattern} avec Ori={ori}, appuis={xml_file_rel}, sortie=PtsImgPredic.xml ...")
     cmd = [
-        'mm3d', 'SaisieAppuisPredicQT', pattern, ori, xml_file_rel, 'PtsImgPredic.xml'
+        'mm3d', cmd_name, pattern, ori, xml_file_rel, 'PtsImgPredic.xml'
     ]
     if extra_params:
         cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
-    logger.info("SaisieAppuisPredicQT terminé.")
+    logger.info(f"{cmd_name} terminé.")
     return ptsimgpredic_file
 
 def run_micmac_gcpbascule_predic(input_dir, logger, tapas_model="Fraser", appuis_file=None):
