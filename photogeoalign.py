@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QSplashScreen, QTabWidget, QCheckBox, QToolBar
+    QMessageBox, QSplashScreen, QTabWidget, QCheckBox, QToolBar, QDialog, QFormLayout, QDialogButtonBox
 )
 from PySide6.QtCore import QThread, Signal, Qt, QTimer, QPoint
 from PySide6.QtGui import QPixmap, QIcon, QMovie, QAction, QPainter, QColor, QBrush
@@ -14,6 +14,7 @@ import time
 from time import sleep
 from pathlib import Path
 import re
+import platform
 
 # Protection freeze_support pour Windows/pyinstaller
 if __name__ == "__main__":
@@ -74,6 +75,7 @@ def run_micmac_tapioca(input_dir, logger, extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*.DNG'
     logger.info(f"Tapioca va utiliser les DNG dans {abs_input_dir} avec le motif {pattern} ...")
+    # 1. Génération des tie points (pipeline)
     cmd = [
         'mm3d', 'Tapioca', 'MulScale', pattern, '500', '2700'
     ]
@@ -86,7 +88,7 @@ def run_micmac_tapioca(input_dir, logger, extra_params=""):
     else:
         logger.error("Le dossier Homol n'a pas été généré par Tapioca. Arrêt du pipeline.")
         raise RuntimeError("Le dossier Homol n'a pas été généré par Tapioca.")
-    logger.info("Tapioca terminé.")
+    logger.info("Tapioca terminé. Les tie points .dat sont utilisés pour le pipeline.")
 
 def run_micmac_tapas(input_dir, logger, tapas_model="Fraser", extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
@@ -103,9 +105,10 @@ def run_micmac_tapas(input_dir, logger, tapas_model="Fraser", extra_params=""):
 def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1, tapas_model='Fraser', extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
     pattern = '.*.DNG'
-    logger.info(f"Lancement de C3DC ({mode}) dans {abs_input_dir} avec le motif {pattern} ...")
+    ori = f"{tapas_model}_abs"
+    logger.info(f"Lancement de C3DC ({mode}) dans {abs_input_dir} avec le motif {pattern} et Ori={ori} ...")
     cmd = [
-        'mm3d', 'C3DC', mode, pattern, tapas_model, f'ZoomF={zoomf}'
+        'mm3d', 'C3DC', mode, pattern, ori, f'ZoomF={zoomf}'
     ]
     if extra_params:
         cmd += extra_params.split()
@@ -121,18 +124,18 @@ def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_
     pattern = '.*DNG'
     ori = tapas_model
     if not appuis_file:
-        logger.error("Aucun fichier d'appuis fourni pour SaisieAppuisInitQT.")
-        raise RuntimeError("Aucun fichier d'appuis fourni pour SaisieAppuisInitQT.")
+        logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisInitQT.")
+        raise RuntimeError("Aucun fichier de coordonnées fourni pour SaisieAppuisInitQT.")
     appuis_file = os.path.abspath(appuis_file)
     if not os.path.exists(appuis_file):
-        logger.error(f"Fichier d'appuis introuvable : {appuis_file}")
-        raise RuntimeError(f"Fichier d'appuis introuvable : {appuis_file}")
+        logger.error(f"Fichier de coordonnées introuvable : {appuis_file}")
+        raise RuntimeError(f"Fichier de coordonnées introuvable : {appuis_file}")
     if not appuis_file.lower().endswith('.txt'):
-        logger.error("Le fichier d'appuis doit être au format .txt")
-        raise RuntimeError("Le fichier d'appuis doit être au format .txt")
+        logger.error("Le fichier de coordonnées doit être au format .txt")
+        raise RuntimeError("Le fichier de coordonnées doit être au format .txt")
     # Conversion systématique en xml
     xml_file = os.path.splitext(appuis_file)[0] + '.xml'
-    logger.info(f"Conversion du fichier d'appuis TXT en XML avec GCPConvert : {appuis_file} -> {xml_file}")
+    logger.info(f"Conversion du fichier de coordonnées TXT en XML avec GCPConvert : {appuis_file} -> {xml_file}")
     cmd_gcp = ['mm3d', 'GCPConvert', 'AppInFile', appuis_file]
     run_command(cmd_gcp, logger, cwd=abs_input_dir)
     if not os.path.exists(xml_file):
@@ -160,8 +163,8 @@ def run_micmac_gcpbascule_init(input_dir, logger, tapas_model="Fraser", appuis_f
     ori_in = tapas_model
     ori_out = f"{tapas_model}_abs_init"
     if not appuis_file:
-        logger.error("Aucun fichier d'appuis fourni pour GCPBascule (init).")
-        raise RuntimeError("Aucun fichier d'appuis fourni pour GCPBascule (init).")
+        logger.error("Aucun fichier de coordonnées fourni pour GCPBascule (init).")
+        raise RuntimeError("Aucun fichier de coordonnées fourni pour GCPBascule (init).")
     appuis_file = os.path.abspath(appuis_file)
     xml_file = os.path.splitext(appuis_file)[0] + '.xml'
     ptsimginit_s2d = os.path.join(abs_input_dir, "PtsImgInit-S2D.xml")
@@ -180,8 +183,8 @@ def run_micmac_saisieappuispredic(input_dir, logger, tapas_model="Fraser", ori_a
     pattern = '.*DNG'
     ori = ori_abs_init or f"{tapas_model}_abs_init"  # Utilise l'orientation de sortie de GCPBascule
     if not appuis_file:
-        logger.error("Aucun fichier d'appuis fourni pour SaisieAppuisPredicQT.")
-        raise RuntimeError("Aucun fichier d'appuis fourni pour SaisieAppuisPredicQT.")
+        logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisPredicQT.")
+        raise RuntimeError("Aucun fichier de coordonnées fourni pour SaisieAppuisPredicQT.")
     appuis_file = os.path.abspath(appuis_file)
     xml_file = os.path.splitext(appuis_file)[0] + '.xml'
     ptsimgpredic_file = os.path.join(abs_input_dir, "PtsImgPredic.xml")
@@ -202,8 +205,8 @@ def run_micmac_gcpbascule_predic(input_dir, logger, tapas_model="Fraser", appuis
     ori_in = f"{tapas_model}_abs_init"
     ori_out = f"{tapas_model}_abs"
     if not appuis_file:
-        logger.error("Aucun fichier d'appuis fourni pour GCPBascule (predic).")
-        raise RuntimeError("Aucun fichier d'appuis fourni pour GCPBascule (predic).")
+        logger.error("Aucun fichier de coordonnées fourni pour GCPBascule (predic).")
+        raise RuntimeError("Aucun fichier de coordonnées fourni pour GCPBascule (predic).")
     appuis_file = os.path.abspath(appuis_file)
     xml_file = os.path.splitext(appuis_file)[0] + '.xml'
     ptsimgpredic_s2d = os.path.join(abs_input_dir, "PtsImgPredic-S2D.xml")
@@ -287,6 +290,39 @@ def resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.dirname(__file__), relative_path)
 
+class JobExportDialog(QDialog):
+    def __init__(self, parent=None, job_name="micmacReveneau", output="Tapioc_Tapas.out", partition="ncpu", ntasks=128, cli_cmd=""):
+        super().__init__(parent)
+        self.setWindowTitle("Exporter le batch SLURM (.job)")
+        self.setModal(True)
+        layout = QFormLayout(self)
+        self.job_name_edit = QLineEdit(job_name)
+        self.output_edit = QLineEdit(output)
+        self.partition_combo = QComboBox()
+        self.partition_combo.addItems(["ncpu", "ncpum", "ncpu_long", "ncpu_short"])
+        self.partition_combo.setCurrentText(partition)
+        self.ntasks_spin = QSpinBox()
+        self.ntasks_spin.setMinimum(1)
+        self.ntasks_spin.setMaximum(1024)
+        self.ntasks_spin.setValue(ntasks)
+        self.cli_cmd = cli_cmd
+        layout.addRow("Nom du job :", self.job_name_edit)
+        layout.addRow("Fichier de sortie :", self.output_edit)
+        layout.addRow("Partition :", self.partition_combo)
+        layout.addRow("Nombre de tâches :", self.ntasks_spin)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    def get_values(self):
+        return {
+            "job_name": self.job_name_edit.text().strip() or "micmacReveneau",
+            "output": self.output_edit.text().strip() or "Tapioc_Tapas.out",
+            "partition": self.partition_combo.currentText(),
+            "ntasks": self.ntasks_spin.value(),
+            "cli_cmd": self.cli_cmd
+        }
+
 class PhotogrammetryGUI(QWidget):
     def __init__(self):
         super().__init__()
@@ -328,7 +364,6 @@ class PhotogrammetryGUI(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setBrush(QBrush(QColor(211, 47, 47)))  # rouge
         painter.setPen(Qt.GlobalColor.transparent)
-        # Cercle plus petit (diamètre 12px, centré)
         painter.drawEllipse(6, 6, 12, 12)
         painter.end()
         icon_stop = QIcon(pixmap_stop)
@@ -337,6 +372,26 @@ class PhotogrammetryGUI(QWidget):
         toolbar.addAction(action_stop)
         self.action_stop = action_stop
         self.action_stop.setEnabled(False)
+        # Icône pour Export .job (flèche vers le bas orange, plus grande)
+        pixmap_export = QPixmap(24, 24)
+        pixmap_export.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_export)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        orange = QColor(255, 152, 0)  # #ff9800
+        painter.setBrush(QBrush(orange))
+        painter.setPen(Qt.GlobalColor.transparent)
+        # Tige de la flèche (plus large et plus longue)
+        painter.drawRect(10, 6, 4, 10)
+        # Pointe de la flèche (plus grande)
+        points = [
+            QPoint(12, 21), QPoint(6, 14), QPoint(18, 14)
+        ]
+        painter.drawPolygon(points)
+        painter.end()
+        icon_export = QIcon(pixmap_export)
+        action_export = QAction(icon_export, "Exporter le batch .job", self)
+        action_export.triggered.connect(self.export_job_dialog)
+        toolbar.addAction(action_export)
         main_layout.addWidget(toolbar)
         # Tabs
         tabs = QTabWidget()
@@ -409,14 +464,14 @@ class PhotogrammetryGUI(QWidget):
         tapas_model_layout.addWidget(QLabel("Modèle Tapas :"))
         tapas_model_layout.addWidget(self.tapas_model_combo)
         param_layout.addLayout(tapas_model_layout)
-        # 5. Fichier d'appuis
+        # 5. Fichier de coordonnées
         pt_layout = QHBoxLayout()
         self.pt_lineedit = QLineEdit()
-        self.pt_lineedit.setPlaceholderText("Chemin du fichier d'appuis (.txt uniquement)")
+        self.pt_lineedit.setPlaceholderText("Chemin du fichier de coordonnées (.txt uniquement)")
         self.pt_lineedit.setText("")
         pt_browse_btn = QPushButton("Parcourir…")
         pt_browse_btn.clicked.connect(self.browse_pt_file)
-        pt_layout.addWidget(QLabel("Fichier d'appuis :"))
+        pt_layout.addWidget(QLabel("Fichier de coordonnées :"))
         pt_layout.addWidget(self.pt_lineedit)
         pt_layout.addWidget(pt_browse_btn)
         param_layout.addLayout(pt_layout)
@@ -568,7 +623,7 @@ class PhotogrammetryGUI(QWidget):
             self.dir_edit.setText(folder)
 
     def browse_pt_file(self):
-        pt_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier d'appuis (.txt)", "", "Fichiers d'appuis (*.txt)")
+        pt_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier de coordonnées (.txt)", "", "Fichiers de coordonnées (*.txt)")
         if pt_file:
             self.pt_lineedit.setText(pt_file)
 
@@ -642,6 +697,53 @@ class PhotogrammetryGUI(QWidget):
             self.summary_label.setText(f"<span style='color:red'>{message}</span>")
         self.action_run.setEnabled(True)
         self.action_stop.setEnabled(False)
+
+    def export_job_dialog(self):
+        import sys
+        import os
+        exe_path = sys.executable
+        script_path = os.path.abspath(__file__)
+        cli_cmd = self.cmd_line.text().strip()
+        parts = cli_cmd.split()
+        # On retire le premier mot (python ou exe)
+        args = parts[1:]
+        # On retire tout photogeoalign.py
+        filtered_args = [arg for arg in args if not arg.endswith('photogeoalign.py') and not arg.endswith('photogeoalign.py"')]
+        if getattr(sys, 'frozen', False):
+            # Cas exécutable PyInstaller
+            cmd = [exe_path] + filtered_args
+        else:
+            # Cas Python
+            cmd = [exe_path, script_path] + filtered_args
+        cli_cmd = " ".join(cmd)
+        dialog = JobExportDialog(self, cli_cmd=cli_cmd)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            vals = dialog.get_values()
+            job_content = self.generate_job_script(vals)
+            file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "micmac.job", "Fichiers batch (*.job *.sh)")
+            if file_path:
+                try:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(job_content)
+                    QMessageBox.information(self, "Export réussi", f"Script batch exporté :\n{file_path}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
+
+    def generate_job_script(self, vals):
+        # Génère le contenu du script SLURM
+        return f"""#!/bin/bash
+
+#SBATCH --job-name {vals['job_name']}
+#SBATCH --output {vals['output']}
+#SBATCH --nodes=1-1
+#SBATCH --partition {vals['partition']} #ncpum,ncpu,ncpulong
+#SBATCH --ntasks={vals['ntasks']}
+
+module purge
+module load micmac
+
+{vals['cli_cmd']}
+"""
 
 def check_micmac_or_quit():
     try:
