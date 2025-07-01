@@ -121,8 +121,14 @@ def to_micmac_path(path):
 
 def micmac_command_exists(cmd):
     try:
-        result = subprocess.run(['mm3d', cmd, '--help'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return result.returncode == 0 or b'usage' in result.stdout.lower() or b'usage' in result.stderr.lower()
+        result = subprocess.run(
+            ['mm3d'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=3,
+            text=True
+        )
+        return cmd in result.stdout
     except Exception:
         return False
 
