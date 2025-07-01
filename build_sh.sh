@@ -10,7 +10,7 @@ ICON=logo.png
 NAME=photogeoalign_linux.sh
 
 # Construction de l'exécutable principal
-pyinstaller --noconfirm --onefile --windowed --icon=$ICON --add-data "logo.png:." --name $NAME $SCRIPT
+pyinstaller --noconfirm --onefile --windowed --icon=$ICON --add-data "logo.png:." --name $NAME --exclude-module PySide6.QtNetwork $SCRIPT
 
 echo
 if [ -f dist/$NAME ]; then

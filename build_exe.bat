@@ -12,7 +12,7 @@ set ICON=logo.png
 set NAME=photogeoalign_windows.exe
 
 REM Construction de l'exécutable principal
-pyinstaller --noconfirm --onefile --windowed --icon=%ICON% --add-data "logo.png;." --name %NAME% %SCRIPT%
+pyinstaller --noconfirm --onefile --windowed --icon=%ICON% --add-data "logo.png;." --name %NAME% --exclude-module PySide6.QtNetwork %SCRIPT%
 
 echo.
 echo Compilation terminée. L'exécutable se trouve dans le dossier dist\ sous le nom %NAME% 
