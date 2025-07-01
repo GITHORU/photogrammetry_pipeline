@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QSplashScreen, QTabWidget, QCheckBox, QToolBar, QDialog, QFormLayout, QDialogButtonBox
 )
 from PySide6.QtCore import QThread, Signal, Qt, QTimer, QPoint
-from PySide6.QtGui import QPixmap, QIcon, QMovie, QAction, QPainter, QColor, QBrush
+from PySide6.QtGui import QPixmap, QIcon, QMovie, QAction, QPainter, QColor, QBrush, QPen
 import subprocess
 import logging
 import argparse
@@ -476,57 +476,119 @@ class PhotogrammetryGUI(QWidget):
         pt_layout.addWidget(pt_browse_btn)
         param_layout.addLayout(pt_layout)
         # 6. Paramètres supplémentaires + cases à cocher associées
-        # Largeur fixe pour alignement harmonieux des cases à cocher
-        checkbox_width = 140
+        # Création des cases à cocher d'abord
         # Tapioca
         tapioca_line = QHBoxLayout()
         self.tapioca_cb = QCheckBox("Tapioca")
         self.tapioca_cb.setChecked(True)
-        self.tapioca_cb.setMinimumWidth(checkbox_width)
+        self.tapioca_cb.setMinimumWidth(140)
         self.tapioca_extra = QLineEdit()
         self.tapioca_extra.setPlaceholderText("Paramètres supplémentaires pour Tapioca (optionnel)")
         tapioca_line.addWidget(self.tapioca_cb)
         tapioca_line.addWidget(self.tapioca_extra)
-        param_layout.addLayout(tapioca_line)
         # Tapas
         tapas_line = QHBoxLayout()
         self.tapas_cb = QCheckBox("Tapas")
         self.tapas_cb.setChecked(True)
-        self.tapas_cb.setMinimumWidth(checkbox_width)
+        self.tapas_cb.setMinimumWidth(140)
         self.tapas_extra = QLineEdit()
         self.tapas_extra.setPlaceholderText("Paramètres supplémentaires pour Tapas (optionnel)")
         tapas_line.addWidget(self.tapas_cb)
         tapas_line.addWidget(self.tapas_extra)
-        param_layout.addLayout(tapas_line)
         # SaisieAppuisInitQT
         saisieappuisinit_line = QHBoxLayout()
         self.saisieappuisinit_cb = QCheckBox("SaisieAppuisInit")
         self.saisieappuisinit_cb.setChecked(True)
-        self.saisieappuisinit_cb.setMinimumWidth(checkbox_width)
+        self.saisieappuisinit_cb.setMinimumWidth(140)
         self.saisieappuisinit_extra = QLineEdit()
         self.saisieappuisinit_extra.setPlaceholderText("Paramètres supplémentaires pour SaisieAppuisInitQT (optionnel)")
         saisieappuisinit_line.addWidget(self.saisieappuisinit_cb)
         saisieappuisinit_line.addWidget(self.saisieappuisinit_extra)
-        param_layout.addLayout(saisieappuisinit_line)
         # SaisieAppuisPredicQT
         saisieappuispredic_line = QHBoxLayout()
         self.saisieappuispredic_cb = QCheckBox("SaisieAppuisPredic")
         self.saisieappuispredic_cb.setChecked(True)
-        self.saisieappuispredic_cb.setMinimumWidth(checkbox_width)
+        self.saisieappuispredic_cb.setMinimumWidth(140)
         self.saisieappuispredic_extra = QLineEdit()
         self.saisieappuispredic_extra.setPlaceholderText("Paramètres supplémentaires pour SaisieAppuisPredicQT (optionnel)")
         saisieappuispredic_line.addWidget(self.saisieappuispredic_cb)
         saisieappuispredic_line.addWidget(self.saisieappuispredic_extra)
-        param_layout.addLayout(saisieappuispredic_line)
         # C3DC
         c3dc_line = QHBoxLayout()
         self.c3dc_cb = QCheckBox("C3DC")
         self.c3dc_cb.setChecked(True)
-        self.c3dc_cb.setMinimumWidth(checkbox_width)
+        self.c3dc_cb.setMinimumWidth(140)
         self.c3dc_extra = QLineEdit()
         self.c3dc_extra.setPlaceholderText("Paramètres supplémentaires pour C3DC (optionnel)")
         c3dc_line.addWidget(self.c3dc_cb)
         c3dc_line.addWidget(self.c3dc_extra)
+        # Ajout bouton à bascule Tout cocher/décocher avec icône dynamique (petit, à gauche, sans texte)
+        toggle_btn = QPushButton()
+        toggle_btn.setFixedSize(24, 24)
+        toggle_btn.setCursor(Qt.PointingHandCursor)
+        toggle_btn.setStyleSheet("border: none; padding: 0px;")
+        def update_toggle_btn():
+            all_checked = all([
+                self.tapioca_cb.isChecked(),
+                self.tapas_cb.isChecked(),
+                self.saisieappuisinit_cb.isChecked(),
+                self.saisieappuispredic_cb.isChecked(),
+                self.c3dc_cb.isChecked()
+            ])
+            if all_checked:
+                # Icône croix rouge ❌
+                pixmap = QPixmap(20, 20)
+                pixmap.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(pixmap)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setPen(QPen(QColor(211, 47, 47), 4))
+                painter.drawLine(4, 4, 16, 16)
+                painter.drawLine(16, 4, 4, 16)
+                painter.end()
+                toggle_btn.setIcon(QIcon(pixmap))
+                toggle_btn.setToolTip("Tout décocher")
+            else:
+                # Icône coche verte ✅
+                pixmap = QPixmap(20, 20)
+                pixmap.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(pixmap)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setPen(QPen(QColor(76, 175, 80), 4))
+                painter.drawLine(4, 12, 9, 17)
+                painter.drawLine(9, 17, 16, 5)
+                painter.end()
+                toggle_btn.setIcon(QIcon(pixmap))
+                toggle_btn.setToolTip("Tout cocher")
+        def toggle_all():
+            all_checked = all([
+                self.tapioca_cb.isChecked(),
+                self.tapas_cb.isChecked(),
+                self.saisieappuisinit_cb.isChecked(),
+                self.saisieappuispredic_cb.isChecked(),
+                self.c3dc_cb.isChecked()
+            ])
+            state = not all_checked
+            self.tapioca_cb.setChecked(state)
+            self.tapas_cb.setChecked(state)
+            self.saisieappuisinit_cb.setChecked(state)
+            self.saisieappuispredic_cb.setChecked(state)
+            self.c3dc_cb.setChecked(state)
+            update_toggle_btn()
+        toggle_btn.clicked.connect(toggle_all)
+        for cb in [self.tapioca_cb, self.tapas_cb, self.saisieappuisinit_cb, self.saisieappuispredic_cb, self.c3dc_cb]:
+            cb.stateChanged.connect(update_toggle_btn)
+        # Ajout du bouton dans un layout horizontal collé à gauche
+        toggle_layout = QHBoxLayout()
+        toggle_layout.setContentsMargins(0, 0, 0, 0)
+        toggle_layout.setSpacing(0)
+        toggle_layout.addWidget(toggle_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        param_layout.addLayout(toggle_layout)
+        update_toggle_btn()
+        # Ajout des cases à cocher au layout
+        param_layout.addLayout(tapioca_line)
+        param_layout.addLayout(tapas_line)
+        param_layout.addLayout(saisieappuisinit_line)
+        param_layout.addLayout(saisieappuispredic_line)
         param_layout.addLayout(c3dc_line)
         # 9. Interpréteur Python
         python_layout = QHBoxLayout()
