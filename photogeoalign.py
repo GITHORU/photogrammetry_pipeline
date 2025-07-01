@@ -291,7 +291,7 @@ def resource_path(relative_path):
     return os.path.join(os.path.dirname(__file__), relative_path)
 
 class JobExportDialog(QDialog):
-    def __init__(self, parent=None, job_name="micmacReveneau", output="Tapioc_Tapas.out", partition="ncpu", ntasks=128, cli_cmd=""):
+    def __init__(self, parent=None, job_name="PhotoGeoAlign", output="PhotoGeoAlign.out", partition="ncpu", ntasks=128, cli_cmd=""):
         super().__init__(parent)
         self.setWindowTitle("Exporter le batch SLURM (.job)")
         self.setModal(True)
@@ -316,8 +316,8 @@ class JobExportDialog(QDialog):
         layout.addWidget(buttons)
     def get_values(self):
         return {
-            "job_name": self.job_name_edit.text().strip() or "micmacReveneau",
-            "output": self.output_edit.text().strip() or "Tapioc_Tapas.out",
+            "job_name": self.job_name_edit.text().strip() or "PhotoGeoAlign",
+            "output": self.output_edit.text().strip() or "PhotoGeoAlign.out",
             "partition": self.partition_combo.currentText(),
             "ntasks": self.ntasks_spin.value(),
             "cli_cmd": self.cli_cmd
