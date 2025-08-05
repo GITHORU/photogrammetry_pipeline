@@ -1,6 +1,10 @@
 # PhotoGeoAlign - Dépendances Python
 PySide6>=6.0.0
 pyinstaller>=5.0.0
+open3d>=0.17.0
+numpy>=1.21.0
+pyproj>=3.0.0
+scipy>=1.7.0
 
 # Les autres modules utilisés (argparse, logging, subprocess, os, sys, time, re, pathlib, multiprocessing)
 # font partie de la bibliothèque standard Python (>=3.8) 
