@@ -9,6 +9,12 @@
 !logo.png 
 !build_sh.sh
 !build_exe.bat
+!build_refactored.bat
+!build_refactored.sh
+!photogeoalign.spec
+!test_build_refactored.py
+!README_BUILD_REFACTORED.md
+!CHANGELOG_REFACTORING.md
 !resources/
 !resources/*
 !modules/
