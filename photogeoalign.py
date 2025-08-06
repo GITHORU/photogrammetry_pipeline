@@ -8,9 +8,14 @@ import sys
 import os
 import argparse
 import subprocess
+import multiprocessing
 from PySide6.QtWidgets import QApplication, QMessageBox, QLabel
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QIcon, QAction
+
+# Protection freeze_support pour Windows/pyinstaller
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
 
 # Import des modules refactorisés
 from modules.core.utils import setup_logger, resource_path

@@ -1,6 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-block_cipher = None
 
 a = Analysis(
     ['photogeoalign.py'],
@@ -15,28 +14,36 @@ a = Analysis(
         'modules.gui.dialogs',
         'modules.workers.pipeline_thread',
         'modules.workers.geodetic_thread',
-        'modules.workers.utils'
+        'modules.workers.utils',
+        'multiprocessing',
+        'multiprocessing.pool',
+        'multiprocessing.managers',
+        'multiprocessing.synchronize',
+        'multiprocessing.heap',
+        'scipy._lib._ccallback_c',
+        'scipy._cyutility',
+        'scipy.interpolate._bsplines',
+        'scipy.interpolate._fitpack',
+        'scipy.interpolate._fitpack2',
+        'scipy.sparse.csgraph._validation',
+        'scipy.special._ufuncs_cxx'
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=['PySide6.QtNetwork'],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
+    optimize=0,
 )
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
-    a.zipfiles,
     a.datas,
     [],
-    name='photogeoalign_windows',
+    name='photogeoalign_linux',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -49,5 +56,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='resources/logo.png'
-) 
+    icon=['resources/logo.png'],
+)

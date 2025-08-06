@@ -3,18 +3,14 @@
 # Nécessite pyinstaller installé dans l'environnement
 
 # Nettoyage des anciens builds
-rm -rf build dist photogeoalign.spec
+rm -rf build dist
 
-SCRIPT=photogeoalign.py
-ICON=resources/logo.png
-NAME=photogeoalign_linux
-
-# Construction de l'exécutable principal
-pyinstaller --noconfirm --onefile --windowed --icon=$ICON --add-data "resources/logo.png:." --name $NAME --exclude-module PySide6.QtNetwork $SCRIPT
+# Construction de l'exécutable principal en utilisant le fichier .spec existant
+pyinstaller --noconfirm photogeoalign_linux.spec
 
 echo
-if [ -f dist/$NAME ]; then
-    echo "Compilation terminée. L'exécutable se trouve dans le dossier dist/ sous le nom $NAME"
+if [ -f dist/photogeoalign_linux ]; then
+    echo "Compilation terminée. L'exécutable se trouve dans le dossier dist/ sous le nom photogeoalign_linux"
 else
     echo "Erreur : l'exécutable n'a pas été généré."
 fi 
