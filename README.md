@@ -1,7 +1,7 @@
 # PhotoGeoAlign
 
 <p align="center">
-  <img src="logo.png" alt="Logo PhotoGeoAlign" height="300"/>
+  <img src="resources/logo.png" alt="Logo PhotoGeoAlign" height="300"/>
 </p>
 
 PhotoGeoAlign est un pipeline photogrammétrique automatisé et personnalisable basé sur MicMac, utilisable en interface graphique (GUI) ou en ligne de commande (CLI). Il fonctionne sous Windows, Linux et macOS.
