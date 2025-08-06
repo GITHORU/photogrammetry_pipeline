@@ -8,4 +8,8 @@
 !.gitignore
 !logo.png 
 !build_sh.sh
-!build_exe.bat 
+!build_exe.bat
+!resources/
+!resources/*
+!modules/
+!modules/* 

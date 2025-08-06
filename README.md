@@ -106,7 +106,20 @@ python photogeoalign.py --no-gui "C:/chemin/vers/images" --mode BigMac --tapas-m
 ## Structure du projet
 ```
 photogeoalign.py         # Script principal (GUI + CLI)
-logo.png                # Logo de l'application
+modules/                 # Structure modulaire
+├── core/               # Fonctions utilitaires et métier
+│   ├── utils.py       # Fonctions utilitaires
+│   ├── micmac.py      # Pipeline MicMac
+│   └── geodetic.py    # Transformations géodésiques
+├── gui/                # Interface graphique
+│   ├── main_window.py  # Fenêtre principale
+│   └── dialogs.py      # Boîtes de dialogue
+└── workers/            # Threads de traitement
+    ├── pipeline_thread.py    # Thread pipeline MicMac
+    ├── geodetic_thread.py    # Thread transformations géodésiques
+    └── utils.py             # Utilitaires pour les threads
+resources/
+└── logo.png            # Logo de l'application
 requirements.txt        # Dépendances Python
 README.md               # Documentation
 ```
@@ -115,6 +128,26 @@ README.md               # Documentation
 - Python 3.8+
 - MicMac installé et accessible via la commande `mm3d`
 - PySide6 (`pip install -r requirements.txt`)
+
+## Build et distribution
+
+### Build avec PyInstaller
+```bash
+# Windows
+build_refactored.bat
+
+# Linux
+chmod +x build_refactored.sh
+./build_refactored.sh
+
+# Ou directement avec PyInstaller
+pyinstaller photogeoalign.spec
+```
+
+### Test du build
+```bash
+python test_build_refactored.py
+```
 
 ## Contact
 Pour toute question, suggestion ou contribution : reveneau@ipgp.fr
