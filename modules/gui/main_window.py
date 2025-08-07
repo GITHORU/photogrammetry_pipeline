@@ -99,9 +99,30 @@ class PhotogrammetryGUI(QWidget):
         painter.drawPolygon(points)
         painter.end()
         icon_export = QIcon(pixmap_export)
-        action_export = QAction(icon_export, "Exporter le batch .job", self)
+        action_export = QAction(icon_export, "Exporter le batch .job (MicMac)", self)
         action_export.triggered.connect(self.export_job_dialog)
         toolbar.addAction(action_export)
+        
+        # Icône pour Export .job géodésique (flèche vers le bas violette)
+        pixmap_export_geodetic = QPixmap(24, 24)
+        pixmap_export_geodetic.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_export_geodetic)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        purple = QColor(156, 39, 176)  # #9c27b0
+        painter.setBrush(QBrush(purple))
+        painter.setPen(Qt.GlobalColor.transparent)
+        # Tige de la flèche (plus large et plus longue)
+        painter.drawRect(10, 6, 4, 10)
+        # Pointe de la flèche (plus grande)
+        points = [
+            QPoint(12, 21), QPoint(6, 14), QPoint(18, 14)
+        ]
+        painter.drawPolygon(points)
+        painter.end()
+        icon_export_geodetic = QIcon(pixmap_export_geodetic)
+        action_export_geodetic = QAction(icon_export_geodetic, "Exporter le batch .job (Géodésique)", self)
+        action_export_geodetic.triggered.connect(self.export_geodetic_job_dialog)
+        toolbar.addAction(action_export_geodetic)
         main_layout.addWidget(toolbar)
         # Tabs
         tabs = QTabWidget()
@@ -1087,9 +1108,9 @@ class PhotogrammetryGUI(QWidget):
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
         dialog = JobExportDialog(self, cli_cmd=cli_cmd)
-        if dialog.exec() == QMessageBox.DialogCode.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
-            job_content = self.generate_job_script(vals)
+            job_content = self.generate_job_script(vals, "micmac")
             file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "micmac.job", "Fichiers batch (*.job *.sh)")
             if file_path:
                 try:
@@ -1099,8 +1120,50 @@ class PhotogrammetryGUI(QWidget):
                 except Exception as e:
                     QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
 
-    def generate_job_script(self, vals):
+    def export_geodetic_job_dialog(self):
+        import sys
+        import os
+        exe_path = sys.executable
+        script_path = os.path.abspath(__file__)
+        cli_cmd = self.geodetic_cmd_line.text().strip()
+        parts = cli_cmd.split()
+        # On retire le premier mot (python ou exe)
+        args = parts[1:]
+        # On retire tout photogeoalign.py
+        filtered_args = [arg for arg in args if not arg.endswith('photogeoalign.py') and not arg.endswith('photogeoalign.py"')]
+        if getattr(sys, 'frozen', False):
+            # Cas exécutable PyInstaller
+            cmd = [exe_path] + filtered_args
+        else:
+            # Cas Python
+            cmd = [exe_path, script_path] + filtered_args
+        cli_cmd = " ".join(cmd)
+        dialog = JobExportDialog(self, cli_cmd=cli_cmd)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            vals = dialog.get_values()
+            job_content = self.generate_job_script(vals, "geodetic")
+            file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "geodetic.job", "Fichiers batch (*.job *.sh)")
+            if file_path:
+                try:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(job_content)
+                    QMessageBox.information(self, "Export réussi", f"Script batch exporté :\n{file_path}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
+
+    def generate_job_script(self, vals, pipeline_type="micmac"):
         # Génère le contenu du script SLURM
+        if pipeline_type == "geodetic":
+            # Pour le pipeline géodésique, on charge les modules nécessaires pour pyproj et open3d
+            modules = """module purge
+module load python/3.9
+module load pyproj
+module load open3d"""
+        else:
+            # Pour le pipeline MicMac
+            modules = """module purge
+module load micmac"""
+        
         return f"""#!/bin/bash
 
 #SBATCH --job-name {vals['job_name']}
@@ -1109,8 +1172,7 @@ class PhotogrammetryGUI(QWidget):
 #SBATCH --partition {vals['partition']} #ncpum,ncpu,ncpulong
 #SBATCH --ntasks={vals['ntasks']}
 
-module purge
-module load micmac
+{modules}
 
 {vals['cli_cmd']}
 """ 
