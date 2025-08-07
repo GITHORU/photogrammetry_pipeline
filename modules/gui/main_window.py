@@ -3,7 +3,7 @@ import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QTabWidget, QCheckBox, QToolBar
+    QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog
 )
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QBrush, QPen, QAction
 from PySide6.QtCore import Qt, QTimer, QPoint
@@ -12,6 +12,27 @@ from ..workers import PipelineThread, GeodeticTransformThread
 from .dialogs import JobExportDialog
 
 class PhotogrammetryGUI(QWidget):
+    def create_folder_icon(self):
+        """Crée une icône de dossier standard"""
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Couleur du dossier
+        folder_color = QColor(255, 193, 7)  # Jaune standard
+        
+        # Dessiner le dossier
+        painter.setBrush(QBrush(folder_color))
+        painter.setPen(QPen(QColor(0, 0, 0), 1))
+        
+        # Base du dossier
+        painter.drawRect(2, 6, 12, 8)
+        # Partie supérieure du dossier
+        painter.drawRect(2, 4, 8, 4)
+        
+        painter.end()
+        return QIcon(pixmap)
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PhotoGeoAlign")
@@ -22,11 +43,30 @@ class PhotogrammetryGUI(QWidget):
         self.pipeline_thread = None
         self.geodetic_thread = None
         self.init_ui()
+    
+
 
     def init_ui(self):
         main_layout = QVBoxLayout()
         # Barre d'outils
         toolbar = QToolBar()
+        
+        # Icône rond rouge pour Arrêter (tout à gauche)
+        pixmap_stop = QPixmap(24, 24)
+        pixmap_stop.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_stop)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QBrush(QColor(211, 47, 47)))  # rouge
+        painter.setPen(Qt.GlobalColor.transparent)
+        painter.drawEllipse(6, 6, 12, 12)
+        painter.end()
+        icon_stop = QIcon(pixmap_stop)
+        action_stop = QAction(icon_stop, "Arrêter", self)
+        action_stop.triggered.connect(self.stop_pipeline)
+        toolbar.addAction(action_stop)
+        self.action_stop = action_stop
+        self.action_stop.setEnabled(False)
+        
         # Icône flèche verte pour Lancer
         pixmap_run = QPixmap(24, 24)
         pixmap_run.fill(Qt.GlobalColor.transparent)
@@ -47,12 +87,12 @@ class PhotogrammetryGUI(QWidget):
         toolbar.addAction(action_run)
         self.action_run = action_run
         
-        # Icône flèche bleue pour Lancer le pipeline géodésique
+        # Icône flèche orange pour Lancer le pipeline géodésique
         pixmap_geodetic = QPixmap(24, 24)
         pixmap_geodetic.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap_geodetic)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QBrush(QColor(33, 150, 243)))  # bleu
+        painter.setBrush(QBrush(QColor(255, 152, 0)))  # orange
         painter.setPen(Qt.GlobalColor.transparent)
         points = [
             pixmap_geodetic.rect().topLeft() + QPoint(6, 4),
@@ -67,28 +107,33 @@ class PhotogrammetryGUI(QWidget):
         toolbar.addAction(action_geodetic)
         self.action_geodetic = action_geodetic
         
-        # Icône rond rouge pour Arrêter
-        pixmap_stop = QPixmap(24, 24)
-        pixmap_stop.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap_stop)
+        # Icône flèche rouge pour Lancer le nouvel onglet
+        pixmap_new = QPixmap(24, 24)
+        pixmap_new.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_new)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QBrush(QColor(211, 47, 47)))  # rouge
+        painter.setBrush(QBrush(QColor(244, 67, 54)))  # rouge
         painter.setPen(Qt.GlobalColor.transparent)
-        painter.drawEllipse(6, 6, 12, 12)
+        points = [
+            pixmap_new.rect().topLeft() + QPoint(6, 4),
+            pixmap_new.rect().bottomLeft() + QPoint(6, -4),
+            pixmap_new.rect().center() + QPoint(6, 0)
+        ]
+        painter.drawPolygon(points)
         painter.end()
-        icon_stop = QIcon(pixmap_stop)
-        action_stop = QAction(icon_stop, "Arrêter", self)
-        action_stop.triggered.connect(self.stop_pipeline)
-        toolbar.addAction(action_stop)
-        self.action_stop = action_stop
-        self.action_stop.setEnabled(False)
-        # Icône pour Export .job (flèche vers le bas orange, plus grande)
+        icon_new = QIcon(pixmap_new)
+        action_new = QAction(icon_new, "Lancer le nouvel onglet", self)
+        action_new.triggered.connect(self.launch_new_pipeline)
+        toolbar.addAction(action_new)
+        self.action_new = action_new
+        
+        # Icône pour Export .job (flèche vers le bas verte - même couleur que lancement MicMac)
         pixmap_export = QPixmap(24, 24)
         pixmap_export.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap_export)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        orange = QColor(255, 152, 0)  # #ff9800
-        painter.setBrush(QBrush(orange))
+        green = QColor(76, 175, 80)  # même vert que lancement MicMac
+        painter.setBrush(QBrush(green))
         painter.setPen(Qt.GlobalColor.transparent)
         # Tige de la flèche (plus large et plus longue)
         painter.drawRect(10, 6, 4, 10)
@@ -103,13 +148,13 @@ class PhotogrammetryGUI(QWidget):
         action_export.triggered.connect(self.export_job_dialog)
         toolbar.addAction(action_export)
         
-        # Icône pour Export .job géodésique (flèche vers le bas violette)
+        # Icône pour Export .job géodésique (flèche vers le bas orange - même couleur que lancement géodésique)
         pixmap_export_geodetic = QPixmap(24, 24)
         pixmap_export_geodetic.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap_export_geodetic)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        purple = QColor(156, 39, 176)  # #9c27b0
-        painter.setBrush(QBrush(purple))
+        orange = QColor(255, 152, 0)  # même orange que lancement géodésique
+        painter.setBrush(QBrush(orange))
         painter.setPen(Qt.GlobalColor.transparent)
         # Tige de la flèche (plus large et plus longue)
         painter.drawRect(10, 6, 4, 10)
@@ -123,6 +168,28 @@ class PhotogrammetryGUI(QWidget):
         action_export_geodetic = QAction(icon_export_geodetic, "Exporter le batch .job (Géodésique)", self)
         action_export_geodetic.triggered.connect(self.export_geodetic_job_dialog)
         toolbar.addAction(action_export_geodetic)
+        
+        # Icône pour Export .job du nouvel onglet (flèche vers le bas rouge - même couleur que lancement)
+        pixmap_export_new = QPixmap(24, 24)
+        pixmap_export_new.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_export_new)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        red = QColor(244, 67, 54)  # même rouge que lancement
+        painter.setBrush(QBrush(red))
+        painter.setPen(Qt.GlobalColor.transparent)
+        # Tige de la flèche (plus large et plus longue)
+        painter.drawRect(10, 6, 4, 10)
+        # Pointe de la flèche (plus grande)
+        points = [
+            QPoint(12, 21), QPoint(6, 14), QPoint(18, 14)
+        ]
+        painter.drawPolygon(points)
+        painter.end()
+        icon_export_new = QIcon(pixmap_export_new)
+        action_export_new = QAction(icon_export_new, "Exporter le batch .job (Nouvel onglet)", self)
+        action_export_new.triggered.connect(self.export_new_job_dialog)
+        toolbar.addAction(action_export_new)
+        
         main_layout.addWidget(toolbar)
         # Tabs
         tabs = QTabWidget()
@@ -133,7 +200,9 @@ class PhotogrammetryGUI(QWidget):
         dir_layout = QHBoxLayout()
         self.dir_edit = QLineEdit()
         self.dir_edit.setPlaceholderText("Dossier d'images DNG à traiter")
-        browse_btn = QPushButton("Parcourir…")
+        browse_btn = QPushButton()
+        browse_btn.setIcon(self.create_folder_icon())
+        browse_btn.setToolTip("Parcourir")
         browse_btn.clicked.connect(self.browse_folder)
         dir_layout.addWidget(QLabel("Dossier d'images :"))
         dir_layout.addWidget(self.dir_edit)
@@ -200,7 +269,9 @@ class PhotogrammetryGUI(QWidget):
         self.pt_lineedit = QLineEdit()
         self.pt_lineedit.setPlaceholderText("Chemin du fichier de coordonnées (.txt uniquement)")
         self.pt_lineedit.setText("")
-        pt_browse_btn = QPushButton("Parcourir…")
+        pt_browse_btn = QPushButton()
+        pt_browse_btn.setIcon(self.create_folder_icon())
+        pt_browse_btn.setToolTip("Parcourir")
         pt_browse_btn.clicked.connect(self.browse_pt_file)
         pt_layout.addWidget(QLabel("Fichier de coordonnées :"))
         pt_layout.addWidget(self.pt_lineedit)
@@ -349,7 +420,9 @@ class PhotogrammetryGUI(QWidget):
         geodetic_dir_layout = QHBoxLayout()
         self.geodetic_dir_edit = QLineEdit()
         self.geodetic_dir_edit.setPlaceholderText("Dossier contenant les nuages .ply à traiter")
-        geodetic_browse_btn = QPushButton("Parcourir…")
+        geodetic_browse_btn = QPushButton()
+        geodetic_browse_btn.setIcon(self.create_folder_icon())
+        geodetic_browse_btn.setToolTip("Parcourir")
         geodetic_browse_btn.clicked.connect(self.browse_geodetic_folder)
         geodetic_dir_layout.addWidget(QLabel("Dossier de travail :"))
         geodetic_dir_layout.addWidget(self.geodetic_dir_edit)
@@ -362,7 +435,9 @@ class PhotogrammetryGUI(QWidget):
         self.geodetic_coord_edit = QLineEdit()
         self.geodetic_coord_edit.setPlaceholderText("Sélectionner un fichier de coordonnées (.txt)")
         coord_layout.addWidget(self.geodetic_coord_edit)
-        self.geodetic_coord_browse_btn = QPushButton("Parcourir")
+        self.geodetic_coord_browse_btn = QPushButton()
+        self.geodetic_coord_browse_btn.setIcon(self.create_folder_icon())
+        self.geodetic_coord_browse_btn.setToolTip("Parcourir")
         self.geodetic_coord_browse_btn.clicked.connect(self.browse_geodetic_coord_file)
         coord_layout.addWidget(self.geodetic_coord_browse_btn)
         geodetic_layout.addLayout(coord_layout)
@@ -398,7 +473,9 @@ class PhotogrammetryGUI(QWidget):
         bascule_xml_layout = QHBoxLayout()
         self.bascule_xml_edit = QLineEdit()
         self.bascule_xml_edit.setPlaceholderText("Chemin du fichier XML GCPBascule (.xml)")
-        bascule_xml_browse_btn = QPushButton("Parcourir…")
+        bascule_xml_browse_btn = QPushButton()
+        bascule_xml_browse_btn.setIcon(self.create_folder_icon())
+        bascule_xml_browse_btn.setToolTip("Parcourir")
         bascule_xml_browse_btn.clicked.connect(self.browse_bascule_xml_file)
         bascule_xml_layout.addWidget(QLabel("Fichier XML GCPBascule :"))
         bascule_xml_layout.addWidget(self.bascule_xml_edit)
@@ -478,138 +555,110 @@ class PhotogrammetryGUI(QWidget):
         geodetic_toggle_layout.addWidget(geodetic_toggle_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         geodetic_layout.addLayout(geodetic_toggle_layout)
         
-        # 6. Cases à cocher pour les étapes
+        # 6. Cases à cocher pour les étapes avec champs de recherche
         # Ajout offset
         add_offset_line = QHBoxLayout()
         self.add_offset_cb = QCheckBox("Ajout offset")
         self.add_offset_cb.setChecked(True)
         self.add_offset_cb.setMinimumWidth(140)
-        self.add_offset_extra = QLineEdit()
-        self.add_offset_extra.setPlaceholderText("Paramètres supplémentaires pour l'ajout d'offset (optionnel)")
         add_offset_line.addWidget(self.add_offset_cb)
-        add_offset_line.addWidget(self.add_offset_extra)
-        
-        # Input/Output for Add Offset
-        add_offset_input_layout = QHBoxLayout()
+        add_offset_line.addWidget(QLabel("Entrée :"))
         self.add_offset_input_edit = QLineEdit()
         self.add_offset_input_edit.setPlaceholderText("Dossier d'entrée (vide = dossier principal)")
-        add_offset_input_layout.addWidget(QLabel("Entrée :"))
-        add_offset_input_layout.addWidget(self.add_offset_input_edit)
-        self.add_offset_input_browse_btn = QPushButton("Parcourir")
+        add_offset_line.addWidget(self.add_offset_input_edit)
+        self.add_offset_input_browse_btn = QPushButton()
+        self.add_offset_input_browse_btn.setIcon(self.create_folder_icon())
+        self.add_offset_input_browse_btn.setToolTip("Parcourir")
         self.add_offset_input_browse_btn.clicked.connect(self.browse_add_offset_input_dir)
-        add_offset_input_layout.addWidget(self.add_offset_input_browse_btn)
-
-        add_offset_output_layout = QHBoxLayout()
+        add_offset_line.addWidget(self.add_offset_input_browse_btn)
+        add_offset_line.addWidget(QLabel("Sortie :"))
         self.add_offset_output_edit = QLineEdit()
         self.add_offset_output_edit.setPlaceholderText("Dossier de sortie (vide = offset_step)")
-        add_offset_output_layout.addWidget(QLabel("Sortie :"))
-        add_offset_output_layout.addWidget(self.add_offset_output_edit)
-        self.add_offset_output_browse_btn = QPushButton("Parcourir")
+        add_offset_line.addWidget(self.add_offset_output_edit)
+        self.add_offset_output_browse_btn = QPushButton()
+        self.add_offset_output_browse_btn.setIcon(self.create_folder_icon())
+        self.add_offset_output_browse_btn.setToolTip("Parcourir")
         self.add_offset_output_browse_btn.clicked.connect(self.browse_add_offset_output_dir)
-        add_offset_output_layout.addWidget(self.add_offset_output_browse_btn)
-
+        add_offset_line.addWidget(self.add_offset_output_browse_btn)
         geodetic_layout.addLayout(add_offset_line)
-        geodetic_layout.addLayout(add_offset_input_layout)
-        geodetic_layout.addLayout(add_offset_output_layout)
         
         # ITRF vers ENU
         itrf_to_enu_line = QHBoxLayout()
         self.itrf_to_enu_cb = QCheckBox("ITRF → ENU")
         self.itrf_to_enu_cb.setChecked(True)
         self.itrf_to_enu_cb.setMinimumWidth(140)
-        self.itrf_to_enu_extra = QLineEdit()
-        self.itrf_to_enu_extra.setPlaceholderText("Paramètres supplémentaires pour ITRF→ENU (optionnel)")
         itrf_to_enu_line.addWidget(self.itrf_to_enu_cb)
-        itrf_to_enu_line.addWidget(self.itrf_to_enu_extra)
-
-        # Input/Output for ITRF to ENU
-        itrf_to_enu_input_layout = QHBoxLayout()
+        itrf_to_enu_line.addWidget(QLabel("Entrée :"))
         self.itrf_to_enu_input_edit = QLineEdit()
         self.itrf_to_enu_input_edit.setPlaceholderText("Dossier d'entrée (vide = sortie précédente)")
-        itrf_to_enu_input_layout.addWidget(QLabel("Entrée :"))
-        itrf_to_enu_input_layout.addWidget(self.itrf_to_enu_input_edit)
-        self.itrf_to_enu_input_browse_btn = QPushButton("Parcourir")
+        itrf_to_enu_line.addWidget(self.itrf_to_enu_input_edit)
+        self.itrf_to_enu_input_browse_btn = QPushButton()
+        self.itrf_to_enu_input_browse_btn.setIcon(self.create_folder_icon())
+        self.itrf_to_enu_input_browse_btn.setToolTip("Parcourir")
         self.itrf_to_enu_input_browse_btn.clicked.connect(self.browse_itrf_to_enu_input_dir)
-        itrf_to_enu_input_layout.addWidget(self.itrf_to_enu_input_browse_btn)
-
-        itrf_to_enu_output_layout = QHBoxLayout()
+        itrf_to_enu_line.addWidget(self.itrf_to_enu_input_browse_btn)
+        itrf_to_enu_line.addWidget(QLabel("Sortie :"))
         self.itrf_to_enu_output_edit = QLineEdit()
         self.itrf_to_enu_output_edit.setPlaceholderText("Dossier de sortie (vide = itrf_to_enu_step)")
-        itrf_to_enu_output_layout.addWidget(QLabel("Sortie :"))
-        itrf_to_enu_output_layout.addWidget(self.itrf_to_enu_output_edit)
-        self.itrf_to_enu_output_browse_btn = QPushButton("Parcourir")
+        itrf_to_enu_line.addWidget(self.itrf_to_enu_output_edit)
+        self.itrf_to_enu_output_browse_btn = QPushButton()
+        self.itrf_to_enu_output_browse_btn.setIcon(self.create_folder_icon())
+        self.itrf_to_enu_output_browse_btn.setToolTip("Parcourir")
         self.itrf_to_enu_output_browse_btn.clicked.connect(self.browse_itrf_to_enu_output_dir)
-        itrf_to_enu_output_layout.addWidget(self.itrf_to_enu_output_browse_btn)
-
+        itrf_to_enu_line.addWidget(self.itrf_to_enu_output_browse_btn)
         geodetic_layout.addLayout(itrf_to_enu_line)
-        geodetic_layout.addLayout(itrf_to_enu_input_layout)
-        geodetic_layout.addLayout(itrf_to_enu_output_layout)
         
         # Déformation
         deform_line = QHBoxLayout()
         self.deform_cb = QCheckBox("Déformation")
         self.deform_cb.setChecked(True)
         self.deform_cb.setMinimumWidth(140)
-        self.deform_extra = QLineEdit()
-        self.deform_extra.setPlaceholderText("Paramètres supplémentaires pour la déformation (optionnel)")
         deform_line.addWidget(self.deform_cb)
-        deform_line.addWidget(self.deform_extra)
-
-        # Input/Output for Deformation
-        deform_input_layout = QHBoxLayout()
+        deform_line.addWidget(QLabel("Entrée :"))
         self.deform_input_edit = QLineEdit()
         self.deform_input_edit.setPlaceholderText("Dossier d'entrée (vide = sortie précédente)")
-        deform_input_layout.addWidget(QLabel("Entrée :"))
-        deform_input_layout.addWidget(self.deform_input_edit)
-        self.deform_input_browse_btn = QPushButton("Parcourir")
+        deform_line.addWidget(self.deform_input_edit)
+        self.deform_input_browse_btn = QPushButton()
+        self.deform_input_browse_btn.setIcon(self.create_folder_icon())
+        self.deform_input_browse_btn.setToolTip("Parcourir")
         self.deform_input_browse_btn.clicked.connect(self.browse_deform_input_dir)
-        deform_input_layout.addWidget(self.deform_input_browse_btn)
-
-        deform_output_layout = QHBoxLayout()
+        deform_line.addWidget(self.deform_input_browse_btn)
+        deform_line.addWidget(QLabel("Sortie :"))
         self.deform_output_edit = QLineEdit()
         self.deform_output_edit.setPlaceholderText("Dossier de sortie (vide = deform_[type]_step)")
-        deform_output_layout.addWidget(QLabel("Sortie :"))
-        deform_output_layout.addWidget(self.deform_output_edit)
-        self.deform_output_browse_btn = QPushButton("Parcourir")
+        deform_line.addWidget(self.deform_output_edit)
+        self.deform_output_browse_btn = QPushButton()
+        self.deform_output_browse_btn.setIcon(self.create_folder_icon())
+        self.deform_output_browse_btn.setToolTip("Parcourir")
         self.deform_output_browse_btn.clicked.connect(self.browse_deform_output_dir)
-        deform_output_layout.addWidget(self.deform_output_browse_btn)
-
+        deform_line.addWidget(self.deform_output_browse_btn)
         geodetic_layout.addLayout(deform_line)
-        geodetic_layout.addLayout(deform_input_layout)
-        geodetic_layout.addLayout(deform_output_layout)
         
         # ENU vers ITRF
         enu_to_itrf_line = QHBoxLayout()
         self.enu_to_itrf_cb = QCheckBox("ENU → ITRF")
-        self.enu_to_itrf_cb.setChecked(True)
+        self.enu_to_itrf_cb.setChecked(False)
         self.enu_to_itrf_cb.setMinimumWidth(140)
-        self.enu_to_itrf_extra = QLineEdit()
-        self.enu_to_itrf_extra.setPlaceholderText("Paramètres supplémentaires pour ENU→ITRF (optionnel)")
         enu_to_itrf_line.addWidget(self.enu_to_itrf_cb)
-        enu_to_itrf_line.addWidget(self.enu_to_itrf_extra)
-
-        # Input/Output for ENU to ITRF
-        enu_to_itrf_input_layout = QHBoxLayout()
+        enu_to_itrf_line.addWidget(QLabel("Entrée :"))
         self.enu_to_itrf_input_edit = QLineEdit()
         self.enu_to_itrf_input_edit.setPlaceholderText("Dossier d'entrée (vide = sortie précédente)")
-        enu_to_itrf_input_layout.addWidget(QLabel("Entrée :"))
-        enu_to_itrf_input_layout.addWidget(self.enu_to_itrf_input_edit)
-        self.enu_to_itrf_input_browse_btn = QPushButton("Parcourir")
+        enu_to_itrf_line.addWidget(self.enu_to_itrf_input_edit)
+        self.enu_to_itrf_input_browse_btn = QPushButton()
+        self.enu_to_itrf_input_browse_btn.setIcon(self.create_folder_icon())
+        self.enu_to_itrf_input_browse_btn.setToolTip("Parcourir")
         self.enu_to_itrf_input_browse_btn.clicked.connect(self.browse_enu_to_itrf_input_dir)
-        enu_to_itrf_input_layout.addWidget(self.enu_to_itrf_input_browse_btn)
-
-        enu_to_itrf_output_layout = QHBoxLayout()
+        enu_to_itrf_line.addWidget(self.enu_to_itrf_input_browse_btn)
+        enu_to_itrf_line.addWidget(QLabel("Sortie :"))
         self.enu_to_itrf_output_edit = QLineEdit()
         self.enu_to_itrf_output_edit.setPlaceholderText("Dossier de sortie (vide = enu_to_itrf_step)")
-        enu_to_itrf_output_layout.addWidget(QLabel("Sortie :"))
-        enu_to_itrf_output_layout.addWidget(self.enu_to_itrf_output_edit)
-        self.enu_to_itrf_output_browse_btn = QPushButton("Parcourir")
+        enu_to_itrf_line.addWidget(self.enu_to_itrf_output_edit)
+        self.enu_to_itrf_output_browse_btn = QPushButton()
+        self.enu_to_itrf_output_browse_btn.setIcon(self.create_folder_icon())
+        self.enu_to_itrf_output_browse_btn.setToolTip("Parcourir")
         self.enu_to_itrf_output_browse_btn.clicked.connect(self.browse_enu_to_itrf_output_dir)
-        enu_to_itrf_output_layout.addWidget(self.enu_to_itrf_output_browse_btn)
-
+        enu_to_itrf_line.addWidget(self.enu_to_itrf_output_browse_btn)
         geodetic_layout.addLayout(enu_to_itrf_line)
-        geodetic_layout.addLayout(enu_to_itrf_input_layout)
-        geodetic_layout.addLayout(enu_to_itrf_output_layout)
         
         # Connexion des cases à cocher au bouton toggle après leur création
         for cb in [self.add_offset_cb, self.itrf_to_enu_cb, self.deform_cb, self.enu_to_itrf_cb]:
@@ -630,7 +679,31 @@ class PhotogrammetryGUI(QWidget):
         geodetic_layout.addStretch(1)
         tabs.addTab(geodetic_tab, "Transformations géodésiques")
 
-        # Onglet 3 : logs
+        # Onglet 3 : Nouvel onglet vierge
+        new_tab = QWidget()
+        new_layout = QVBoxLayout(new_tab)
+        
+        # Titre de l'onglet
+        new_layout.addWidget(QLabel("Nouvel onglet"))
+        
+        # Zone de contenu vide
+        new_layout.addWidget(QLabel("Contenu à définir..."))
+        
+        # Ligne de commande CLI équivalente
+        self.new_cmd_label = QLabel("Ligne de commande CLI équivalente :")
+        new_layout.addWidget(self.new_cmd_label)
+        self.new_cmd_line = QLineEdit()
+        self.new_cmd_line.setReadOnly(True)
+        self.new_cmd_line.setStyleSheet("font-family: monospace;")
+        new_layout.addWidget(self.new_cmd_line)
+        
+        # Résumé et stretch
+        self.new_summary_label = QLabel("")
+        new_layout.addWidget(self.new_summary_label)
+        new_layout.addStretch(1)
+        tabs.addTab(new_tab, "Nouvel onglet")
+
+        # Onglet 4 : logs
         log_tab = QWidget()
         log_layout = QVBoxLayout(log_tab)
         log_layout.addWidget(QLabel("Logs :"))
@@ -668,10 +741,7 @@ class PhotogrammetryGUI(QWidget):
         self.deformation_combo.currentTextChanged.connect(self.update_geodetic_cmd_line)
         self.deformation_params_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.bascule_xml_edit.textChanged.connect(self.update_geodetic_cmd_line)
-        self.add_offset_extra.textChanged.connect(self.update_geodetic_cmd_line)
-        self.itrf_to_enu_extra.textChanged.connect(self.update_geodetic_cmd_line)
-        self.deform_extra.textChanged.connect(self.update_geodetic_cmd_line)
-        self.enu_to_itrf_extra.textChanged.connect(self.update_geodetic_cmd_line)
+
         self.add_offset_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         self.itrf_to_enu_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         self.deform_cb.stateChanged.connect(self.update_geodetic_cmd_line)
@@ -690,48 +760,10 @@ class PhotogrammetryGUI(QWidget):
         self.enu_to_itrf_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexion pour le nombre de workers
-        self.parallel_workers_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+        self.parallel_workers_spin.valueChanged.connect(self.update_geodetic_cmd_line) 
         
-        self.update_geodetic_cmd_line() 
-
-    def update_cmd_line(self):
-        input_dir = self.dir_edit.text().strip() or "<dossier_images>"
-        mode = self.mode_combo.currentText()
-        zoomf = self.zoom_spin.value()
-        tapas_model = self.tapas_model_combo.currentText()
-        tapioca_extra = self.tapioca_extra.text().strip()
-        tapas_extra = self.tapas_extra.text().strip()
-        c3dc_extra = self.c3dc_extra.text().strip()
-        saisieappuisinit_pt = self.pt_lineedit.text().strip()
-        saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
-        saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
-        base_cmd = ["photogeoalign.py", "--no-gui", f'\"{input_dir}\"', f"--mode {mode}", f"--tapas-model {tapas_model}", f"--zoomf {zoomf}"]
-        if tapioca_extra:
-            base_cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
-        if tapas_extra:
-            base_cmd.append(f"--tapas-extra \"{tapas_extra}\"")
-        if c3dc_extra:
-            base_cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
-        if saisieappuisinit_pt:
-            base_cmd.append(f"--saisieappuisinit-pt \"{saisieappuisinit_pt}\"")
-        if saisieappuisinit_extra:
-            base_cmd.append(f"--saisieappuisinit-extra \"{saisieappuisinit_extra}\"")
-        if saisieappuispredic_extra:
-            base_cmd.append(f"--saisieappuispredic-extra \"{saisieappuispredic_extra}\"")
-        # Ajout des options de skip
-        if not self.tapioca_cb.isChecked():
-            base_cmd.append("--skip-tapioca")
-        if not self.tapas_cb.isChecked():
-            base_cmd.append("--skip-tapas")
-        if not self.saisieappuisinit_cb.isChecked():
-            base_cmd.append("--skip-saisieappuisinit")
-        if not self.saisieappuispredic_cb.isChecked():
-            base_cmd.append("--skip-saisieappuispredic")
-        if not self.c3dc_cb.isChecked():
-            base_cmd.append("--skip-c3dc")
-        python_cmd = self.python_selector.currentText()
-        cmd = python_cmd + " " + " ".join(base_cmd)
-        self.cmd_line.setText(cmd)
+        # Initialisation de la ligne de commande pour le nouvel onglet
+        self.update_new_cmd_line()
 
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'images")
@@ -832,16 +864,113 @@ class PhotogrammetryGUI(QWidget):
         if folder:
             self.enu_to_itrf_output_edit.setText(folder)
 
+    def update_cmd_line(self):
+        input_dir = self.dir_edit.text().strip() or "<dossier_images>"
+        mode = self.mode_combo.currentText()
+        zoomf = self.zoom_spin.value()
+        tapas_model = self.tapas_model_combo.currentText()
+        tapioca_extra = self.tapioca_extra.text().strip()
+        tapas_extra = self.tapas_extra.text().strip()
+        c3dc_extra = self.c3dc_extra.text().strip()
+        saisieappuisinit_pt = self.pt_lineedit.text().strip()
+        saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
+        saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
+        run_tapioca = self.tapioca_cb.isChecked()
+        run_tapas = self.tapas_cb.isChecked()
+        run_saisieappuisinit = self.saisieappuisinit_cb.isChecked()
+        run_saisieappuispredic = self.saisieappuispredic_cb.isChecked()
+        run_c3dc = self.c3dc_cb.isChecked()
+        
+        # Construction de la ligne de commande
+        base_cmd = ["photogeoalign.py", f'\"{input_dir}\"']
+        
+        if mode != "MulScale":
+            base_cmd.append(f"--mode {mode}")
+        
+        if zoomf != 500:
+            base_cmd.append(f"--zoomf {zoomf}")
+        
+        if tapas_model != "Fraser":
+            base_cmd.append(f"--tapas-model {tapas_model}")
+        
+        if tapioca_extra:
+            base_cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
+        
+        if tapas_extra:
+            base_cmd.append(f"--tapas-extra \"{tapas_extra}\"")
+        
+        if c3dc_extra:
+            base_cmd.append(f"--c3dc-extra \"{c3dc_extra}\"")
+        
+        if saisieappuisinit_pt:
+            base_cmd.append(f"--saisieappuisinit-pt \"{saisieappuisinit_pt}\"")
+        
+        if saisieappuisinit_extra:
+            base_cmd.append(f"--saisieappuisinit-extra \"{saisieappuisinit_extra}\"")
+        
+        if saisieappuispredic_extra:
+            base_cmd.append(f"--saisieappuispredic-extra \"{saisieappuispredic_extra}\"")
+        
+        # Ajout des options de skip
+        if not run_tapioca:
+            base_cmd.append("--skip-tapioca")
+        
+        if not run_tapas:
+            base_cmd.append("--skip-tapas")
+        
+        if not run_saisieappuisinit:
+            base_cmd.append("--skip-saisieappuisinit")
+        
+        if not run_saisieappuispredic:
+            base_cmd.append("--skip-saisieappuispredic")
+        
+        if not run_c3dc:
+            base_cmd.append("--skip-c3dc")
+        
+        python_cmd = self.python_selector.currentText()
+        cmd = python_cmd + " " + " ".join(base_cmd)
+        self.cmd_line.setText(cmd)
+
+    def launch_pipeline(self):
+        input_dir = self.dir_edit.text().strip()
+        if not input_dir or not os.path.isdir(input_dir):
+            self.log_text.append("<span style='color:red'>Veuillez sélectionner un dossier valide.</span>")
+            return
+        mode = self.mode_combo.currentText()
+        zoomf = self.zoom_spin.value()
+        tapas_model = self.tapas_model_combo.currentText()
+        tapioca_extra = self.tapioca_extra.text().strip()
+        tapas_extra = self.tapas_extra.text().strip()
+        c3dc_extra = self.c3dc_extra.text().strip()
+        saisieappuisinit_pt = self.pt_lineedit.text().strip()
+        saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
+        saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
+        run_tapioca = self.tapioca_cb.isChecked()
+        run_tapas = self.tapas_cb.isChecked()
+        run_saisieappuisinit = self.saisieappuisinit_cb.isChecked()
+        run_saisieappuispredic = self.saisieappuispredic_cb.isChecked()
+        run_c3dc = self.c3dc_cb.isChecked()
+        # Avertissement si incohérence
+        if run_c3dc and not run_tapas:
+            self.log_text.append("<span style='color:orange'>Attention : lancer C3DC sans Tapas n'a pas de sens !</span>")
+        if run_tapas and not run_tapioca:
+            self.log_text.append("<span style='color:orange'>Attention : lancer Tapas sans Tapioca n'a pas de sens !</span>")
+        self.log_text.clear()
+        self.summary_label.setText("")
+        self.action_run.setEnabled(False)
+        self.action_geodetic.setEnabled(False)
+        self.action_stop.setEnabled(True)
+        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, saisieappuisinit_extra, saisieappuispredic_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca, run_tapas, run_saisieappuisinit, run_saisieappuispredic, run_c3dc)
+        self.pipeline_thread.log_signal.connect(self.append_log)
+        self.pipeline_thread.finished_signal.connect(self.pipeline_finished)
+        self.pipeline_thread.start()
+
     def update_geodetic_cmd_line(self):
         geodetic_dir = self.geodetic_dir_edit.text().strip() or "<dossier_nuages>"
         coord_file = self.geodetic_coord_edit.text().strip()
         deformation_type = self.deformation_combo.currentText()
         deformation_params = self.deformation_params_edit.text().strip()
         bascule_xml = self.bascule_xml_edit.text().strip()
-        add_offset_extra = self.add_offset_extra.text().strip()
-        itrf_to_enu_extra = self.itrf_to_enu_extra.text().strip()
-        deform_extra = self.deform_extra.text().strip()
-        enu_to_itrf_extra = self.enu_to_itrf_extra.text().strip()
         
         # Dossiers d'entrée personnalisés
         add_offset_input_dir = self.add_offset_input_edit.text().strip()
@@ -868,22 +997,10 @@ class PhotogrammetryGUI(QWidget):
         if bascule_xml:
             base_cmd.append(f"--deform-bascule-xml \"{bascule_xml}\"")
         
-        if add_offset_extra:
-            base_cmd.append(f"--add-offset-extra \"{add_offset_extra}\"")
-        
-        if itrf_to_enu_extra:
-            base_cmd.append(f"--itrf-to-enu-extra \"{itrf_to_enu_extra}\"")
-        
         # Ajout du point de référence sélectionné
         selected_ref_point = self.get_selected_ref_point()
         if selected_ref_point:
             base_cmd.append(f"--itrf-to-enu-ref-point \"{selected_ref_point}\"")
-        
-        if deform_extra:
-            base_cmd.append(f"--deform-extra \"{deform_extra}\"")
-        
-        if enu_to_itrf_extra:
-            base_cmd.append(f"--enu-to-itrf-extra \"{enu_to_itrf_extra}\"")
         
         # Ajout des dossiers d'entrée personnalisés
         if add_offset_input_dir:
@@ -931,40 +1048,6 @@ class PhotogrammetryGUI(QWidget):
         python_cmd = self.python_selector.currentText()
         cmd = python_cmd + " " + " ".join(base_cmd)
         self.geodetic_cmd_line.setText(cmd)
-
-    def launch_pipeline(self):
-        input_dir = self.dir_edit.text().strip()
-        if not input_dir or not os.path.isdir(input_dir):
-            self.log_text.append("<span style='color:red'>Veuillez sélectionner un dossier valide.</span>")
-            return
-        mode = self.mode_combo.currentText()
-        zoomf = self.zoom_spin.value()
-        tapas_model = self.tapas_model_combo.currentText()
-        tapioca_extra = self.tapioca_extra.text().strip()
-        tapas_extra = self.tapas_extra.text().strip()
-        c3dc_extra = self.c3dc_extra.text().strip()
-        saisieappuisinit_pt = self.pt_lineedit.text().strip()
-        saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
-        saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
-        run_tapioca = self.tapioca_cb.isChecked()
-        run_tapas = self.tapas_cb.isChecked()
-        run_saisieappuisinit = self.saisieappuisinit_cb.isChecked()
-        run_saisieappuispredic = self.saisieappuispredic_cb.isChecked()
-        run_c3dc = self.c3dc_cb.isChecked()
-        # Avertissement si incohérence
-        if run_c3dc and not run_tapas:
-            self.log_text.append("<span style='color:orange'>Attention : lancer C3DC sans Tapas n'a pas de sens !</span>")
-        if run_tapas and not run_tapioca:
-            self.log_text.append("<span style='color:orange'>Attention : lancer Tapas sans Tapioca n'a pas de sens !</span>")
-        self.log_text.clear()
-        self.summary_label.setText("")
-        self.action_run.setEnabled(False)
-        self.action_geodetic.setEnabled(False)
-        self.action_stop.setEnabled(True)
-        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, saisieappuisinit_extra, saisieappuispredic_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca, run_tapas, run_saisieappuisinit, run_saisieappuispredic, run_c3dc)
-        self.pipeline_thread.log_signal.connect(self.append_log)
-        self.pipeline_thread.finished_signal.connect(self.pipeline_finished)
-        self.pipeline_thread.start()
 
     def append_log(self, text):
         # Recherche du format : '2025-06-24 13:11:38,200 - INFO - message'
@@ -1107,7 +1190,7 @@ class PhotogrammetryGUI(QWidget):
             # Cas Python
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
-        dialog = JobExportDialog(self, cli_cmd=cli_cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_MicMac", output="PhotoGeoAlign_MicMac.job", cli_cmd=cli_cmd)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
             job_content = self.generate_job_script(vals, "micmac")
@@ -1138,11 +1221,76 @@ class PhotogrammetryGUI(QWidget):
             # Cas Python
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
-        dialog = JobExportDialog(self, cli_cmd=cli_cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_Geodetic", output="PhotoGeoAlign_Geodetic.job", cli_cmd=cli_cmd)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
             job_content = self.generate_job_script(vals, "geodetic")
             file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "geodetic.job", "Fichiers batch (*.job *.sh)")
+            if file_path:
+                try:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(job_content)
+                    QMessageBox.information(self, "Export réussi", f"Script batch exporté :\n{file_path}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
+
+    def launch_new_pipeline(self):
+        """Lance le pipeline du nouvel onglet"""
+        self.log_text.clear()
+        self.new_summary_label.setText("")
+        self.action_run.setEnabled(False)
+        self.action_geodetic.setEnabled(False)
+        self.action_new.setEnabled(False)
+        self.action_stop.setEnabled(True)
+        
+        # Pour l'instant, juste un message de log
+        self.append_log("Démarrage du pipeline du nouvel onglet...")
+        self.append_log("Pipeline en cours de développement...")
+        
+        # Simuler une fin de pipeline
+        QTimer.singleShot(2000, lambda: self.new_pipeline_finished(True, "Pipeline du nouvel onglet terminé avec succès"))
+
+    def new_pipeline_finished(self, success, message):
+        """Appelé quand le pipeline du nouvel onglet se termine"""
+        if success:
+            self.new_summary_label.setText(f"<span style='color:green'>{message}</span>")
+        else:
+            self.new_summary_label.setText(f"<span style='color:red'>{message}</span>")
+        self.action_run.setEnabled(True)
+        self.action_geodetic.setEnabled(True)
+        self.action_new.setEnabled(True)
+        self.action_stop.setEnabled(False)
+
+    def update_new_cmd_line(self):
+        """Met à jour la ligne de commande CLI pour le nouvel onglet"""
+        # Pour l'instant, une commande simple
+        cmd = "python photogeoalign.py --new-pipeline"
+        self.new_cmd_line.setText(cmd)
+
+    def export_new_job_dialog(self):
+        """Exporte le job pour le nouvel onglet"""
+        import sys
+        import os
+        exe_path = sys.executable
+        script_path = os.path.abspath(__file__)
+        cli_cmd = self.new_cmd_line.text().strip()
+        parts = cli_cmd.split()
+        # On retire le premier mot (python ou exe)
+        args = parts[1:]
+        # On retire tout photogeoalign.py
+        filtered_args = [arg for arg in args if not arg.endswith('photogeoalign.py') and not arg.endswith('photogeoalign.py"')]
+        if getattr(sys, 'frozen', False):
+            # Cas exécutable PyInstaller
+            cmd = [exe_path] + filtered_args
+        else:
+            # Cas Python
+            cmd = [exe_path, script_path] + filtered_args
+        cli_cmd = " ".join(cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_New", output="PhotoGeoAlign_New.job", cli_cmd=cli_cmd)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            vals = dialog.get_values()
+            job_content = self.generate_job_script(vals, "new")
+            file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "new.job", "Fichiers batch (*.job *.sh)")
             if file_path:
                 try:
                     with open(file_path, "w", encoding="utf-8") as f:
@@ -1159,6 +1307,10 @@ class PhotogrammetryGUI(QWidget):
 module load python/3.9
 module load pyproj
 module load open3d"""
+        elif pipeline_type == "new":
+            # Pour le nouveau pipeline
+            modules = """module purge
+module load python/3.9"""
         else:
             # Pour le pipeline MicMac
             modules = """module purge
