@@ -1015,7 +1015,109 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
         logger.warning(f"⚠️ {len(failed_files)} fichiers n'ont pas pu être traités")
     logger.info(f"Déformation {deformation_type} terminée. {total_files_processed} fichiers traités dans {output_dir}.")
 
-def convert_enu_to_itrf(input_dir, logger, coord_file=None, extra_params="", max_workers=None):
+def process_single_cloud_enu_to_itrf(args):
+    """Fonction de traitement d'un seul nuage pour la conversion ENU→ITRF (pour multiprocessing)"""
+    ply_file, output_dir, coord_file, extra_params, ref_point_name = args
+    
+    # Création d'un logger pour ce processus
+    logger = logging.getLogger(f"ENUtoITRF_{os.getpid()}")
+    logger.setLevel(logging.INFO)
+    
+    try:
+        import open3d as o3d
+        import pyproj
+        
+        # Lecture du nuage
+        cloud = o3d.io.read_point_cloud(ply_file)
+        if not cloud.has_points():
+            return False, f"Nuage vide dans {os.path.basename(ply_file)}"
+        
+        points = np.asarray(cloud.points)
+        logger.info(f"  {len(points)} points chargés")
+        
+        # Lecture du point de référence depuis le fichier de coordonnées
+        ref_point = None
+        offset = None
+        
+        if coord_file and os.path.exists(coord_file):
+            with open(coord_file, 'r') as f:
+                lines = f.readlines()
+            
+            # Recherche du point de référence
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if len(parts) >= 4:  # Format: NOM X Y Z
+                        try:
+                            point_name = parts[0]
+                            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                            if ref_point_name is None or point_name == ref_point_name:
+                                ref_point = [x, y, z]
+                                break
+                        except ValueError:
+                            continue
+            
+            # Lecture de l'offset
+            for line in lines:
+                line = line.strip()
+                if line.startswith('#Offset to add :'):
+                    offset_text = line.replace('#Offset to add :', '').strip()
+                    offset = [float(x) for x in offset_text.split()]
+                    break
+        
+        if ref_point is None:
+            return False, f"Point de référence non trouvé dans {coord_file}"
+        
+        if offset is None:
+            return False, f"Offset non trouvé dans {coord_file}"
+        
+        # Application de l'offset au point de référence
+        ref_point_with_offset = [ref_point[0] + offset[0], ref_point[1] + offset[1], ref_point[2] + offset[2]]
+        
+        # Configuration de la transformation topocentrique inverse (ENU→ITRF)
+        tr_center = ref_point_with_offset
+        tr_ellps = "GRS80"
+        
+        # Pipeline pour la transformation ENU→ITRF (inverse de ITRF→ENU)
+        pipeline = "+proj=topocentric +X_0={0} +Y_0={1} +Z_0={2} +ellps={3}".format(
+            tr_center[0], tr_center[1], tr_center[2], tr_ellps
+        )
+        
+        # Création du transformer avec la direction inverse
+        transformer = pyproj.Transformer.from_pipeline(pipeline)
+        
+        # Application de la transformation topocentrique inverse (ENU→ITRF)
+        arr_x = np.array(list(points[:, 0]))
+        arr_y = np.array(list(points[:, 1]))
+        arr_z = np.array(list(points[:, 2]))
+        
+        # Transformation inverse : ENU → ITRF
+        arr_pts_ITRF = np.array(transformer.transform(arr_x, arr_y, arr_z, direction='INVERSE')).T
+        
+        # Création du nouveau nuage
+        new_cloud = o3d.geometry.PointCloud()
+        new_cloud.points = o3d.utility.Vector3dVector(arr_pts_ITRF)
+        
+        # Copie des couleurs et normales
+        if cloud.has_colors():
+            new_cloud.colors = cloud.colors
+        if cloud.has_normals():
+            new_cloud.normals = cloud.normals
+        
+        # Sauvegarde
+        output_file = os.path.join(output_dir, os.path.basename(ply_file))
+        success = o3d.io.write_point_cloud(output_file, new_cloud)
+        
+        if success:
+            return True, f"Conversion ENU→ITRF : {os.path.basename(ply_file)} ({len(points)} points)"
+        else:
+            return False, f"Erreur de sauvegarde : {os.path.basename(ply_file)}"
+        
+    except Exception as e:
+        return False, f"Erreur lors de la conversion ENU→ITRF de {os.path.basename(ply_file)} : {e}"
+
+def convert_enu_to_itrf(input_dir, logger, coord_file=None, extra_params="", ref_point_name=None, max_workers=None):
     """Convertit les nuages de points d'ENU vers ITRF"""
     abs_input_dir = os.path.abspath(input_dir)
     logger.info(f"Conversion ENU vers ITRF dans {abs_input_dir} ...")
@@ -1038,10 +1140,151 @@ def convert_enu_to_itrf(input_dir, logger, coord_file=None, extra_params="", max
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"Dossier de sortie créé : {output_dir}")
     
-    # TODO: Implémenter la conversion ENU→ITRF
-    # - Lire le fichier de coordonnées
-    # - Déterminer le point de référence ITRF
-    # - Convertir les coordonnées des nuages
-    # - Sauvegarder les nuages convertis dans output_dir
+    # ÉTAPE 1 : Lecture du fichier de coordonnées pour obtenir le point de référence
+    logger.info(f"Lecture du fichier de coordonnées : {coord_file}")
     
-    logger.info(f"Conversion ENU vers ITRF terminée. Fichiers sauvegardés dans {output_dir}.") 
+    ref_point = None
+    offset = None
+    
+    try:
+        with open(coord_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if len(parts) >= 4:  # Format: NOM X Y Z
+                        try:
+                            point_name = parts[0]
+                            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                            if ref_point_name is None or point_name == ref_point_name:
+                                ref_point = np.array([x, y, z])
+                                logger.info(f"Point de référence trouvé : {point_name} ({x:.6f}, {y:.6f}, {z:.6f})")
+                                break
+                        except ValueError:
+                            continue
+            
+            # Lecture de l'offset
+            f.seek(0)  # Retour au début du fichier
+            for line in f:
+                line = line.strip()
+                if line.startswith('#Offset to add :'):
+                    # Format: #Offset to add : X Y Z
+                    parts = line.split(':')[1].strip().split()
+                    if len(parts) == 3:
+                        offset = [float(parts[0]), float(parts[1]), float(parts[2])]
+                        break
+            
+            if ref_point is None:
+                logger.error(f"Aucun point de référence trouvé dans le fichier de coordonnées.")
+                raise RuntimeError(f"Aucun point de référence trouvé dans le fichier de coordonnées.")
+            
+            if offset is None:
+                logger.warning("Offset non trouvé dans le fichier de coordonnées. Utilisation du point de référence sans offset.")
+            else:
+                logger.info(f"Offset trouvé : {offset}")
+                # Application de l'offset au point de référence
+                ref_point = ref_point + np.array(offset)
+                logger.info(f"Point de référence avec offset : ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
+                
+    except Exception as e:
+        logger.error(f"Erreur lors de la lecture du fichier de coordonnées : {e}")
+        raise RuntimeError(f"Erreur lors de la lecture du fichier de coordonnées : {e}")
+    
+    # ÉTAPE 2 : Configuration de la transformation topocentrique inverse
+    logger.info("Configuration de la transformation topocentrique ENU→ITRF...")
+    
+    try:
+        import pyproj
+        
+        # Le point de référence (ref_point) est le centre de la transformation topocentrique
+        tr_center = ref_point  # [X, Y, Z] en ITRF2020
+        tr_ellps = "GRS80"     # Ellipsoïde de référence (standard pour ITRF)
+        
+        logger.info(f"Centre de transformation topocentrique : ({tr_center[0]:.3f}, {tr_center[1]:.3f}, {tr_center[2]:.3f})")
+        logger.info(f"Ellipsoïde de référence : {tr_ellps}")
+        
+        # Création du pipeline de transformation topocentrique inverse
+        pipeline = "+proj=topocentric +X_0={0} +Y_0={1} +Z_0={2} +ellps={3}".format(
+            tr_center[0], tr_center[1], tr_center[2], tr_ellps
+        )
+        
+        logger.info(f"Pipeline de transformation inverse créé : {pipeline}")
+        
+    except ImportError:
+        logger.error("pyproj n'est pas installé. La transformation topocentrique nécessite pyproj.")
+        raise RuntimeError("pyproj n'est pas installé. Veuillez l'installer avec: pip install pyproj")
+    
+    logger.info("Transformation topocentrique inverse configurée avec succès")
+    
+    # Import d'open3d pour gérer les fichiers PLY
+    try:
+        import open3d as o3d
+        logger.info("Open3D importé avec succès")
+    except ImportError:
+        logger.error("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
+        raise RuntimeError("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
+    
+    # ÉTAPE 3 : Traitement des nuages de points
+    ply_files = []
+    for root, dirs, files in os.walk(abs_input_dir):
+        for file in files:
+            if file.lower().endswith('.ply'):
+                ply_files.append(os.path.join(root, file))
+    
+    logger.info(f"Trouvé {len(ply_files)} fichiers .ply dans {abs_input_dir}")
+    
+    if len(ply_files) == 0:
+        logger.warning(f"Aucun fichier .ply trouvé dans {abs_input_dir}")
+        logger.info("Aucun fichier à traiter.")
+        return
+    
+    # Configuration de la parallélisation
+    if max_workers is None:
+        max_workers = min(10, cpu_count(), len(ply_files))  # Maximum 10 processus par défaut
+    else:
+        max_workers = min(max_workers, len(ply_files))  # Respecter la limite demandée (pas de limite CPU sur cluster)
+    logger.info(f"Traitement parallèle avec {max_workers} processus...")
+    
+    # Préparation des arguments pour le multiprocessing
+    process_args = []
+    for ply_file in ply_files:
+        process_args.append((ply_file, output_dir, coord_file, extra_params, ref_point_name))
+    
+    # Traitement parallèle
+    total_files_processed = 0
+    failed_files = []
+    
+    try:
+        with Pool(processes=max_workers) as pool:
+            # Lancement du traitement parallèle
+            results = pool.map(process_single_cloud_enu_to_itrf, process_args)
+            
+            # Analyse des résultats
+            for i, (success, message) in enumerate(results):
+                if success:
+                    logger.info(f"✅ {message}")
+                    total_files_processed += 1
+                else:
+                    logger.error(f"❌ {message}")
+                    failed_files.append(ply_files[i])
+                    
+    except Exception as e:
+        logger.error(f"Erreur lors du traitement parallèle : {e}")
+        # Fallback vers le traitement séquentiel en cas d'erreur
+        logger.info("Tentative de traitement séquentiel...")
+        total_files_processed = 0
+        for ply_file in ply_files:
+            try:
+                result = process_single_cloud_enu_to_itrf((ply_file, output_dir, coord_file, extra_params, ref_point_name))
+                if result[0]:
+                    logger.info(f"✅ {result[1]}")
+                    total_files_processed += 1
+                else:
+                    logger.error(f"❌ {result[1]}")
+            except Exception as e:
+                logger.error(f"Erreur lors du traitement de {os.path.basename(ply_file)} : {e}")
+    
+    # Résumé final
+    if failed_files:
+        logger.warning(f"⚠️ {len(failed_files)} fichiers n'ont pas pu être traités")
+    logger.info(f"Conversion ENU→ITRF terminée. {total_files_processed} fichiers traités dans {output_dir}.") 

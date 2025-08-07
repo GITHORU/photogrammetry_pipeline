@@ -336,15 +336,25 @@ class PhotogrammetryGUI(QWidget):
         geodetic_layout.addLayout(geodetic_dir_layout)
         
         # 2. Fichier de coordonnées de recalage
-        geodetic_coord_layout = QHBoxLayout()
+        coord_layout = QHBoxLayout()
+        coord_layout.addWidget(QLabel("Fichier de coordonnées :"))
         self.geodetic_coord_edit = QLineEdit()
-        self.geodetic_coord_edit.setPlaceholderText("Chemin du fichier de coordonnées de recalage (.txt)")
-        geodetic_coord_browse_btn = QPushButton("Parcourir…")
-        geodetic_coord_browse_btn.clicked.connect(self.browse_geodetic_coord_file)
-        geodetic_coord_layout.addWidget(QLabel("Fichier de coordonnées :"))
-        geodetic_coord_layout.addWidget(self.geodetic_coord_edit)
-        geodetic_coord_layout.addWidget(geodetic_coord_browse_btn)
-        geodetic_layout.addLayout(geodetic_coord_layout)
+        self.geodetic_coord_edit.setPlaceholderText("Sélectionner un fichier de coordonnées (.txt)")
+        coord_layout.addWidget(self.geodetic_coord_edit)
+        self.geodetic_coord_browse_btn = QPushButton("Parcourir")
+        self.geodetic_coord_browse_btn.clicked.connect(self.browse_geodetic_coord_file)
+        coord_layout.addWidget(self.geodetic_coord_browse_btn)
+        geodetic_layout.addLayout(coord_layout)
+        
+        # Point de référence
+        ref_point_layout = QHBoxLayout()
+        ref_point_layout.addWidget(QLabel("Point de référence :"))
+        self.ref_point_combo = QComboBox()
+        self.ref_point_combo.setPlaceholderText("Sélectionner un point de référence")
+        self.ref_point_combo.setMinimumWidth(200)
+        ref_point_layout.addWidget(self.ref_point_combo)
+        ref_point_layout.addStretch(1)
+        geodetic_layout.addLayout(ref_point_layout)
         
         # 3. Type de déformation
         deformation_layout = QHBoxLayout()
@@ -632,6 +642,8 @@ class PhotogrammetryGUI(QWidget):
         # Connexions pour l'onglet géodésique
         self.geodetic_dir_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.geodetic_coord_edit.textChanged.connect(self.update_geodetic_cmd_line)
+        self.geodetic_coord_edit.textChanged.connect(lambda: self.update_ref_point_combo(self.geodetic_coord_edit.text()))
+        self.ref_point_combo.currentTextChanged.connect(self.update_geodetic_cmd_line)
         self.deformation_combo.currentTextChanged.connect(self.update_geodetic_cmd_line)
         self.deformation_params_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.bascule_xml_edit.textChanged.connect(self.update_geodetic_cmd_line)
@@ -655,6 +667,10 @@ class PhotogrammetryGUI(QWidget):
         self.itrf_to_enu_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.deform_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.enu_to_itrf_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
+        
+        # Connexion pour le nombre de workers
+        self.parallel_workers_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+        
         self.update_geodetic_cmd_line() 
 
     def update_cmd_line(self):
@@ -715,6 +731,40 @@ class PhotogrammetryGUI(QWidget):
         coord_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier de coordonnées de recalage (.txt)", "", "Fichiers de coordonnées (*.txt)")
         if coord_file:
             self.geodetic_coord_edit.setText(coord_file)
+            self.update_ref_point_combo(coord_file)
+    
+    def update_ref_point_combo(self, coord_file):
+        """Met à jour le menu déroulant des points de référence en lisant le fichier de coordonnées"""
+        self.ref_point_combo.clear()
+        self.ref_point_combo.addItem("Premier point (par défaut)", None)
+        
+        if not coord_file or not os.path.exists(coord_file):
+            return
+        
+        try:
+            with open(coord_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        parts = line.split()
+                        if len(parts) >= 4:  # Format: NOM X Y Z
+                            try:
+                                point_name = parts[0]
+                                x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                                # Ajouter le point avec ses coordonnées dans le tooltip
+                                tooltip = f"{point_name}: ({x:.3f}, {y:.3f}, {z:.3f})"
+                                self.ref_point_combo.addItem(point_name, point_name)
+                                # Définir le tooltip pour le dernier item ajouté
+                                self.ref_point_combo.setItemData(self.ref_point_combo.count() - 1, tooltip, Qt.ToolTipRole)
+                            except ValueError:
+                                continue
+        except Exception as e:
+            print(f"Erreur lors de la lecture du fichier de coordonnées : {e}")
+    
+    def get_selected_ref_point(self):
+        """Retourne le point de référence sélectionné"""
+        current_data = self.ref_point_combo.currentData()
+        return current_data  # None pour "Premier point", sinon le nom du point
     
     def browse_bascule_xml_file(self):
         xml_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier XML GCPBascule (.xml)", "", "Fichiers XML (*.xml)")
@@ -803,8 +853,10 @@ class PhotogrammetryGUI(QWidget):
         if itrf_to_enu_extra:
             base_cmd.append(f"--itrf-to-enu-extra \"{itrf_to_enu_extra}\"")
         
-        # Note: Pour le point de référence, on pourrait ajouter un champ dans le GUI
-        # Pour l'instant, on utilise le premier point par défaut
+        # Ajout du point de référence sélectionné
+        selected_ref_point = self.get_selected_ref_point()
+        if selected_ref_point:
+            base_cmd.append(f"--itrf-to-enu-ref-point \"{selected_ref_point}\"")
         
         if deform_extra:
             base_cmd.append(f"--deform-extra \"{deform_extra}\"")
@@ -837,6 +889,10 @@ class PhotogrammetryGUI(QWidget):
         
         if enu_to_itrf_output_dir:
             base_cmd.append(f"--enu-to-itrf-output-dir \"{enu_to_itrf_output_dir}\"")
+        
+        # Ajout du nombre de workers
+        max_workers = self.parallel_workers_spin.value()
+        base_cmd.append(f"--max-workers {max_workers}")
         
         # Ajout des options de skip
         if not self.add_offset_cb.isChecked():
@@ -997,7 +1053,7 @@ class PhotogrammetryGUI(QWidget):
             run_add_offset, run_itrf_to_enu, run_deform, run_enu_to_itrf,
             add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, enu_to_itrf_input_dir,
             add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, enu_to_itrf_output_dir,
-            None, bascule_xml, max_workers
+            self.get_selected_ref_point(), bascule_xml, max_workers
         )
         self.geodetic_thread.log_signal.connect(self.append_log)
         self.geodetic_thread.finished_signal.connect(self.geodetic_pipeline_finished)

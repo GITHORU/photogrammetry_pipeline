@@ -101,7 +101,7 @@ class GeodeticTransformThread(QThread):
             if self.run_enu_to_itrf:
                 # Utiliser le dossier d'entrée personnalisé ou le dossier de l'étape précédente
                 step_input_dir = self.enu_to_itrf_input_dir if self.enu_to_itrf_input_dir else current_input_dir
-                convert_enu_to_itrf(step_input_dir, logger, self.coord_file, self.enu_to_itrf_extra, self.max_workers)
+                convert_enu_to_itrf(step_input_dir, logger, self.coord_file, self.enu_to_itrf_extra, self.itrf_to_enu_ref_point, self.max_workers)
                 # Utiliser le dossier de sortie personnalisé ou le dossier par défaut
                 if self.enu_to_itrf_output_dir:
                     current_input_dir = self.enu_to_itrf_output_dir

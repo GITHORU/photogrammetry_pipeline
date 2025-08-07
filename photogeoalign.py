@@ -130,6 +130,7 @@ if __name__ == "__main__":
         parser.add_argument('--itrf-to-enu-output-dir', default='', help='Dossier de sortie personnalisé pour ITRF vers ENU (optionnel)')
         parser.add_argument('--deform-output-dir', default='', help='Dossier de sortie personnalisé pour la déformation (optionnel)')
         parser.add_argument('--enu-to-itrf-output-dir', default='', help='Dossier de sortie personnalisé pour ENU vers ITRF (optionnel)')
+        parser.add_argument('--max-workers', type=int, default=4, help='Nombre maximum de processus parallèles (défaut: 4)')
     
         args = parser.parse_args()
         if args.geodetic:
@@ -180,7 +181,7 @@ if __name__ == "__main__":
                     run_add_offset, run_itrf_to_enu, run_deform, run_enu_to_itrf,
                     add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, enu_to_itrf_input_dir,
                     add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, enu_to_itrf_output_dir,
-                    itrf_to_enu_ref_point, deform_bascule_xml
+                    itrf_to_enu_ref_point, deform_bascule_xml, args.max_workers
                 )
                 
                 # Exécution des transformations
