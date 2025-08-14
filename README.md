@@ -45,7 +45,7 @@ photogeoalign_windows.exe --no-gui <dossier_images> [options]
 Ou, si vous avez généré un exécutable Linux (PyInstaller) :
 
 ```bash
-./photogeoalign_linux.sh --no-gui <dossier_images> [options]
+./photogeoalign_linux --no-gui <dossier_images> [options]
 ```
 
 ## Paramètres de la ligne de commande (CLI)
@@ -110,10 +110,10 @@ modules/                 # Structure modulaire
 ├── core/               # Fonctions utilitaires et métier
 │   ├── utils.py       # Fonctions utilitaires
 │   ├── micmac.py      # Pipeline MicMac
-│   └── geodetic.py    # Transformations géodésiques
+│   └── geodetic.py    # Transformations géodésiques et orthoimages
 ├── gui/                # Interface graphique
 │   ├── main_window.py  # Fenêtre principale
-│   └── dialogs.py      # Boîtes de dialogue
+│   └── dialogs.py      # Boîtes de dialogue et export SLURM
 └── workers/            # Threads de traitement
     ├── pipeline_thread.py    # Thread pipeline MicMac
     ├── geodetic_thread.py    # Thread transformations géodésiques
@@ -121,33 +121,42 @@ modules/                 # Structure modulaire
 resources/
 └── logo.png            # Logo de l'application
 requirements.txt        # Dépendances Python
-README.md               # Documentation
+README.md               # Documentation principale
+README_ORTHOIMAGE.md    # Documentation du pipeline géodésique
+build_windows.bat       # Script de build Windows
+build_linux.sh          # Script de build Linux
+photogeoalign_windows.spec  # Configuration PyInstaller Windows
+photogeoalign_linux.spec    # Configuration PyInstaller Linux
 ```
 
 ## Prérequis
 - Python 3.8+
 - MicMac installé et accessible via la commande `mm3d`
-- PySide6 (`pip install -r requirements.txt`)
+- Dépendances Python : `pip install -r requirements.txt`
+
+### Dépendances principales
+- **Interface** : PySide6 (Qt6)
+- **3D et géospatial** : Open3D, pyproj, rasterio
+- **Images** : Pillow (PIL), numpy, scipy
+- **Build** : PyInstaller
 
 ## Build et distribution
 
 ### Build avec PyInstaller
 ```bash
 # Windows
-build_refactored.bat
+build_windows.bat
 
 # Linux
-chmod +x build_refactored.sh
-./build_refactored.sh
+chmod +x build_linux.sh
+./build_linux.sh
 
 # Ou directement avec PyInstaller
-pyinstaller photogeoalign.spec
+pyinstaller photogeoalign_windows.spec    # Windows
+pyinstaller photogeoalign_linux.spec      # Linux
 ```
 
-### Test du build
-```bash
-python test_build_refactored.py
-```
+
 
 ## Contact
 Pour toute question, suggestion ou contribution : reveneau@ipgp.fr
@@ -173,19 +182,19 @@ photogeoalign_windows.exe --no-gui <dossier_images> [options]
 Après compilation ou téléchargement, l'exécutable Linux se nomme :
 
 ```
-photogeoalign_linux.sh
+photogeoalign_linux
 ```
 
 Il est nécessaire de lui donner les droits d'exécution avant de pouvoir le lancer :
 
 ```bash
-chmod +x photogeoalign_linux.sh
+chmod +x photogeoalign_linux
 ```
 
 Ensuite, lancez-le avec :
 
 ```bash
-./photogeoalign_linux.sh --no-gui <dossier_images> [options]
+./photogeoalign_linux --no-gui <dossier_images> [options]
 ```
 
 Ceci est une mesure de sécurité standard sous Linux : tout fichier téléchargé n'est pas exécutable par défaut. 
@@ -248,4 +257,32 @@ Le pipeline PhotoGeoAlign intègre désormais la gestion avancée des points d'a
 ### Remarques
 - Les étapes GCPBascule sont automatiques et gérées par le pipeline.
 - Les fichiers intermédiaires sont générés et utilisés automatiquement.
-- Les logs détaillent chaque étape et les fichiers utilisés. 
+- Les logs détaillent chaque étape et les fichiers utilisés.
+
+### 2. Pipeline géodésique avancé
+
+PhotoGeoAlign intègre également un pipeline géodésique complet pour la transformation et fusion de nuages de points :
+
+#### Étapes disponibles
+- **Ajout d'offset** : Application d'un décalage géométrique
+- **ITRF → ENU** : Conversion du système de coordonnées global vers local
+- **Déformation TPS** : Transformation géométrique non-linéaire
+- **Orthoimage unitaire** : Création d'orthoimages individuelles depuis chaque nuage
+- **Orthoimage unifiée** : Fusion de toutes les orthoimages en une seule
+
+#### Fonctionnalités
+- **Gestion des résolutions** : Paramétrage de la résolution des orthoimages (0.1mm à 20m)
+- **Fusion des couleurs** : Choix entre méthode "Moyenne" et "Médiane"
+- **Gestion des nodata** : Traitement automatique des zones sans données
+- **Export SLURM** : Génération de scripts de batch pour clusters
+
+#### Utilisation
+```bash
+# Interface graphique
+python photogeoalign.py
+
+# Ligne de commande
+python photogeoalign.py --geodetic [options]
+```
+
+Pour plus de détails, consultez `README_ORTHOIMAGE.md`. 
