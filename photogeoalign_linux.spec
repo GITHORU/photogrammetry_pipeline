@@ -4,14 +4,7 @@
 a = Analysis(
     ['photogeoalign.py'],
     pathex=[],
-    binaries=[
-        # Inclusion des binaires Open3D
-        ('venv/lib/python3.*/site-packages/open3d/cpu/*.so', 'open3d/cpu/'),
-        ('venv/lib/python3.*/site-packages/open3d/geometry/*.so', 'open3d/geometry/'),
-        ('venv/lib/python3.*/site-packages/open3d/io/*.so', 'open3d/io/'),
-        ('venv/lib/python3.*/site-packages/open3d/utility/*.so', 'open3d/utility/'),
-        ('venv/lib/python3.*/site-packages/open3d/visualization/*.so', 'open3d/visualization/'),
-    ],
+    binaries=[],
     datas=[('resources/logo.png', '.')],
     hiddenimports=[
         'modules.core.utils',
@@ -34,21 +27,8 @@ a = Analysis(
         'scipy.interpolate._fitpack2',
         'scipy.sparse.csgraph._validation',
         'scipy.special._ufuncs_cxx',
-        # Open3D imports critiques
-        'open3d',
-        'open3d.cpu',
-        'open3d.cpu.pybind',
-        'open3d.cpu.pybind.cpython-311-x86_64-linux-gnu',
-        'open3d.cpu.pybind.cpython-311-x86_64-linux-gnu.so',
-        'open3d.cpu.pybind.cpython-310-x86_64-linux-gnu',
-        'open3d.cpu.pybind.cpython-310-x86_64-linux-gnu.so',
-        'open3d.cpu.pybind.cpython-39-x86_64-linux-gnu',
-        'open3d.cpu.pybind.cpython-39-x86_64-linux-gnu.so',
-        # Autres dépendances Open3D
-        'open3d.geometry',
-        'open3d.io',
-        'open3d.utility',
-        'open3d.visualization'
+        # Open3D - géré par le hook personnalisé
+        'open3d'
     ],
     hookspath=['hooks'],
     hooksconfig={},
