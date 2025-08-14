@@ -14,4 +14,6 @@
 !resources/
 !resources/*
 !modules/
-!modules/* 
+!modules/*
+!hooks/
+!hooks/* 
