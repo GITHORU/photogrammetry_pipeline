@@ -10,7 +10,7 @@ class GeodeticTransformThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None):
+    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None, color_fusion_method="average"):
         super().__init__()
         self.input_dir = input_dir
         self.coord_file = coord_file
@@ -47,6 +47,7 @@ class GeodeticTransformThread(QThread):
         self.orthoimage_color_field = orthoimage_color_field
         self.unified_orthoimage_resolution = unified_orthoimage_resolution
         self.max_workers = max_workers
+        self.color_fusion_method = color_fusion_method
 
     def run(self):
         logger = logging.getLogger(f"GeodeticTransform_{id(self)}")
@@ -132,7 +133,7 @@ class GeodeticTransformThread(QThread):
                     step_input_dir = current_input_dir
                 
                 # IMPORTANT: Passer la résolution unifiée pour contrôler la résolution finale
-                merge_orthoimages_and_dtm(step_input_dir, logger, self.unified_orthoimage_output_dir, self.unified_orthoimage_resolution, self.max_workers)
+                merge_orthoimages_and_dtm(step_input_dir, logger, self.unified_orthoimage_output_dir, self.unified_orthoimage_resolution, self.max_workers, self.color_fusion_method)
                 if self.unified_orthoimage_output_dir:
                     current_input_dir = self.unified_orthoimage_output_dir
                 else:

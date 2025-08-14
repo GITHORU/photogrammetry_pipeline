@@ -2,7 +2,7 @@ import os
 import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFileDialog, QComboBox, QSpinBox, QTextEdit, QLineEdit,
+    QFileDialog, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QLineEdit,
     QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog
 )
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QBrush, QPen, QAction
@@ -504,7 +504,9 @@ class PhotogrammetryGUI(QWidget):
             all_checked = all([
                 self.add_offset_cb.isChecked(),
                 self.itrf_to_enu_cb.isChecked(),
-                self.deform_cb.isChecked()
+                self.deform_cb.isChecked(),
+                self.orthoimage_cb.isChecked(),
+                self.unified_orthoimage_cb.isChecked()
             ])
             if all_checked:
                 # Icône croix rouge ❌
@@ -535,12 +537,16 @@ class PhotogrammetryGUI(QWidget):
             all_checked = all([
                 self.add_offset_cb.isChecked(),
                 self.itrf_to_enu_cb.isChecked(),
-                self.deform_cb.isChecked()
+                self.deform_cb.isChecked(),
+                self.orthoimage_cb.isChecked(),
+                self.unified_orthoimage_cb.isChecked()
             ])
             state = not all_checked
             self.add_offset_cb.setChecked(state)
             self.itrf_to_enu_cb.setChecked(state)
             self.deform_cb.setChecked(state)
+            self.orthoimage_cb.setChecked(state)
+            self.unified_orthoimage_cb.setChecked(state)
             update_geodetic_toggle_btn()
         
         geodetic_toggle_btn.clicked.connect(toggle_all_geodetic)
@@ -660,18 +666,66 @@ class PhotogrammetryGUI(QWidget):
         # Paramètres d'orthoimage
         orthoimage_params_line = QHBoxLayout()
         orthoimage_params_line.addWidget(QLabel("Résolution :"))
-        self.orthoimage_resolution_spin = QSpinBox()
-        self.orthoimage_resolution_spin.setRange(1, 1000)
-        self.orthoimage_resolution_spin.setValue(10)  # 0.1 mètre par défaut
-        self.orthoimage_resolution_spin.setSuffix(" cm")
+        self.orthoimage_resolution_spin = QDoubleSpinBox()
+        self.orthoimage_resolution_spin.setRange(0.1, 20000.0)
+        self.orthoimage_resolution_spin.setValue(100.0)  # 100 mm par défaut
+        self.orthoimage_resolution_spin.setSuffix(" mm")
+        self.orthoimage_resolution_spin.setDecimals(1)
         orthoimage_params_line.addWidget(self.orthoimage_resolution_spin)
         orthoimage_params_line.addStretch(1)
         geodetic_layout.addLayout(orthoimage_params_line)
         
-
+        # Méthode de fusion des couleurs
+        geodetic_layout.addWidget(QLabel(""))  # Ligne vide pour séparer
+        color_fusion_line = QHBoxLayout()
+        color_fusion_line.addWidget(QLabel("Méthode de fusion des couleurs :"))
+        self.color_fusion_combo = QComboBox()
+        self.color_fusion_combo.addItems(["Moyenne", "Médiane"])
+        self.color_fusion_combo.setCurrentText("Moyenne")
+        color_fusion_line.addWidget(self.color_fusion_combo)
+        color_fusion_line.addStretch(1)
+        geodetic_layout.addLayout(color_fusion_line)
+        
+        # Orthoimage unifiée
+        unified_orthoimage_line = QHBoxLayout()
+        self.unified_orthoimage_cb = QCheckBox("Orthoimage unifiée")
+        self.unified_orthoimage_cb.setChecked(True)
+        self.unified_orthoimage_cb.setMinimumWidth(140)
+        unified_orthoimage_line.addWidget(self.unified_orthoimage_cb)
+        unified_orthoimage_line.addWidget(QLabel("Entrée :"))
+        self.unified_orthoimage_input_edit = QLineEdit()
+        self.unified_orthoimage_input_edit.setPlaceholderText("Dossier d'entrée (vide = sortie précédente)")
+        unified_orthoimage_line.addWidget(self.unified_orthoimage_input_edit)
+        self.unified_orthoimage_input_browse_btn = QPushButton()
+        self.unified_orthoimage_input_browse_btn.setIcon(self.create_folder_icon())
+        self.unified_orthoimage_input_browse_btn.setToolTip("Parcourir")
+        self.unified_orthoimage_input_browse_btn.clicked.connect(self.browse_unified_orthoimage_input_dir)
+        unified_orthoimage_line.addWidget(self.unified_orthoimage_input_browse_btn)
+        unified_orthoimage_line.addWidget(QLabel("Sortie :"))
+        self.unified_orthoimage_output_edit = QLineEdit()
+        self.unified_orthoimage_output_edit.setPlaceholderText("Dossier de sortie (vide = unified_orthoimage_dtm)")
+        unified_orthoimage_line.addWidget(self.unified_orthoimage_output_edit)
+        self.unified_orthoimage_output_browse_btn = QPushButton()
+        self.unified_orthoimage_output_browse_btn.setIcon(self.create_folder_icon())
+        self.unified_orthoimage_output_browse_btn.setToolTip("Parcourir")
+        self.unified_orthoimage_output_browse_btn.clicked.connect(self.browse_unified_orthoimage_output_dir)
+        unified_orthoimage_line.addWidget(self.unified_orthoimage_output_browse_btn)
+        geodetic_layout.addLayout(unified_orthoimage_line)
+        
+        # Paramètres d'orthoimage unifiée
+        unified_orthoimage_params_line = QHBoxLayout()
+        unified_orthoimage_params_line.addWidget(QLabel("Résolution :"))
+        self.unified_orthoimage_resolution_spin = QDoubleSpinBox()
+        self.unified_orthoimage_resolution_spin.setRange(0.1, 20000.0)
+        self.unified_orthoimage_resolution_spin.setValue(100.0)  # 100 mm par défaut
+        self.unified_orthoimage_resolution_spin.setSuffix(" mm")
+        self.unified_orthoimage_resolution_spin.setDecimals(1)
+        unified_orthoimage_params_line.addWidget(self.unified_orthoimage_resolution_spin)
+        unified_orthoimage_params_line.addStretch(1)
+        geodetic_layout.addLayout(unified_orthoimage_params_line)
         
         # Connexion des cases à cocher au bouton toggle après leur création
-        for cb in [self.add_offset_cb, self.itrf_to_enu_cb, self.deform_cb, self.orthoimage_cb]:
+        for cb in [self.add_offset_cb, self.itrf_to_enu_cb, self.deform_cb, self.orthoimage_cb, self.unified_orthoimage_cb]:
             cb.stateChanged.connect(update_geodetic_toggle_btn)
         update_geodetic_toggle_btn()
         
@@ -756,24 +810,33 @@ class PhotogrammetryGUI(QWidget):
         self.itrf_to_enu_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         self.deform_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         self.orthoimage_cb.stateChanged.connect(self.update_geodetic_cmd_line)
+        self.unified_orthoimage_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexions pour les dossiers d'entrée personnalisés
         self.add_offset_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.itrf_to_enu_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.deform_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.orthoimage_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
+        self.unified_orthoimage_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexions pour les dossiers de sortie personnalisés
         self.add_offset_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.itrf_to_enu_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.deform_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.orthoimage_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
+        self.unified_orthoimage_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexion pour le nombre de workers
         self.parallel_workers_spin.valueChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexion pour les paramètres d'orthoimage
-        self.orthoimage_resolution_spin.valueChanged.connect(self.update_geodetic_cmd_line) 
+        self.orthoimage_resolution_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+        
+        # Connexion pour la méthode de fusion des couleurs
+        self.color_fusion_combo.currentTextChanged.connect(self.update_geodetic_cmd_line)
+        
+        # Connexion pour les paramètres d'orthoimage unifiée
+        self.unified_orthoimage_resolution_spin.valueChanged.connect(self.update_geodetic_cmd_line) 
         
         # Initialisation de la ligne de commande pour le nouvel onglet
         self.update_new_cmd_line()
@@ -878,6 +941,16 @@ class PhotogrammetryGUI(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'orthoimage")
         if folder:
             self.orthoimage_output_edit.setText(folder)
+
+    def browse_unified_orthoimage_input_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'entrée pour l'orthoimage unifiée")
+        if folder:
+            self.unified_orthoimage_input_edit.setText(folder)
+
+    def browse_unified_orthoimage_output_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'orthoimage unifiée")
+        if folder:
+            self.unified_orthoimage_output_edit.setText(folder)
 
 
 
@@ -1047,11 +1120,28 @@ class PhotogrammetryGUI(QWidget):
         if orthoimage_output_dir:
             base_cmd.append(f"--orthoimage-output-dir \"{orthoimage_output_dir}\"")
         
-
+        # Ajout des dossiers d'entrée/sortie pour l'orthoimage unifiée
+        unified_orthoimage_input_dir = self.unified_orthoimage_input_edit.text().strip()
+        unified_orthoimage_output_dir = self.unified_orthoimage_output_edit.text().strip()
+        
+        if unified_orthoimage_input_dir:
+            base_cmd.append(f"--unified-orthoimage-input-dir \"{unified_orthoimage_input_dir}\"")
+        
+        if unified_orthoimage_output_dir:
+            base_cmd.append(f"--unified-orthoimage-output-dir \"{unified_orthoimage_output_dir}\"")
         
         # Ajout des paramètres d'orthoimage
-        orthoimage_resolution = self.orthoimage_resolution_spin.value() / 1000.0  # Conversion cm vers m
+        orthoimage_resolution = self.orthoimage_resolution_spin.value() / 1000.0  # Conversion mm vers m
         base_cmd.append(f"--orthoimage-resolution {orthoimage_resolution}")
+        
+        # Ajout des paramètres d'orthoimage unifiée
+        unified_orthoimage_resolution = self.unified_orthoimage_resolution_spin.value() / 1000.0  # Conversion mm vers m
+        base_cmd.append(f"--unified-orthoimage-resolution {unified_orthoimage_resolution}")
+        
+        # Ajout de la méthode de fusion des couleurs
+        color_fusion_method = self.color_fusion_combo.currentText()
+        if color_fusion_method == "Médiane":
+            base_cmd.append("--color-fusion-median")
         
 
         
@@ -1072,7 +1162,8 @@ class PhotogrammetryGUI(QWidget):
         if not self.orthoimage_cb.isChecked():
             base_cmd.append("--skip-orthoimage")
         
-
+        if not self.unified_orthoimage_cb.isChecked():
+            base_cmd.append("--skip-unified-orthoimage")
         
         python_cmd = self.python_selector.currentText()
         cmd = python_cmd + " " + " ".join(base_cmd)
@@ -1146,10 +1237,11 @@ class PhotogrammetryGUI(QWidget):
         run_itrf_to_enu = self.itrf_to_enu_cb.isChecked()
         run_deform = self.deform_cb.isChecked()
         run_orthoimage = self.orthoimage_cb.isChecked()
+        run_unified_orthoimage = self.unified_orthoimage_cb.isChecked()
 
         
         # Vérification qu'au moins une étape est sélectionnée
-        if not any([run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage]):
+        if not any([run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage, run_unified_orthoimage]):
             self.log_text.append("<span style='color:red'>Veuillez sélectionner au moins une étape de transformation.</span>")
             return
         
@@ -1164,33 +1256,43 @@ class PhotogrammetryGUI(QWidget):
         itrf_to_enu_input_dir = self.itrf_to_enu_input_edit.text().strip()
         deform_input_dir = self.deform_input_edit.text().strip()
         orthoimage_input_dir = self.orthoimage_input_edit.text().strip()
+        unified_orthoimage_input_dir = self.unified_orthoimage_input_edit.text().strip()
         
         # Récupération des dossiers de sortie personnalisés
         add_offset_output_dir = self.add_offset_output_edit.text().strip()
         itrf_to_enu_output_dir = self.itrf_to_enu_output_edit.text().strip()
         deform_output_dir = self.deform_output_edit.text().strip()
         orthoimage_output_dir = self.orthoimage_output_edit.text().strip()
+        unified_orthoimage_output_dir = self.unified_orthoimage_output_edit.text().strip()
         
         # Conversion en None si vide
         add_offset_input_dir = add_offset_input_dir if add_offset_input_dir else None
         itrf_to_enu_input_dir = itrf_to_enu_input_dir if itrf_to_enu_input_dir else None
         deform_input_dir = deform_input_dir if deform_input_dir else None
         orthoimage_input_dir = orthoimage_input_dir if orthoimage_input_dir else None
+        unified_orthoimage_input_dir = unified_orthoimage_input_dir if unified_orthoimage_input_dir else None
         add_offset_output_dir = add_offset_output_dir if add_offset_output_dir else None
         itrf_to_enu_output_dir = itrf_to_enu_output_dir if itrf_to_enu_output_dir else None
         deform_output_dir = deform_output_dir if deform_output_dir else None
         orthoimage_output_dir = orthoimage_output_dir if orthoimage_output_dir else None
+        unified_orthoimage_output_dir = unified_orthoimage_output_dir if unified_orthoimage_output_dir else None
         
         # Paramètres d'orthoimage
-        orthoimage_resolution = self.orthoimage_resolution_spin.value() / 1000.0  # Conversion cm vers m
+        orthoimage_resolution = self.orthoimage_resolution_spin.value() / 1000.0  # Conversion mm vers m
+        
+        # Paramètres d'orthoimage unifiée
+        unified_orthoimage_resolution = self.unified_orthoimage_resolution_spin.value() / 1000.0  # Conversion mm vers m
+        
+        # Méthode de fusion des couleurs
+        color_fusion_method = self.color_fusion_combo.currentText()
         
         self.geodetic_thread = GeodeticTransformThread(
             input_dir, coord_file, deformation_type, deformation_params,
             add_offset_extra, itrf_to_enu_extra, deform_extra,
-            run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage,
-            add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir,
-            add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir,
-            self.get_selected_ref_point(), bascule_xml, orthoimage_resolution, "z", "rgb", max_workers
+            run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage, run_unified_orthoimage,
+            add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
+            add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
+            self.get_selected_ref_point(), bascule_xml, orthoimage_resolution, "z", "rgb", unified_orthoimage_resolution, max_workers, color_fusion_method
         )
         self.geodetic_thread.log_signal.connect(self.append_log)
         self.geodetic_thread.finished_signal.connect(self.geodetic_pipeline_finished)
@@ -1334,20 +1436,30 @@ class PhotogrammetryGUI(QWidget):
 
     def generate_job_script(self, vals, pipeline_type="micmac"):
         # Génère le contenu du script SLURM
+        # NOTE: L'exécutable Python est détecté automatiquement par le script :
+        # - Si exécutable PyInstaller : utilise directement l'exécutable
+        # - Si script Python : utilise sys.executable + chemin du script
+        # Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable
+        
         if pipeline_type == "geodetic":
-            # Pour le pipeline géodésique, on charge les modules nécessaires pour pyproj et open3d
+            # Pour le pipeline géodésique, utiliser l'exécutable détecté automatiquement
             modules = """module purge
-module load python/3.9
-module load pyproj
-module load open3d"""
+# Charger MicMac si nécessaire
+module load micmac
+
+# L'exécutable Python est détecté automatiquement par le script
+# Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""
         elif pipeline_type == "new":
             # Pour le nouveau pipeline
             modules = """module purge
-module load python/3.9"""
+# L'exécutable Python est détecté automatiquement par le script
+# Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""
         else:
             # Pour le pipeline MicMac
             modules = """module purge
-module load micmac"""
+module load micmac
+
+# L'exécutable Python est détecté automatiquement par le script"""
         
         return f"""#!/bin/bash
 

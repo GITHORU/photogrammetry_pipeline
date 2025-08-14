@@ -140,6 +140,9 @@ if __name__ == "__main__":
         # Arguments pour les paramètres d'orthoimage
         parser.add_argument('--orthoimage-resolution', type=float, default=0.1, help='Résolution de l\'orthoimage en mètres (défaut: 0.1)')
         parser.add_argument('--unified-orthoimage-resolution', type=float, default=0.1, help='Résolution de l\'orthoimage unifiée en mètres (défaut: 0.1)')
+        
+        # Arguments pour la méthode de fusion des couleurs
+        parser.add_argument('--color-fusion-median', action='store_true', help='Utiliser la méthode de médiane pour la fusion des couleurs')
 
         parser.add_argument('--max-workers', type=int, default=4, help='Nombre maximum de processus parallèles (défaut: 4)')
     
@@ -191,6 +194,9 @@ if __name__ == "__main__":
                 run_unified_orthoimage = not args.skip_unified_orthoimage
 
                 
+                # Méthode de fusion des couleurs
+                color_fusion_method = "median" if args.color_fusion_median else "average"
+                
                 # Création d'une instance du thread pour gérer les dossiers d'entrée/sortie
                 geodetic_thread = GeodeticTransformThread(
                     args.input_dir, coord_file, deformation_type, deformation_params,
@@ -198,7 +204,7 @@ if __name__ == "__main__":
                     run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage, run_unified_orthoimage,
                     add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
                     add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
-                    itrf_to_enu_ref_point, deform_bascule_xml, args.orthoimage_resolution, "z", "rgb", args.unified_orthoimage_resolution, args.max_workers
+                    itrf_to_enu_ref_point, deform_bascule_xml, args.orthoimage_resolution, "z", "rgb", args.unified_orthoimage_resolution, args.max_workers, color_fusion_method
                 )
                 
                 # Exécution des transformations

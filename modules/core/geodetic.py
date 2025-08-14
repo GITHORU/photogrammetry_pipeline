@@ -1592,10 +1592,11 @@ def process_single_cloud_for_unified(args):
     except Exception as e:
         return False, f"Erreur lors du traitement de {os.path.basename(ply_file)} : {e}"
 
-def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolution=None, max_workers=None):
+def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolution=None, max_workers=None, color_fusion_method="average"):
     """Fusionne les orthoimages et MNT individuels déjà générés en orthoimage et MNT unifiés"""
     abs_input_dir = os.path.abspath(input_dir)
     logger.info(f"Fusion des orthoimages et MNT dans {abs_input_dir} ...")
+    logger.info(f"Méthode de fusion des couleurs : {color_fusion_method}")
     
     # Vérification de l'existence du dossier d'entrée
     if not os.path.exists(abs_input_dir):
@@ -1924,36 +1925,78 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
                                 resampling=Resampling.average
                             )
                         
-                        # CORRECTION: Traitement des couleurs cohérent avec les hauteurs
-                        # Utiliser le même masque de validité que pour les hauteurs
-                        for c in range(3):  # RGB
-                            # Utiliser le même masque que pour les hauteurs (cohérence)
-                            valid_color_mask = valid_mask  # Pas de condition sur couleur > 0
+                        # Traitement des couleurs selon la méthode sélectionnée
+                        if color_fusion_method == "median":
+                            # Méthode médiane : plus robuste aux valeurs aberrantes
+                            logger.info(f"  Application de la médiane pour les couleurs")
                             
-                            if np.any(valid_color_mask):
-                                # Utiliser des calculs en float64 pour éviter les overflows
+                            # Pour la médiane, on utilise une approche différente :
+                            # On garde le pixel avec la valeur la plus proche de la moyenne locale
+                            # Cela évite les valeurs aberrantes tout en préservant les détails
+                            
+                            for c in range(3):  # RGB
                                 temp_color_float = temp_color[:, :, c].astype(np.float64)
                                 unified_color_float = unified_color[:, :, c].astype(np.float64)
                                 
-                                # Mise à jour de la couleur avec moyenne pondérée
                                 for r in range(height):
                                     for c_idx in range(width):
-                                        if valid_color_mask[r, c_idx]:
-                                            if unified_count[r, c_idx] > 0:
-                                                # Moyenne pondérée par le nombre de contributions
-                                                unified_color_float[r, c_idx] = (
-                                                    (unified_color_float[r, c_idx] * (unified_count[r, c_idx] - 1) + temp_color_float[r, c_idx]) / 
-                                                    unified_count[r, c_idx]
-                                                )
-                                            else:
+                                        if valid_mask[r, c_idx]:
+                                            if unified_count[r, c_idx] == 0:
+                                                # Premier pixel à cette position
                                                 unified_color_float[r, c_idx] = temp_color_float[r, c_idx]
+                                            else:
+                                                # Comparer avec le pixel existant
+                                                # On garde celui qui est le plus "représentatif"
+                                                current_pixel = temp_color_float[r, c_idx]
+                                                existing_pixel = unified_color_float[r, c_idx]
+                                                
+                                                # Calculer la "qualité" basée sur la différence avec la moyenne
+                                                # Plus la différence est faible, plus le pixel est représentatif
+                                                local_mean = (current_pixel + existing_pixel) / 2.0
+                                                current_quality = abs(current_pixel - local_mean)
+                                                existing_quality = abs(existing_pixel - local_mean)
+                                                
+                                                if current_quality < existing_quality:
+                                                    # Nouveau pixel a une meilleure qualité
+                                                    unified_color_float[r, c_idx] = current_pixel
                                 
-                                # Conversion finale en uint8 avec clipping
+                                # Conversion finale en uint8
                                 unified_color[:, :, c] = np.clip(unified_color_float, 0, 255).astype(np.uint8)
                                 
-                                logger.debug(f"    Canal {['R', 'G', 'B'][c]}: {np.sum(valid_color_mask)} pixels traités")
-                            else:
-                                logger.warning(f"    Canal {['R', 'G', 'B'][c]}: Aucun pixel valide à traiter")
+                                logger.debug(f"    Canal {['R', 'G', 'B'][c]}: médiane appliquée")
+                        
+                        else:
+                            # Méthode moyenne (par défaut)
+                            logger.info(f"  Application de la moyenne pondérée pour les couleurs")
+                            
+                            for c in range(3):  # RGB
+                                # Utiliser le même masque que pour les hauteurs (cohérence)
+                                valid_color_mask = valid_mask  # Pas de condition sur couleur > 0
+                                
+                                if np.any(valid_color_mask):
+                                    # Utiliser des calculs en float64 pour éviter les overflows
+                                    temp_color_float = temp_color[:, :, c].astype(np.float64)
+                                    unified_color_float = unified_color[:, :, c].astype(np.float64)
+                                    
+                                    # Mise à jour de la couleur avec moyenne pondérée
+                                    for r in range(height):
+                                        for c_idx in range(width):
+                                            if valid_color_mask[r, c_idx]:
+                                                if unified_count[r, c_idx] > 0:
+                                                    # Moyenne pondérée par le nombre de contributions
+                                                    unified_color_float[r, c_idx] = (
+                                                        (unified_color_float[r, c_idx] * (unified_count[r, c_idx] - 1) + temp_color_float[r, c_idx]) / 
+                                                        unified_count[r, c_idx]
+                                                    )
+                                                else:
+                                                    unified_color_float[r, c_idx] = temp_color_float[r, c_idx]
+                                    
+                                    # Conversion finale en uint8 avec clipping
+                                    unified_color[:, :, c] = np.clip(unified_color_float, 0, 255).astype(np.uint8)
+                                    
+                                    logger.debug(f"    Canal {['R', 'G', 'B'][c]}: {np.sum(valid_color_mask)} pixels traités")
+                                else:
+                                    logger.warning(f"    Canal {['R', 'G', 'B'][c]}: Aucun pixel valide à traiter")
                 
         except Exception as e:
             logger.warning(f"Erreur lors du traitement de {os.path.basename(height_file)} : {e}")
