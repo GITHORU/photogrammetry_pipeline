@@ -9,4 +9,8 @@ Pillow>=8.0.0
 rasterio>=1.3.0
 
 # Les autres modules utilisés (argparse, logging, subprocess, os, sys, time, re, pathlib, multiprocessing)
-# font partie de la bibliothèque standard Python (>=3.8) 
+# font partie de la bibliothèque standard Python (>=3.8)
+
+# Tests et développement
+pytest>=7.0.0
+pytest-qt>=4.0.0 
