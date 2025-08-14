@@ -2,7 +2,7 @@ import logging
 import os
 from PySide6.QtCore import QThread, Signal
 from ..core.geodetic import (
-    add_offset_to_clouds, convert_itrf_to_enu, deform_clouds, convert_enu_to_itrf
+    add_offset_to_clouds, convert_itrf_to_enu, deform_clouds, create_orthoimage_from_pointcloud, merge_orthoimages_and_dtm
 )
 from .utils import QtLogHandler
 
@@ -10,7 +10,7 @@ class GeodeticTransformThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, enu_to_itrf_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_enu_to_itrf=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, enu_to_itrf_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, enu_to_itrf_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, max_workers=None):
+    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None):
         super().__init__()
         self.input_dir = input_dir
         self.coord_file = coord_file
@@ -19,23 +19,33 @@ class GeodeticTransformThread(QThread):
         self.add_offset_extra = add_offset_extra
         self.itrf_to_enu_extra = itrf_to_enu_extra
         self.deform_extra = deform_extra
-        self.enu_to_itrf_extra = enu_to_itrf_extra
+
         self.run_add_offset = run_add_offset
         self.run_itrf_to_enu = run_itrf_to_enu
         self.run_deform = run_deform
-        self.run_enu_to_itrf = run_enu_to_itrf
+        self.run_orthoimage = run_orthoimage
+        self.run_unified_orthoimage = run_unified_orthoimage
+
         # Dossiers d'entrée personnalisés pour chaque étape
         self.add_offset_input_dir = add_offset_input_dir
         self.itrf_to_enu_input_dir = itrf_to_enu_input_dir
         self.deform_input_dir = deform_input_dir
-        self.enu_to_itrf_input_dir = enu_to_itrf_input_dir
+        self.orthoimage_input_dir = orthoimage_input_dir
+        self.unified_orthoimage_input_dir = unified_orthoimage_input_dir
+
         # Dossiers de sortie personnalisés pour chaque étape
         self.add_offset_output_dir = add_offset_output_dir
         self.itrf_to_enu_output_dir = itrf_to_enu_output_dir
         self.deform_output_dir = deform_output_dir
-        self.enu_to_itrf_output_dir = enu_to_itrf_output_dir
+        self.orthoimage_output_dir = orthoimage_output_dir
+        self.unified_orthoimage_output_dir = unified_orthoimage_output_dir
+
         self.itrf_to_enu_ref_point = itrf_to_enu_ref_point
         self.deform_bascule_xml = deform_bascule_xml
+        self.orthoimage_resolution = orthoimage_resolution
+        self.orthoimage_height_field = orthoimage_height_field
+        self.orthoimage_color_field = orthoimage_color_field
+        self.unified_orthoimage_resolution = unified_orthoimage_resolution
         self.max_workers = max_workers
 
     def run(self):
@@ -98,17 +108,38 @@ class GeodeticTransformThread(QThread):
                 self.log_signal.emit("Déformation terminée.\n")
                 print("Déformation terminée.")
                 
-            if self.run_enu_to_itrf:
+            if self.run_orthoimage:
                 # Utiliser le dossier d'entrée personnalisé ou le dossier de l'étape précédente
-                step_input_dir = self.enu_to_itrf_input_dir if self.enu_to_itrf_input_dir else current_input_dir
-                convert_enu_to_itrf(step_input_dir, logger, self.coord_file, self.enu_to_itrf_extra, self.itrf_to_enu_ref_point, self.max_workers)
+                step_input_dir = self.orthoimage_input_dir if self.orthoimage_input_dir else current_input_dir
+                create_orthoimage_from_pointcloud(step_input_dir, logger, self.orthoimage_output_dir, self.orthoimage_resolution, self.orthoimage_height_field, self.orthoimage_color_field, self.max_workers)
                 # Utiliser le dossier de sortie personnalisé ou le dossier par défaut
-                if self.enu_to_itrf_output_dir:
-                    current_input_dir = self.enu_to_itrf_output_dir
+                if self.orthoimage_output_dir:
+                    current_input_dir = self.orthoimage_output_dir
                 else:
-                    current_input_dir = os.path.join(os.path.dirname(step_input_dir), "enu_to_itrf_step")
-                self.log_signal.emit("Conversion ENU→ITRF terminée.\n")
-                print("Conversion ENU→ITRF terminée.")
+                    current_input_dir = os.path.join(os.path.dirname(step_input_dir), "orthoimage_step")
+                self.log_signal.emit("Création d'orthoimage terminée.\n")
+                print("Création d'orthoimage terminée.")
+
+            # Étape 4 : Fusion des orthoimages et MNT unifiés
+            if self.run_unified_orthoimage:
+                # Pour l'orthoimage unifiée, on utilise les orthoimages .tif déjà générées
+                # Si un dossier d'entrée personnalisé est spécifié, on l'utilise
+                # Sinon, on utilise le dossier de l'étape précédente (qui contient les .tif)
+                if self.unified_orthoimage_input_dir:
+                    step_input_dir = self.unified_orthoimage_input_dir
+                else:
+                    # Utiliser le dossier de l'étape précédente qui contient les orthoimages .tif
+                    step_input_dir = current_input_dir
+                
+                # IMPORTANT: Passer la résolution unifiée pour contrôler la résolution finale
+                merge_orthoimages_and_dtm(step_input_dir, logger, self.unified_orthoimage_output_dir, self.unified_orthoimage_resolution, self.max_workers)
+                if self.unified_orthoimage_output_dir:
+                    current_input_dir = self.unified_orthoimage_output_dir
+                else:
+                    current_input_dir = os.path.join(os.path.dirname(step_input_dir), "unified_orthoimage_dtm")
+                self.log_signal.emit("Fusion des orthoimages et MNT unifiés terminée.\n")
+                print("Fusion des orthoimages et MNT unifiés terminée.")
+
                 
             success_msg = "Transformations géodésiques terminées avec succès !"
             self.finished_signal.emit(True, success_msg)

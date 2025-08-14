@@ -113,23 +113,34 @@ if __name__ == "__main__":
         parser.add_argument('--itrf-to-enu-ref-point', default='', help='Nom du point de référence pour ITRF vers ENU (optionnel, utilise le premier point si non spécifié)')
         parser.add_argument('--deform-extra', default='', help='Paramètres supplémentaires pour la déformation (optionnel)')
         parser.add_argument('--deform-bascule-xml', default='', help='Fichier XML GCPBascule pour la déformation (optionnel)')
-        parser.add_argument('--enu-to-itrf-extra', default='', help='Paramètres supplémentaires pour ENU vers ITRF (optionnel)')
+
         parser.add_argument('--skip-add-offset', action='store_true', help='Ne pas exécuter l\'ajout d\'offset')
         parser.add_argument('--skip-itrf-to-enu', action='store_true', help='Ne pas exécuter la conversion ITRF vers ENU')
         parser.add_argument('--skip-deform', action='store_true', help='Ne pas exécuter la déformation')
-        parser.add_argument('--skip-enu-to-itrf', action='store_true', help='Ne pas exécuter la conversion ENU vers ITRF')
+        parser.add_argument('--skip-orthoimage', action='store_true', help='Ne pas exécuter la création d\'orthoimage')
+        parser.add_argument('--skip-unified-orthoimage', action='store_true', help='Ne pas exécuter la création d\'orthoimage et MNT unifiés')
+
         
         # Arguments pour les dossiers d'entrée personnalisés
         parser.add_argument('--add-offset-input-dir', default='', help='Dossier d\'entrée personnalisé pour l\'ajout d\'offset (optionnel)')
         parser.add_argument('--itrf-to-enu-input-dir', default='', help='Dossier d\'entrée personnalisé pour ITRF vers ENU (optionnel)')
         parser.add_argument('--deform-input-dir', default='', help='Dossier d\'entrée personnalisé pour la déformation (optionnel)')
-        parser.add_argument('--enu-to-itrf-input-dir', default='', help='Dossier d\'entrée personnalisé pour ENU vers ITRF (optionnel)')
+        parser.add_argument('--orthoimage-input-dir', default='', help='Dossier d\'entrée personnalisé pour l\'orthoimage (optionnel)')
+        parser.add_argument('--unified-orthoimage-input-dir', default='', help='Dossier d\'entrée personnalisé pour l\'orthoimage unifiée (optionnel)')
+
         
         # Arguments pour les dossiers de sortie personnalisés
         parser.add_argument('--add-offset-output-dir', default='', help='Dossier de sortie personnalisé pour l\'ajout d\'offset (optionnel)')
         parser.add_argument('--itrf-to-enu-output-dir', default='', help='Dossier de sortie personnalisé pour ITRF vers ENU (optionnel)')
         parser.add_argument('--deform-output-dir', default='', help='Dossier de sortie personnalisé pour la déformation (optionnel)')
-        parser.add_argument('--enu-to-itrf-output-dir', default='', help='Dossier de sortie personnalisé pour ENU vers ITRF (optionnel)')
+        parser.add_argument('--orthoimage-output-dir', default='', help='Dossier de sortie personnalisé pour l\'orthoimage (optionnel)')
+        parser.add_argument('--unified-orthoimage-output-dir', default='', help='Dossier de sortie personnalisé pour l\'orthoimage unifiée (optionnel)')
+
+        
+        # Arguments pour les paramètres d'orthoimage
+        parser.add_argument('--orthoimage-resolution', type=float, default=0.1, help='Résolution de l\'orthoimage en mètres (défaut: 0.1)')
+        parser.add_argument('--unified-orthoimage-resolution', type=float, default=0.1, help='Résolution de l\'orthoimage unifiée en mètres (défaut: 0.1)')
+
         parser.add_argument('--max-workers', type=int, default=4, help='Nombre maximum de processus parallèles (défaut: 4)')
     
         args = parser.parse_args()
@@ -155,33 +166,39 @@ if __name__ == "__main__":
                 itrf_to_enu_ref_point = args.itrf_to_enu_ref_point if args.itrf_to_enu_ref_point else None
                 deform_extra = args.deform_extra
                 deform_bascule_xml = args.deform_bascule_xml if args.deform_bascule_xml else None
-                enu_to_itrf_extra = args.enu_to_itrf_extra
+
                 
                 # Dossiers d'entrée personnalisés
                 add_offset_input_dir = args.add_offset_input_dir if args.add_offset_input_dir else None
                 itrf_to_enu_input_dir = args.itrf_to_enu_input_dir if args.itrf_to_enu_input_dir else None
                 deform_input_dir = args.deform_input_dir if args.deform_input_dir else None
-                enu_to_itrf_input_dir = args.enu_to_itrf_input_dir if args.enu_to_itrf_input_dir else None
+                orthoimage_input_dir = args.orthoimage_input_dir if args.orthoimage_input_dir else None
+                unified_orthoimage_input_dir = args.unified_orthoimage_input_dir if args.unified_orthoimage_input_dir else None
+
                 
                 # Dossiers de sortie personnalisés
                 add_offset_output_dir = args.add_offset_output_dir if args.add_offset_output_dir else None
                 itrf_to_enu_output_dir = args.itrf_to_enu_output_dir if args.itrf_to_enu_output_dir else None
                 deform_output_dir = args.deform_output_dir if args.deform_output_dir else None
-                enu_to_itrf_output_dir = args.enu_to_itrf_output_dir if args.enu_to_itrf_output_dir else None
+                orthoimage_output_dir = args.orthoimage_output_dir if args.orthoimage_output_dir else None
+                unified_orthoimage_output_dir = args.unified_orthoimage_output_dir if args.unified_orthoimage_output_dir else None
+
                 
                 run_add_offset = not args.skip_add_offset
                 run_itrf_to_enu = not args.skip_itrf_to_enu
                 run_deform = not args.skip_deform
-                run_enu_to_itrf = not args.skip_enu_to_itrf
+                run_orthoimage = not args.skip_orthoimage
+                run_unified_orthoimage = not args.skip_unified_orthoimage
+
                 
                 # Création d'une instance du thread pour gérer les dossiers d'entrée/sortie
                 geodetic_thread = GeodeticTransformThread(
                     args.input_dir, coord_file, deformation_type, deformation_params,
-                    add_offset_extra, itrf_to_enu_extra, deform_extra, enu_to_itrf_extra,
-                    run_add_offset, run_itrf_to_enu, run_deform, run_enu_to_itrf,
-                    add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, enu_to_itrf_input_dir,
-                    add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, enu_to_itrf_output_dir,
-                    itrf_to_enu_ref_point, deform_bascule_xml, args.max_workers
+                    add_offset_extra, itrf_to_enu_extra, deform_extra,
+                    run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage, run_unified_orthoimage,
+                    add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
+                    add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
+                    itrf_to_enu_ref_point, deform_bascule_xml, args.orthoimage_resolution, "z", "rgb", args.unified_orthoimage_resolution, args.max_workers
                 )
                 
                 # Exécution des transformations

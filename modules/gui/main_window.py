@@ -504,8 +504,7 @@ class PhotogrammetryGUI(QWidget):
             all_checked = all([
                 self.add_offset_cb.isChecked(),
                 self.itrf_to_enu_cb.isChecked(),
-                self.deform_cb.isChecked(),
-                self.enu_to_itrf_cb.isChecked()
+                self.deform_cb.isChecked()
             ])
             if all_checked:
                 # Icône croix rouge ❌
@@ -536,14 +535,12 @@ class PhotogrammetryGUI(QWidget):
             all_checked = all([
                 self.add_offset_cb.isChecked(),
                 self.itrf_to_enu_cb.isChecked(),
-                self.deform_cb.isChecked(),
-                self.enu_to_itrf_cb.isChecked()
+                self.deform_cb.isChecked()
             ])
             state = not all_checked
             self.add_offset_cb.setChecked(state)
             self.itrf_to_enu_cb.setChecked(state)
             self.deform_cb.setChecked(state)
-            self.enu_to_itrf_cb.setChecked(state)
             update_geodetic_toggle_btn()
         
         geodetic_toggle_btn.clicked.connect(toggle_all_geodetic)
@@ -634,34 +631,47 @@ class PhotogrammetryGUI(QWidget):
         deform_line.addWidget(self.deform_output_browse_btn)
         geodetic_layout.addLayout(deform_line)
         
-        # ENU vers ITRF
-        enu_to_itrf_line = QHBoxLayout()
-        self.enu_to_itrf_cb = QCheckBox("ENU → ITRF")
-        self.enu_to_itrf_cb.setChecked(False)
-        self.enu_to_itrf_cb.setMinimumWidth(140)
-        enu_to_itrf_line.addWidget(self.enu_to_itrf_cb)
-        enu_to_itrf_line.addWidget(QLabel("Entrée :"))
-        self.enu_to_itrf_input_edit = QLineEdit()
-        self.enu_to_itrf_input_edit.setPlaceholderText("Dossier d'entrée (vide = sortie précédente)")
-        enu_to_itrf_line.addWidget(self.enu_to_itrf_input_edit)
-        self.enu_to_itrf_input_browse_btn = QPushButton()
-        self.enu_to_itrf_input_browse_btn.setIcon(self.create_folder_icon())
-        self.enu_to_itrf_input_browse_btn.setToolTip("Parcourir")
-        self.enu_to_itrf_input_browse_btn.clicked.connect(self.browse_enu_to_itrf_input_dir)
-        enu_to_itrf_line.addWidget(self.enu_to_itrf_input_browse_btn)
-        enu_to_itrf_line.addWidget(QLabel("Sortie :"))
-        self.enu_to_itrf_output_edit = QLineEdit()
-        self.enu_to_itrf_output_edit.setPlaceholderText("Dossier de sortie (vide = enu_to_itrf_step)")
-        enu_to_itrf_line.addWidget(self.enu_to_itrf_output_edit)
-        self.enu_to_itrf_output_browse_btn = QPushButton()
-        self.enu_to_itrf_output_browse_btn.setIcon(self.create_folder_icon())
-        self.enu_to_itrf_output_browse_btn.setToolTip("Parcourir")
-        self.enu_to_itrf_output_browse_btn.clicked.connect(self.browse_enu_to_itrf_output_dir)
-        enu_to_itrf_line.addWidget(self.enu_to_itrf_output_browse_btn)
-        geodetic_layout.addLayout(enu_to_itrf_line)
+        # Orthoimage
+        orthoimage_line = QHBoxLayout()
+        self.orthoimage_cb = QCheckBox("Orthoimage")
+        self.orthoimage_cb.setChecked(True)
+        self.orthoimage_cb.setMinimumWidth(140)
+        orthoimage_line.addWidget(self.orthoimage_cb)
+        orthoimage_line.addWidget(QLabel("Entrée :"))
+        self.orthoimage_input_edit = QLineEdit()
+        self.orthoimage_input_edit.setPlaceholderText("Dossier d'entrée (vide = sortie précédente)")
+        orthoimage_line.addWidget(self.orthoimage_input_edit)
+        self.orthoimage_input_browse_btn = QPushButton()
+        self.orthoimage_input_browse_btn.setIcon(self.create_folder_icon())
+        self.orthoimage_input_browse_btn.setToolTip("Parcourir")
+        self.orthoimage_input_browse_btn.clicked.connect(self.browse_orthoimage_input_dir)
+        orthoimage_line.addWidget(self.orthoimage_input_browse_btn)
+        orthoimage_line.addWidget(QLabel("Sortie :"))
+        self.orthoimage_output_edit = QLineEdit()
+        self.orthoimage_output_edit.setPlaceholderText("Dossier de sortie (vide = orthoimage_step)")
+        orthoimage_line.addWidget(self.orthoimage_output_edit)
+        self.orthoimage_output_browse_btn = QPushButton()
+        self.orthoimage_output_browse_btn.setIcon(self.create_folder_icon())
+        self.orthoimage_output_browse_btn.setToolTip("Parcourir")
+        self.orthoimage_output_browse_btn.clicked.connect(self.browse_orthoimage_output_dir)
+        orthoimage_line.addWidget(self.orthoimage_output_browse_btn)
+        geodetic_layout.addLayout(orthoimage_line)
+        
+        # Paramètres d'orthoimage
+        orthoimage_params_line = QHBoxLayout()
+        orthoimage_params_line.addWidget(QLabel("Résolution :"))
+        self.orthoimage_resolution_spin = QSpinBox()
+        self.orthoimage_resolution_spin.setRange(1, 1000)
+        self.orthoimage_resolution_spin.setValue(10)  # 0.1 mètre par défaut
+        self.orthoimage_resolution_spin.setSuffix(" cm")
+        orthoimage_params_line.addWidget(self.orthoimage_resolution_spin)
+        orthoimage_params_line.addStretch(1)
+        geodetic_layout.addLayout(orthoimage_params_line)
+        
+
         
         # Connexion des cases à cocher au bouton toggle après leur création
-        for cb in [self.add_offset_cb, self.itrf_to_enu_cb, self.deform_cb, self.enu_to_itrf_cb]:
+        for cb in [self.add_offset_cb, self.itrf_to_enu_cb, self.deform_cb, self.orthoimage_cb]:
             cb.stateChanged.connect(update_geodetic_toggle_btn)
         update_geodetic_toggle_btn()
         
@@ -745,22 +755,25 @@ class PhotogrammetryGUI(QWidget):
         self.add_offset_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         self.itrf_to_enu_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         self.deform_cb.stateChanged.connect(self.update_geodetic_cmd_line)
-        self.enu_to_itrf_cb.stateChanged.connect(self.update_geodetic_cmd_line)
+        self.orthoimage_cb.stateChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexions pour les dossiers d'entrée personnalisés
         self.add_offset_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.itrf_to_enu_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.deform_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
-        self.enu_to_itrf_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
+        self.orthoimage_input_edit.textChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexions pour les dossiers de sortie personnalisés
         self.add_offset_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.itrf_to_enu_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.deform_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
-        self.enu_to_itrf_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
+        self.orthoimage_output_edit.textChanged.connect(self.update_geodetic_cmd_line)
         
         # Connexion pour le nombre de workers
-        self.parallel_workers_spin.valueChanged.connect(self.update_geodetic_cmd_line) 
+        self.parallel_workers_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+        
+        # Connexion pour les paramètres d'orthoimage
+        self.orthoimage_resolution_spin.valueChanged.connect(self.update_geodetic_cmd_line) 
         
         # Initialisation de la ligne de commande pour le nouvel onglet
         self.update_new_cmd_line()
@@ -839,10 +852,7 @@ class PhotogrammetryGUI(QWidget):
         if folder:
             self.deform_input_edit.setText(folder)
 
-    def browse_enu_to_itrf_input_dir(self):
-        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'entrée pour ENU→ITRF")
-        if folder:
-            self.enu_to_itrf_input_edit.setText(folder)
+
 
     def browse_add_offset_output_dir(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'ajout d'offset")
@@ -859,10 +869,17 @@ class PhotogrammetryGUI(QWidget):
         if folder:
             self.deform_output_edit.setText(folder)
 
-    def browse_enu_to_itrf_output_dir(self):
-        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour ENU→ITRF")
+    def browse_orthoimage_input_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'entrée pour l'orthoimage")
         if folder:
-            self.enu_to_itrf_output_edit.setText(folder)
+            self.orthoimage_input_edit.setText(folder)
+
+    def browse_orthoimage_output_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'orthoimage")
+        if folder:
+            self.orthoimage_output_edit.setText(folder)
+
+
 
     def update_cmd_line(self):
         input_dir = self.dir_edit.text().strip() or "<dossier_images>"
@@ -976,13 +993,13 @@ class PhotogrammetryGUI(QWidget):
         add_offset_input_dir = self.add_offset_input_edit.text().strip()
         itrf_to_enu_input_dir = self.itrf_to_enu_input_edit.text().strip()
         deform_input_dir = self.deform_input_edit.text().strip()
-        enu_to_itrf_input_dir = self.enu_to_itrf_input_edit.text().strip()
+        orthoimage_input_dir = self.orthoimage_input_edit.text().strip()
         
         # Dossiers de sortie personnalisés
         add_offset_output_dir = self.add_offset_output_edit.text().strip()
         itrf_to_enu_output_dir = self.itrf_to_enu_output_edit.text().strip()
         deform_output_dir = self.deform_output_edit.text().strip()
-        enu_to_itrf_output_dir = self.enu_to_itrf_output_edit.text().strip()
+        orthoimage_output_dir = self.orthoimage_output_edit.text().strip()
         
         base_cmd = ["photogeoalign.py", "--geodetic", f'\"{geodetic_dir}\"']
         
@@ -1012,8 +1029,10 @@ class PhotogrammetryGUI(QWidget):
         if deform_input_dir:
             base_cmd.append(f"--deform-input-dir \"{deform_input_dir}\"")
         
-        if enu_to_itrf_input_dir:
-            base_cmd.append(f"--enu-to-itrf-input-dir \"{enu_to_itrf_input_dir}\"")
+        if orthoimage_input_dir:
+            base_cmd.append(f"--orthoimage-input-dir \"{orthoimage_input_dir}\"")
+        
+
         
         # Ajout des dossiers de sortie personnalisés
         if add_offset_output_dir:
@@ -1025,8 +1044,16 @@ class PhotogrammetryGUI(QWidget):
         if deform_output_dir:
             base_cmd.append(f"--deform-output-dir \"{deform_output_dir}\"")
         
-        if enu_to_itrf_output_dir:
-            base_cmd.append(f"--enu-to-itrf-output-dir \"{enu_to_itrf_output_dir}\"")
+        if orthoimage_output_dir:
+            base_cmd.append(f"--orthoimage-output-dir \"{orthoimage_output_dir}\"")
+        
+
+        
+        # Ajout des paramètres d'orthoimage
+        orthoimage_resolution = self.orthoimage_resolution_spin.value() / 1000.0  # Conversion cm vers m
+        base_cmd.append(f"--orthoimage-resolution {orthoimage_resolution}")
+        
+
         
         # Ajout du nombre de workers
         max_workers = self.parallel_workers_spin.value()
@@ -1042,8 +1069,10 @@ class PhotogrammetryGUI(QWidget):
         if not self.deform_cb.isChecked():
             base_cmd.append("--skip-deform")
         
-        if not self.enu_to_itrf_cb.isChecked():
-            base_cmd.append("--skip-enu-to-itrf")
+        if not self.orthoimage_cb.isChecked():
+            base_cmd.append("--skip-orthoimage")
+        
+
         
         python_cmd = self.python_selector.currentText()
         cmd = python_cmd + " " + " ".join(base_cmd)
@@ -1108,18 +1137,19 @@ class PhotogrammetryGUI(QWidget):
         deformation_params = self.deformation_params_edit.text().strip()
         bascule_xml = self.bascule_xml_edit.text().strip()
         max_workers = self.parallel_workers_spin.value()
-        add_offset_extra = self.add_offset_extra.text().strip()
-        itrf_to_enu_extra = self.itrf_to_enu_extra.text().strip()
-        deform_extra = self.deform_extra.text().strip()
-        enu_to_itrf_extra = self.enu_to_itrf_extra.text().strip()
+        add_offset_extra = ""  # Champ non implémenté dans la GUI
+        itrf_to_enu_extra = ""  # Champ non implémenté dans la GUI
+        deform_extra = ""  # Champ non implémenté dans la GUI
+
         
         run_add_offset = self.add_offset_cb.isChecked()
         run_itrf_to_enu = self.itrf_to_enu_cb.isChecked()
         run_deform = self.deform_cb.isChecked()
-        run_enu_to_itrf = self.enu_to_itrf_cb.isChecked()
+        run_orthoimage = self.orthoimage_cb.isChecked()
+
         
         # Vérification qu'au moins une étape est sélectionnée
-        if not any([run_add_offset, run_itrf_to_enu, run_deform, run_enu_to_itrf]):
+        if not any([run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage]):
             self.log_text.append("<span style='color:red'>Veuillez sélectionner au moins une étape de transformation.</span>")
             return
         
@@ -1133,31 +1163,34 @@ class PhotogrammetryGUI(QWidget):
         add_offset_input_dir = self.add_offset_input_edit.text().strip()
         itrf_to_enu_input_dir = self.itrf_to_enu_input_edit.text().strip()
         deform_input_dir = self.deform_input_edit.text().strip()
-        enu_to_itrf_input_dir = self.enu_to_itrf_input_edit.text().strip()
+        orthoimage_input_dir = self.orthoimage_input_edit.text().strip()
         
         # Récupération des dossiers de sortie personnalisés
         add_offset_output_dir = self.add_offset_output_edit.text().strip()
         itrf_to_enu_output_dir = self.itrf_to_enu_output_edit.text().strip()
         deform_output_dir = self.deform_output_edit.text().strip()
-        enu_to_itrf_output_dir = self.enu_to_itrf_output_edit.text().strip()
+        orthoimage_output_dir = self.orthoimage_output_edit.text().strip()
         
         # Conversion en None si vide
         add_offset_input_dir = add_offset_input_dir if add_offset_input_dir else None
         itrf_to_enu_input_dir = itrf_to_enu_input_dir if itrf_to_enu_input_dir else None
         deform_input_dir = deform_input_dir if deform_input_dir else None
-        enu_to_itrf_input_dir = enu_to_itrf_input_dir if enu_to_itrf_input_dir else None
+        orthoimage_input_dir = orthoimage_input_dir if orthoimage_input_dir else None
         add_offset_output_dir = add_offset_output_dir if add_offset_output_dir else None
         itrf_to_enu_output_dir = itrf_to_enu_output_dir if itrf_to_enu_output_dir else None
         deform_output_dir = deform_output_dir if deform_output_dir else None
-        enu_to_itrf_output_dir = enu_to_itrf_output_dir if enu_to_itrf_output_dir else None
+        orthoimage_output_dir = orthoimage_output_dir if orthoimage_output_dir else None
+        
+        # Paramètres d'orthoimage
+        orthoimage_resolution = self.orthoimage_resolution_spin.value() / 1000.0  # Conversion cm vers m
         
         self.geodetic_thread = GeodeticTransformThread(
             input_dir, coord_file, deformation_type, deformation_params,
-            add_offset_extra, itrf_to_enu_extra, deform_extra, enu_to_itrf_extra,
-            run_add_offset, run_itrf_to_enu, run_deform, run_enu_to_itrf,
-            add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, enu_to_itrf_input_dir,
-            add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, enu_to_itrf_output_dir,
-            self.get_selected_ref_point(), bascule_xml, max_workers
+            add_offset_extra, itrf_to_enu_extra, deform_extra,
+            run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage,
+            add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir,
+            add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir,
+            self.get_selected_ref_point(), bascule_xml, orthoimage_resolution, "z", "rgb", max_workers
         )
         self.geodetic_thread.log_signal.connect(self.append_log)
         self.geodetic_thread.finished_signal.connect(self.geodetic_pipeline_finished)
