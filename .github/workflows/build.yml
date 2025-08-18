@@ -64,7 +64,12 @@ jobs:
     
     - name: Create hooks directory
       run: |
-        mkdir -p hooks
+        # Créer le dossier hooks s'il n'existe pas déjà
+        if [ ! -d "hooks" ]; then
+          mkdir -p hooks
+        else
+          echo "Hooks directory already exists"
+        fi
     
     - name: Verify spec file exists
       run: |
