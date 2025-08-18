@@ -14,12 +14,12 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            python-version: 3.11
+            python-version: '3.11'
             spec-file: photogeoalign_windows.spec
             artifact-name: photogeoalign-windows
             executable-ext: .exe
           - os: ubuntu-latest
-            python-version: 3.11
+            python-version: '3.11'
             spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-linux
             executable-ext: ""
