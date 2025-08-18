@@ -155,19 +155,18 @@ PhotoGeoAlign utilise GitHub Actions pour construire automatiquement les exécut
 2. Cliquez sur le dernier build ✅
 3. Téléchargez `photogeoalign-windows.zip`
 
-**Linux (téléchargement direct sur cluster) :**
-```bash
-# Méthode simple avec curl (compatible CentOS 7+ / GLIBC 2.31+)
-curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-linux.zip -o photogeoalign-linux.zip && \
-unzip -o photogeoalign-linux.zip && \
-rm photogeoalign-linux.zip && \
-chmod +x photogeoalign* && \
-echo "✅ Prêt ! Testez avec: ./photogeoalign_linux --help"
+**Linux (choisissez votre version) :**
 
-# Ou avec wget
-wget https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-linux.zip && \
-unzip photogeoalign-linux.zip && \
-chmod +x photogeoalign*
+**Ubuntu 24.04+ / GLIBC 2.39+ :**
+```bash
+curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu24.zip -o photogeoalign-linux.zip && \
+unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign_linux --help
+```
+
+**Ubuntu 20.04+ / GLIBC 2.31+ (clusters anciens) :**
+```bash
+curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu20.zip -o photogeoalign-linux.zip && \
+unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign_linux --help
 ```
 
 ### Build manuel avec PyInstaller

@@ -18,17 +18,16 @@ jobs:
             spec-file: photogeoalign_windows.spec
             artifact-name: photogeoalign-windows
             executable-ext: .exe
-          - os: ubuntu-22.04  # StaticX rend la version GLIBC irrelevante
+          - os: ubuntu-24.04
             python-version: '3.11'
             spec-file: photogeoalign_linux.spec
-            artifact-name: photogeoalign-linux
+            artifact-name: photogeoalign-ubuntu24
             executable-ext: ""
-          # Optionnel: Build avec Python 3.10 pour compatibilité
-          # - os: ubuntu-latest
-          #   python-version: 3.10
-          #   spec-file: photogeoalign_linux.spec
-          #   artifact-name: photogeoalign-linux-py310
-          #   executable-ext: ""
+          - os: ubuntu-20.04
+            python-version: '3.11'
+            spec-file: photogeoalign_linux.spec
+            artifact-name: photogeoalign-ubuntu20
+            executable-ext: ""
 
     runs-on: ${{ matrix.os }}
     
@@ -40,7 +39,6 @@ jobs:
       if: contains(matrix.os, 'ubuntu')
       run: |
         git config --global --add safe.directory $GITHUB_WORKSPACE
-        git config --global --add safe.directory '*'
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -48,13 +46,10 @@ jobs:
         python-version: ${{ matrix.python-version }}
     
     - name: Install system dependencies (Linux)
-      if: matrix.os == 'ubuntu-22.04'
+      if: contains(matrix.os, 'ubuntu')
       run: |
         sudo apt-get update
-        # Install older GLIBC development packages for compatibility
-        sudo apt-get install -y build-essential patchelf
-        # Install Python from source with older GLIBC linking
-        sudo apt-get install -y libssl-dev libffi-dev libbz2-dev libreadline-dev libsqlite3-dev
+        sudo apt-get install -y build-essential
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
@@ -64,20 +59,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
     
-    - name: Install Python dependencies (static linking approach)
-      if: matrix.os == 'ubuntu-22.04'
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        # Install PyInstaller with static linking capabilities
-        pip install pyinstaller==6.3.0 staticx
-    
-    - name: Install Python dependencies (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install --force-reinstall pyinstaller==6.3.0
+        pip install pyinstaller
     
     - name: Create hooks directory (cross-platform)
       run: |
@@ -87,33 +73,8 @@ jobs:
       run: |
         python -c "import os; print(f'Spec file: ${{ matrix.spec-file }}'); print('Exists:', os.path.exists('${{ matrix.spec-file }}'))"
     
-    - name: Build executable (static linking)
-      if: matrix.os == 'ubuntu-22.04'
+    - name: Build executable
       run: |
-        # Build with PyInstaller first
-        echo "Building with PyInstaller..."
-        pyinstaller ${{ matrix.spec-file }} --clean --noconfirm
-        
-        # Then wrap with StaticX for ultimate compatibility
-        echo "Wrapping with StaticX for GLIBC independence..."
-        cd dist
-        if [ -f "photogeoalign_linux" ]; then
-          # Try StaticX with error handling
-          if staticx --strip photogeoalign_linux photogeoalign_linux_static; then
-            mv photogeoalign_linux_static photogeoalign_linux
-            echo "StaticX wrapping completed successfully"
-          else
-            echo "StaticX failed, keeping PyInstaller executable"
-            echo "Executable will have GLIBC dependencies"
-          fi
-        else
-          echo "Warning: executable not found for StaticX wrapping"
-        fi
-    
-    - name: Build executable (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo "Building with system Python..."
         pyinstaller ${{ matrix.spec-file }} --clean --noconfirm
     
     - name: Verify executable exists
