@@ -1468,6 +1468,8 @@ module load micmac
 #SBATCH --nodes=1-1
 #SBATCH --partition {vals['partition']} #ncpum,ncpu,ncpulong
 #SBATCH --ntasks={vals['ntasks']}
+#SBATCH --time={vals['time_limit']}
+#SBATCH --mem-per-cpu=4G
 
 {modules}
 

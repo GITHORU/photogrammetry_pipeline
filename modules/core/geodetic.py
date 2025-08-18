@@ -132,12 +132,24 @@ def process_single_cloud_itrf_to_enu(args):
         
         transformer = pyproj.Transformer.from_pipeline(pipeline)
         
-        # Application de la transformation topocentrique
-        arr_x = np.array(list(points[:, 0]))
-        arr_y = np.array(list(points[:, 1]))
-        arr_z = np.array(list(points[:, 2]))
+        # Application de la transformation topocentrique (optimisée)
+        # Traitement par chunks pour éviter surcharge mémoire avec gros nuages
+        chunk_size = 100000  # 100k points par chunk
+        total_points = len(points)
+        arr_pts_ENU = np.zeros_like(points)
         
-        arr_pts_ENU = np.array(transformer.transform(arr_x, arr_y, arr_z)).T
+        for i in range(0, total_points, chunk_size):
+            end_idx = min(i + chunk_size, total_points)
+            chunk_points = points[i:end_idx]
+            
+            # Extraction directe sans conversion list inutile
+            arr_x = chunk_points[:, 0]
+            arr_y = chunk_points[:, 1] 
+            arr_z = chunk_points[:, 2]
+            
+            # Transformation du chunk
+            chunk_enu = np.array(transformer.transform(arr_x, arr_y, arr_z)).T
+            arr_pts_ENU[i:end_idx] = chunk_enu
         
         # Création du nouveau nuage
         new_cloud = o3d.geometry.PointCloud()
@@ -397,7 +409,8 @@ def add_offset_to_clouds(input_dir, logger, coord_file=None, extra_params="", ma
     if max_workers is None:
         max_workers = min(10, cpu_count(), len(ply_files))  # Maximum 10 processus par défaut
     else:
-        max_workers = min(max_workers, len(ply_files))  # Respecter la limite demandée (pas de limite CPU sur cluster)
+        # Limiter par CPU disponibles ET fichiers pour éviter surcharge cluster
+        max_workers = min(max_workers, cpu_count(), len(ply_files))
     logger.info(f"Traitement parallèle avec {max_workers} processus...")
     
     # Préparation des arguments pour le multiprocessing
@@ -589,7 +602,8 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
     if max_workers is None:
         max_workers = min(10, cpu_count(), len(ply_files))  # Maximum 10 processus par défaut
     else:
-        max_workers = min(max_workers, len(ply_files))  # Respecter la limite demandée (pas de limite CPU sur cluster)
+        # Limiter par CPU disponibles ET fichiers pour éviter surcharge cluster
+        max_workers = min(max_workers, cpu_count(), len(ply_files))
     logger.info(f"Traitement parallèle avec {max_workers} processus...")
     
     # Préparation des arguments pour le multiprocessing
@@ -968,7 +982,8 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
     if max_workers is None:
         max_workers = min(10, cpu_count(), len(ply_files))  # Maximum 10 processus par défaut
     else:
-        max_workers = min(max_workers, len(ply_files))  # Respecter la limite demandée (pas de limite CPU sur cluster)
+        # Limiter par CPU disponibles ET fichiers pour éviter surcharge cluster
+        max_workers = min(max_workers, cpu_count(), len(ply_files))
     logger.info(f"Traitement parallèle avec {max_workers} processus...")
     
     # Préparation des arguments pour le multiprocessing
