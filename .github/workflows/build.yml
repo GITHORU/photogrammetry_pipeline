@@ -98,9 +98,14 @@ jobs:
         echo "Wrapping with StaticX for GLIBC independence..."
         cd dist
         if [ -f "photogeoalign_linux" ]; then
-          staticx photogeoalign_linux photogeoalign_linux_static
-          mv photogeoalign_linux_static photogeoalign_linux
-          echo "StaticX wrapping completed"
+          # Try StaticX with error handling
+          if staticx --strip photogeoalign_linux photogeoalign_linux_static; then
+            mv photogeoalign_linux_static photogeoalign_linux
+            echo "StaticX wrapping completed successfully"
+          else
+            echo "StaticX failed, keeping PyInstaller executable"
+            echo "Executable will have GLIBC dependencies"
+          fi
         else
           echo "Warning: executable not found for StaticX wrapping"
         fi
