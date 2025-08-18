@@ -21,4 +21,6 @@
 !.github/**
 !tests/
 !tests/**
-!pytest.ini 
+!pytest.ini
+!download_*.sh
+!download_*.py 
