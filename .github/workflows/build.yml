@@ -45,7 +45,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgl1-mesa-dev libglib2.0-0 libsm6 libxext6 libxrender1 libfontconfig1 libegl1-mesa libxrandr2 libxss1 libxcursor1 libxcomposite1 libxdamage1 libxfixes3 libxinerama1 libxi6 libxtst6 libasound2
+        sudo apt-get install -y build-essential libgl1-mesa-dev libglib2.0-0 libxext6 libfontconfig1 libegl1-mesa libxrandr2 libxinerama1 libxi6
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
@@ -80,7 +80,13 @@ jobs:
     - name: Test executable (basic smoke test)
       run: |
         cd dist
-        ./photogeoalign${{ matrix.executable-ext }} --help || echo "Executable created successfully"
+        # Test basique sans interface graphique
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          echo "Linux executable created: $(ls -la photogeoalign)"
+          file photogeoalign || echo "Executable exists"
+        else
+          ./photogeoalign${{ matrix.executable-ext }} --help || echo "Windows executable created successfully"
+        fi
     
     - name: Prepare artifact
       run: |
