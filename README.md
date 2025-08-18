@@ -157,12 +157,12 @@ PhotoGeoAlign utilise GitHub Actions pour construire automatiquement les exécut
 
 **Linux (téléchargement direct sur cluster) :**
 ```bash
-# Méthode simple avec curl
+# Méthode simple avec curl (compatible CentOS 7+ / GLIBC 2.31+)
 curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-linux.zip -o photogeoalign-linux.zip && \
 unzip -o photogeoalign-linux.zip && \
 rm photogeoalign-linux.zip && \
 chmod +x photogeoalign* && \
-echo "✅ Prêt ! Testez avec: ./photogeoalign --help"
+echo "✅ Prêt ! Testez avec: ./photogeoalign_linux --help"
 
 # Ou avec wget
 wget https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-linux.zip && \
@@ -182,6 +182,21 @@ chmod +x build_linux.sh
 # Ou directement avec PyInstaller
 pyinstaller photogeoalign_windows.spec    # Windows
 pyinstaller photogeoalign_linux.spec      # Linux
+```
+
+### Dépannage clusters Linux
+
+**Erreur GLIBC** (`GLIBC_2.35' not found`) :
+- L'exécutable est construit sur Ubuntu 20.04 (GLIBC 2.31)
+- Compatible avec CentOS 7+, RHEL 7+, Ubuntu 18.04+
+- Si votre cluster est plus ancien, buildez directement dessus :
+```bash
+# Sur le cluster directement
+git clone https://github.com/GITHORU/photogrammetry_pipeline.git
+cd photogrammetry_pipeline
+pip install -r requirements.txt
+pip install pyinstaller
+./build_linux.sh
 ```
 
 

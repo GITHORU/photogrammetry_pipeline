@@ -18,7 +18,7 @@ jobs:
             spec-file: photogeoalign_windows.spec
             artifact-name: photogeoalign-windows
             executable-ext: .exe
-          - os: ubuntu-22.04
+          - os: ubuntu-20.04  # Compatible GLIBC 2.31 pour clusters CentOS 7+
             python-version: '3.11'
             spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-linux
@@ -42,7 +42,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     
     - name: Install system dependencies (Linux)
-      if: matrix.os == 'ubuntu-22.04'
+      if: matrix.os == 'ubuntu-20.04'
       run: |
         sudo apt-get update
         # Installation minimale - PyInstaller se débrouille souvent seul
