@@ -18,7 +18,7 @@ jobs:
             spec-file: photogeoalign_windows.spec
             artifact-name: photogeoalign-windows
             executable-ext: .exe
-          - os: ubuntu-18.04  # GLIBC 2.27 - compatibilité maximum clusters
+          - os: ubuntu-22.04  # StaticX rend la version GLIBC irrelevante
             python-version: '3.11'
             spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-linux
@@ -48,7 +48,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     
     - name: Install system dependencies (Linux)
-      if: matrix.os == 'ubuntu-18.04'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         sudo apt-get update
         # Install older GLIBC development packages for compatibility
@@ -65,7 +65,7 @@ jobs:
           ${{ runner.os }}-pip-
     
     - name: Install Python dependencies (static linking approach)
-      if: matrix.os == 'ubuntu-18.04'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
@@ -88,7 +88,7 @@ jobs:
         python -c "import os; print(f'Spec file: ${{ matrix.spec-file }}'); print('Exists:', os.path.exists('${{ matrix.spec-file }}'))"
     
     - name: Build executable (static linking)
-      if: matrix.os == 'ubuntu-18.04'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         # Build with PyInstaller first
         echo "Building with PyInstaller..."
