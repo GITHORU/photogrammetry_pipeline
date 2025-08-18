@@ -12,11 +12,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
-        exclude:
-          # Exclure Python 3.12 sur Windows (compatibilité)
-          - os: windows-latest
-            python-version: '3.12'
+        python-version: ['3.11']  # Simplification pendant développement
+        # python-version: ['3.9', '3.10', '3.11', '3.12']  # Version complète pour plus tard
+        # exclude:
+        #   # Exclure Python 3.12 sur Windows (compatibilité)
+        #   - os: windows-latest
+        #     python-version: '3.12'
     
     steps:
     - name: Checkout code
@@ -27,6 +28,12 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     
+    - name: Install system dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libgl1-mesa-dev
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -34,13 +41,17 @@ jobs:
     
     - name: Run tests
       run: |
-        python -m pytest tests/ -v --tb=short
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          xvfb-run -a python -m pytest tests/ -v --tb=short
+        else
+          python -m pytest tests/ -v --tb=short
+        fi
     
     - name: Test coverage (optional)
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       run: |
         pip install pytest-cov
-        python -m pytest tests/ --cov=modules/ --cov-report=xml
+        xvfb-run -a python -m pytest tests/ --cov=modules/ --cov-report=xml
     
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'

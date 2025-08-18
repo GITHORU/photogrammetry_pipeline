@@ -45,7 +45,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libfontconfig1
+        sudo apt-get install -y libgl1-mesa-dev libglib2.0-0 libsm6 libxext6 libxrender1 libfontconfig1 libegl1-mesa libxrandr2 libxss1 libxcursor1 libxcomposite1 libxdamage1 libxfixes3 libxinerama1 libxi6 libxtst6 libasound2
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
