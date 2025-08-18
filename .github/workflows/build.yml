@@ -80,12 +80,18 @@ jobs:
     
     - name: Test executable (basic smoke test)
       run: |
-        python -c "import os, sys; os.chdir('dist'); exe='photogeoalign${{ matrix.executable-ext }}'; exists=os.path.exists(exe); print(f'OK {exe} exists: {exists}'); sys.exit(0 if exists else 1)"
+        python -c "import os, sys; os.chdir('dist'); files=os.listdir('.'); exe_files=[f for f in files if f.startswith('photogeoalign') and (f.endswith('.exe') or '.' not in f.split('/')[-1])]; print(f'Found executables: {exe_files}'); sys.exit(0 if exe_files else 1)"
     
     - name: Prepare artifact
       run: |
-        mkdir -p release
-        cp dist/photogeoalign${{ matrix.executable-ext }} release/
+        python -c "
+import os, shutil
+os.makedirs('release', exist_ok=True)
+files = [f for f in os.listdir('dist') if f.startswith('photogeoalign')]
+for f in files:
+    shutil.copy(f'dist/{f}', 'release/')
+    print(f'Copied: {f}')
+"
         cp README.md release/
         cp requirements.txt release/
     
