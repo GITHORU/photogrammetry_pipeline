@@ -68,20 +68,21 @@ jobs:
           ${{ runner.os }}-pip-
     
     - name: Install Python dependencies (with conda for compatibility)
+      if: matrix.os == 'ubuntu-22.04'
       run: |
-        if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
-          # Use conda Python for better compatibility
-          export PATH="$HOME/miniconda/bin:$PATH"
-          conda create -n build python=3.11 -y
-          source activate build
-          pip install -r requirements.txt
-          pip install pyinstaller==6.3.0
-        else
-          # Windows standard pip
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install --force-reinstall pyinstaller==6.3.0
-        fi
+        # Use conda Python for better compatibility
+        export PATH="$HOME/miniconda/bin:$PATH"
+        conda create -n build python=3.11 -y
+        source activate build
+        pip install -r requirements.txt
+        pip install pyinstaller==6.3.0
+    
+    - name: Install Python dependencies (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install --force-reinstall pyinstaller==6.3.0
     
     - name: Create hooks directory (cross-platform)
       run: |
@@ -92,18 +93,19 @@ jobs:
         python -c "import os; print(f'Spec file: ${{ matrix.spec-file }}'); print('Exists:', os.path.exists('${{ matrix.spec-file }}'))"
     
     - name: Build executable (conda environment)
+      if: matrix.os == 'ubuntu-22.04'
       run: |
-        if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
-          # Build with conda Python (better GLIBC compatibility)
-          export PATH="$HOME/miniconda/bin:$PATH"
-          source activate build
-          echo "Building with conda Python..."
-          pyinstaller ${{ matrix.spec-file }} --clean --noconfirm
-        else
-          # Windows standard build
-          echo "Building with system Python..."
-          pyinstaller ${{ matrix.spec-file }} --clean --noconfirm
-        fi
+        # Build with conda Python (better GLIBC compatibility)
+        export PATH="$HOME/miniconda/bin:$PATH"
+        source activate build
+        echo "Building with conda Python..."
+        pyinstaller ${{ matrix.spec-file }} --clean --noconfirm
+    
+    - name: Build executable (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "Building with system Python..."
+        pyinstaller ${{ matrix.spec-file }} --clean --noconfirm
     
     - name: Verify executable exists
       run: |
