@@ -144,7 +144,33 @@ photogeoalign_linux.spec    # Configuration PyInstaller Linux
 
 ## Build et distribution
 
-### Build avec PyInstaller
+### Build automatisé (GitHub Actions)
+
+PhotoGeoAlign utilise GitHub Actions pour construire automatiquement les exécutables Windows et Linux à chaque modification du code.
+
+#### Télécharger les exécutables pré-compilés
+
+**Windows :**
+1. Allez sur [GitHub Actions](https://github.com/GITHORU/photogrammetry_pipeline/actions)
+2. Cliquez sur le dernier build ✅
+3. Téléchargez `photogeoalign-windows.zip`
+
+**Linux (téléchargement direct sur cluster) :**
+```bash
+# Méthode simple avec curl
+curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-linux.zip -o photogeoalign-linux.zip && \
+unzip -o photogeoalign-linux.zip && \
+rm photogeoalign-linux.zip && \
+chmod +x photogeoalign* && \
+echo "✅ Prêt ! Testez avec: ./photogeoalign --help"
+
+# Ou avec wget
+wget https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-linux.zip && \
+unzip photogeoalign-linux.zip && \
+chmod +x photogeoalign*
+```
+
+### Build manuel avec PyInstaller
 ```bash
 # Windows
 build_windows.bat
