@@ -80,7 +80,7 @@ jobs:
     
     - name: Test executable (basic smoke test)
       run: |
-        python -c "import os, sys; os.chdir('dist'); exe='photogeoalign${{ matrix.executable-ext }}'; exists=os.path.exists(exe); print(f'✅ {exe} exists: {exists}'); sys.exit(0 if exists else 1)"
+        python -c "import os, sys; os.chdir('dist'); exe='photogeoalign${{ matrix.executable-ext }}'; exists=os.path.exists(exe); print(f'OK {exe} exists: {exists}'); sys.exit(0 if exists else 1)"
     
     - name: Prepare artifact
       run: |
