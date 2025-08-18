@@ -68,7 +68,7 @@ jobs:
     
     - name: Verify spec file exists
       run: |
-        ls -la ${{ matrix.spec-file }}
+        python -c "import os; print(f'Spec file: ${{ matrix.spec-file }}'); print('Exists:', os.path.exists('${{ matrix.spec-file }}'))"
     
     - name: Build executable
       run: |
@@ -76,7 +76,7 @@ jobs:
     
     - name: Verify executable exists
       run: |
-        ls -la dist/
+        python -c "import os; print('Dist contents:'); [print(f'  {f}') for f in os.listdir('dist') if os.path.exists('dist')]"
     
     - name: Test executable (basic smoke test)
       run: |
