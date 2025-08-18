@@ -62,14 +62,9 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
     
-    - name: Create hooks directory
+    - name: Create hooks directory (cross-platform)
       run: |
-        # Créer le dossier hooks s'il n'existe pas déjà
-        if [ ! -d "hooks" ]; then
-          mkdir -p hooks
-        else
-          echo "Hooks directory already exists"
-        fi
+        python -c "import os; os.makedirs('hooks', exist_ok=True); print('Hooks directory ready')"
     
     - name: Verify spec file exists
       run: |
