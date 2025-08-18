@@ -69,7 +69,7 @@ jobs:
     
     - name: Install Python dependencies (with conda for compatibility)
       run: |
-        if [[ "${{ matrix.os }}" == *ubuntu* ]]; then
+        if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
           # Use conda Python for better compatibility
           export PATH="$HOME/miniconda/bin:$PATH"
           conda create -n build python=3.11 -y
@@ -93,7 +93,7 @@ jobs:
     
     - name: Build executable (conda environment)
       run: |
-        if [[ "${{ matrix.os }}" == *ubuntu* ]]; then
+        if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
           # Build with conda Python (better GLIBC compatibility)
           export PATH="$HOME/miniconda/bin:$PATH"
           source activate build
