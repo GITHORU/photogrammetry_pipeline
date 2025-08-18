@@ -18,7 +18,7 @@ jobs:
             spec-file: photogeoalign_windows.spec
             artifact-name: photogeoalign-windows
             executable-ext: .exe
-          - os: ubuntu-20.04  # Compatible GLIBC 2.31 pour clusters CentOS 7+
+          - os: ubuntu-22.04  # Optimisé pour compatibilité cluster avec build statique
             python-version: '3.11'
             spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-linux
@@ -42,11 +42,15 @@ jobs:
         python-version: ${{ matrix.python-version }}
     
     - name: Install system dependencies (Linux)
-      if: matrix.os == 'ubuntu-20.04'
+      if: contains(matrix.os, 'ubuntu')
       run: |
         sudo apt-get update
-        # Installation minimale - PyInstaller se débrouille souvent seul
-        sudo apt-get install -y build-essential || echo "Dependencies optional for PyInstaller"
+        # Build essentials + bibliothèques de compatibilité
+        sudo apt-get install -y build-essential
+        # Force inclusion de vieilles versions GLIBC pour compatibilité
+        sudo apt-get install -y libc6-dev gcc-multilib
+        # Bibliothèques statiques pour PyInstaller
+        sudo apt-get install -y libpython3-dev libffi-dev
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
@@ -70,9 +74,10 @@ jobs:
       run: |
         python -c "import os; print(f'Spec file: ${{ matrix.spec-file }}'); print('Exists:', os.path.exists('${{ matrix.spec-file }}'))"
     
-    - name: Build executable
+    - name: Build executable (static linking for compatibility)
       run: |
-        pyinstaller ${{ matrix.spec-file }} --clean --noconfirm
+        # Force PyInstaller à inclure les bibliothèques statiquement
+        pyinstaller ${{ matrix.spec-file }} --clean --noconfirm --onefile
     
     - name: Verify executable exists
       run: |

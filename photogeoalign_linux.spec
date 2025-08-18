@@ -48,15 +48,16 @@ exe = EXE(
     name='photogeoalign_linux',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
+    strip=True,  # Optimisation taille
+    upx=False,   # UPX peut causer des problèmes GLIBC
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,  # Console pour debugging cluster
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['resources/logo.png'],
+    # Retirer icon pour éviter dépendances graphiques
+    # icon=['resources/logo.png'],
 )

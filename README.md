@@ -187,8 +187,9 @@ pyinstaller photogeoalign_linux.spec      # Linux
 ### Dépannage clusters Linux
 
 **Erreur GLIBC** (`GLIBC_2.35' not found`) :
-- L'exécutable est construit sur Ubuntu 20.04 (GLIBC 2.31)
-- Compatible avec CentOS 7+, RHEL 7+, Ubuntu 18.04+
+- L'exécutable est construit sur Ubuntu 22.04 (GLIBC 2.35)
+- Compatible avec Ubuntu 22.04+, CentOS 9+, RHEL 9+
+- **Pour CentOS 7/8** : buildez directement sur le cluster
 - Si votre cluster est plus ancien, buildez directement dessus :
 ```bash
 # Sur le cluster directement
