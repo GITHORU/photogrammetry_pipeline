@@ -84,16 +84,8 @@ jobs:
     
     - name: Prepare artifact
       run: |
-        python -c "
-import os, shutil
-os.makedirs('release', exist_ok=True)
-files = [f for f in os.listdir('dist') if f.startswith('photogeoalign')]
-for f in files:
-    shutil.copy(f'dist/{f}', 'release/')
-    print(f'Copied: {f}')
-"
-        cp README.md release/
-        cp requirements.txt release/
+        python -c "import os, shutil; os.makedirs('release', exist_ok=True); files=[f for f in os.listdir('dist') if f.startswith('photogeoalign')]; [shutil.copy(f'dist/{f}', 'release/') for f in files]; print(f'Copied: {files}')"
+        python -c "import shutil; shutil.copy('README.md', 'release/'); shutil.copy('requirements.txt', 'release/'); print('Added README and requirements')"
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
