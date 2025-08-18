@@ -1,10 +1,12 @@
 name: Tests PhotoGeoAlign
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+  # Temporairement désactivé pendant setup des builds
+  # push:
+  #   branches: [ main, develop ]
+  # pull_request:
+  #   branches: [ main ]
+  workflow_dispatch:  # Manuel seulement
 
 jobs:
   test:
