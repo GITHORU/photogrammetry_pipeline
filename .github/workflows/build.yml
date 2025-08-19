@@ -50,7 +50,7 @@ jobs:
           yum install -y git gcc gcc-c++ make mesa-libGL libgomp zlib-devel file \
                          openssl-devel bzip2-devel libffi-devel sqlite-devel \
                          readline-devel tk-devel gdbm-devel \
-                         xz-devel expat-devel wget
+                         xz-devel expat-devel wget findutils
           
           # Compilation Python 3.11.5 (version exacte cluster)
           cd /tmp
