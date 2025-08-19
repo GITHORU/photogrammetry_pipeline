@@ -153,7 +153,7 @@ PhotoGeoAlign utilise GitHub Actions pour construire automatiquement les exécut
 **Windows :**
 1. Allez sur [GitHub Actions](https://github.com/GITHORU/photogrammetry_pipeline/actions)
 2. Cliquez sur le dernier build ✅
-3. Téléchargez `photogeoalign-windows-docker.zip`
+3. Téléchargez `photogeoalign-windows-docker`
 
 **Linux (choisissez votre version) :**
 
