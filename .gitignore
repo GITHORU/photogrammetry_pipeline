@@ -5,6 +5,7 @@
 !*.py
 !requirements.txt
 !requirements_rocky8.txt
+!requirements_cluster.txt
 !README.md
 !.gitignore
 !logo.png 

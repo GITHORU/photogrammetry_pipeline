@@ -100,8 +100,14 @@ jobs:
       run: |
         python3 -m pip install --upgrade pip
         
-        # Installation uniforme - Tous Python 3.11 maintenant !
-        pip3 install -r requirements.txt
+        # Installation selon la cible
+        if [[ "${{ matrix.container }}" == rockylinux* ]]; then
+          # Versions cluster-compatible pour RHEL 8.2 (évite OpenBLAS64 alignment errors)
+          pip3 install -r requirements_cluster.txt
+        else
+          # Versions standard pour autres OS
+          pip3 install -r requirements.txt
+        fi
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
