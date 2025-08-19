@@ -1634,6 +1634,16 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
         import rasterio
         from rasterio.warp import reproject, Resampling
         from rasterio.transform import from_origin
+        
+        # PATCH: Gérer l'absence de rasterio.sample dans les nouvelles versions
+        try:
+            import rasterio.sample
+        except ImportError:
+            # Créer un module sample vide si absent
+            import types
+            rasterio.sample = types.ModuleType('rasterio.sample')
+            logger.warning("rasterio.sample non disponible - patch appliqué")
+        
         logger.info("Rasterio importé avec succès")
     except ImportError as e:
         logger.error(f"Importation échouée : {e}")
