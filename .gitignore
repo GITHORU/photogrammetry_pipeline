@@ -10,6 +10,7 @@
 !build_linux.sh
 !build_windows.bat
 !photogeoalign_linux.spec
+!photogeoalign_rocky8.spec
 !photogeoalign_windows.spec
 !resources/
 !resources/*
