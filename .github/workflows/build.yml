@@ -20,7 +20,7 @@ jobs:
         include:
           # Rocky Linux 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
           - container: rockylinux:8
-            python-version: '3.11'
+            python-version: '3.9'
             spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-rocky8-docker
             platform: linux
@@ -47,11 +47,14 @@ jobs:
         if [[ "${{ matrix.container }}" == centos* ]] || [[ "${{ matrix.container }}" == rockylinux* ]]; then
           # CentOS/RHEL/Rocky setup avec Python 3.11
           yum update -y
-          yum install -y python311 python311-pip python311-devel git gcc gcc-c++ make \
+          # Activer PowerTools et EPEL pour Python 3.11
+          yum install -y epel-release
+          yum config-manager --set-enabled powertools || yum config-manager --set-enabled PowerTools
+          yum install -y python39 python39-pip python39-devel git gcc gcc-c++ make \
                          mesa-libGL libgomp zlib-devel file
-          ln -sf /usr/bin/python3.11 /usr/bin/python3
-          ln -sf /usr/bin/python3.11 /usr/bin/python
-          ln -sf /usr/bin/pip3.11 /usr/bin/pip3
+          ln -sf /usr/bin/python3.9 /usr/bin/python3
+          ln -sf /usr/bin/python3.9 /usr/bin/python
+          ln -sf /usr/bin/pip3.9 /usr/bin/pip3
         else
           # Ubuntu/Debian setup  
           export DEBIAN_FRONTEND=noninteractive
