@@ -47,14 +47,26 @@ jobs:
         if [[ "${{ matrix.container }}" == centos* ]] || [[ "${{ matrix.container }}" == rockylinux* ]]; then
           # CentOS/RHEL/Rocky setup avec Python 3.11.5 compilé (match cluster exact)
           yum update -y
-          # Activation EPEL pour PROJ
+          # Activation EPEL pour dépendances de base
           yum install -y epel-release
           yum config-manager --set-enabled powertools || yum config-manager --set-enabled PowerTools
           yum install -y git gcc gcc-c++ make mesa-libGL libgomp zlib-devel file \
                          openssl-devel bzip2-devel libffi-devel sqlite-devel \
                          readline-devel tk-devel gdbm-devel \
                          xz-devel expat-devel wget findutils \
-                         proj-devel proj
+                         cmake3 libtiff-devel libcurl-devel sqlite-devel
+          
+          # Compilation PROJ 7.2.1 (compatible PyProj 3.x)
+          cd /tmp
+          wget https://download.osgeo.org/proj/proj-7.2.1.tar.gz
+          tar xzf proj-7.2.1.tar.gz
+          cd proj-7.2.1
+          mkdir build && cd build
+          cmake3 .. -DCMAKE_INSTALL_PREFIX=/usr/local
+          make -j$(nproc)
+          make install
+          echo "/usr/local/lib" >> /etc/ld.so.conf.d/proj.conf
+          ldconfig
           
           # Compilation Python 3.11.5 (version exacte cluster)
           cd /tmp
