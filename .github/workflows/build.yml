@@ -17,6 +17,14 @@ jobs:
     strategy:
       matrix:
         include:
+          # CentOS 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
+          - container: centos:8
+            python-version: '3.11'
+            spec-file: photogeoalign_linux.spec
+            artifact-name: photogeoalign-centos8-docker
+            platform: linux
+            glibc-version: "2.28"
+            
           # Ubuntu 20.04 - Compatibilité GLIBC clusters
           - container: ubuntu:20.04
             python-version: '3.11'
@@ -39,28 +47,26 @@ jobs:
     steps:
     - name: Setup container environment
       run: |
-        # 🔧 Configuration non-interactive pour éviter les prompts
-        export DEBIAN_FRONTEND=noninteractive
+        # 🔧 Configuration universelle
         export TZ=Europe/Paris
-        ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
         
-        # 📦 Installation des paquets sans interaction
-        apt-get update
-        apt-get install -y \
-          python3 \
-          python3-pip \
-          python3-dev \
-          git \
-          build-essential \
-          libgl1-mesa-glx \
-          libglib2.0-0 \
-          libsm6 \
-          libxext6 \
-          libxrender-dev \
-          libgomp1
-        
-        # 🔗 Créer un lien python -> python3
-        ln -sf /usr/bin/python3 /usr/bin/python
+        # 📦 Installation conditionnelle selon l'OS
+        if [[ "${{ matrix.container }}" == centos* ]]; then
+          # CentOS/RHEL setup
+          yum update -y
+          yum install -y python3 python3-pip python3-devel git gcc gcc-c++ make \
+                         mesa-libGL libgomp zlib-devel
+          ln -sf /usr/bin/python3 /usr/bin/python
+        else
+          # Ubuntu/Debian setup  
+          export DEBIAN_FRONTEND=noninteractive
+          ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+          apt-get update
+          apt-get install -y python3 python3-pip python3-dev git build-essential \
+                             libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 \
+                             libxrender-dev libgomp1
+          ln -sf /usr/bin/python3 /usr/bin/python
+        fi
         
         # 📊 Info version
         echo "=== Container Info ==="
