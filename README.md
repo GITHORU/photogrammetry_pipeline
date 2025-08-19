@@ -157,15 +157,15 @@ PhotoGeoAlign utilise GitHub Actions pour construire automatiquement les exécut
 
 **Linux (choisissez votre version) :**
 
-**Ubuntu 22.04+ / GLIBC 2.35+ (moderne) :**
+**RHEL 8.2+ / CentOS 8+ / GLIBC 2.28+ (clusters anciens) :**
 ```bash
-curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu22-docker.zip -o photogeoalign-linux.zip && \
+curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-centos8-docker.zip -o photogeoalign-linux.zip && \
 unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign --help
 ```
 
-**Ubuntu 20.04+ / GLIBC 2.31+ (clusters anciens) :**
+**Ubuntu 22.04+ / GLIBC 2.35+ (clusters modernes) :**
 ```bash
-curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu20-docker.zip -o photogeoalign-linux.zip && \
+curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu22-docker.zip -o photogeoalign-linux.zip && \
 unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign --help
 ```
 
