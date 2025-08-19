@@ -57,7 +57,7 @@ jobs:
           wget https://www.python.org/ftp/python/3.11.5/Python-3.11.5.tgz
           tar xvf Python-3.11.5.tgz
           cd Python-3.11.5
-          ./configure --enable-optimizations --prefix=/usr/local
+          ./configure --enable-optimizations --enable-shared --prefix=/usr/local
           make -j$(nproc)
           make altinstall
           
@@ -65,6 +65,10 @@ jobs:
           ln -sf /usr/local/bin/python3.11 /usr/bin/python3
           ln -sf /usr/local/bin/python3.11 /usr/bin/python
           ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3
+          
+          # Configuration shared library pour PyInstaller
+          echo "/usr/local/lib" >> /etc/ld.so.conf.d/python311.conf
+          ldconfig
           
           # Nettoyage
           cd / && rm -rf /tmp/Python-3.11.5*
