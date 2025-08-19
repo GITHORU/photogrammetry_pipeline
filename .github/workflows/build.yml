@@ -119,7 +119,8 @@ jobs:
         # Installation selon la cible
         if [[ "${{ matrix.container }}" == rockylinux* ]]; then
           # Versions cluster-compatible pour RHEL 8.2 (évite OpenBLAS64 alignment errors)
-          pip3 install -r requirements_cluster.txt
+          # Force wheels pré-compilés pour éviter erreurs compilation
+          pip3 install --only-binary=:all: -r requirements_cluster.txt
         else
           # Versions standard pour autres OS
           pip3 install -r requirements.txt
