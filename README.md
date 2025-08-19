@@ -47,7 +47,7 @@ photogeoalign_windows.exe --no-gui <dossier_images> [options]
 Ou, si vous avez généré un exécutable Linux (PyInstaller) :
 
 ```bash
-./photogeoalign_linux --no-gui <dossier_images> [options]
+./photogeoalign --no-gui <dossier_images> [options]
 ```
 
 ## Paramètres de la ligne de commande (CLI)
@@ -128,7 +128,7 @@ README_ORTHOIMAGE.md    # Documentation du pipeline géodésique
 build_windows.bat       # Script de build Windows
 build_linux.sh          # Script de build Linux
 photogeoalign_windows.spec  # Configuration PyInstaller Windows
-photogeoalign_linux.spec    # Configuration PyInstaller Linux
+photogeoalign.spec    # Configuration PyInstaller Linux
 ```
 
 ## Prérequis
@@ -153,20 +153,20 @@ PhotoGeoAlign utilise GitHub Actions pour construire automatiquement les exécut
 **Windows :**
 1. Allez sur [GitHub Actions](https://github.com/GITHORU/photogrammetry_pipeline/actions)
 2. Cliquez sur le dernier build ✅
-3. Téléchargez `photogeoalign-windows.zip`
+3. Téléchargez `photogeoalign-windows-docker.zip`
 
 **Linux (choisissez votre version) :**
 
-**Ubuntu 24.04+ / GLIBC 2.39+ :**
+**Ubuntu 22.04+ / GLIBC 2.35+ (moderne) :**
 ```bash
-curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu24.zip -o photogeoalign-linux.zip && \
-unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign_linux --help
+curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu22-docker.zip -o photogeoalign-linux.zip && \
+unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign --help
 ```
 
 **Ubuntu 20.04+ / GLIBC 2.31+ (clusters anciens) :**
 ```bash
-curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu20.zip -o photogeoalign-linux.zip && \
-unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign_linux --help
+curl -L https://nightly.link/GITHORU/photogrammetry_pipeline/workflows/build/main/photogeoalign-ubuntu20-docker.zip -o photogeoalign-linux.zip && \
+unzip -o photogeoalign-linux.zip && rm photogeoalign-linux.zip && chmod +x photogeoalign* && ./photogeoalign --help
 ```
 
 ### Build manuel avec PyInstaller
@@ -180,7 +180,7 @@ chmod +x build_linux.sh
 
 # Ou directement avec PyInstaller
 pyinstaller photogeoalign_windows.spec    # Windows
-pyinstaller photogeoalign_linux.spec      # Linux
+pyinstaller photogeoalign.spec      # Linux
 ```
 
 ### Dépannage clusters Linux
@@ -225,19 +225,19 @@ photogeoalign_windows.exe --no-gui <dossier_images> [options]
 Après compilation ou téléchargement, l'exécutable Linux se nomme :
 
 ```
-photogeoalign_linux
+photogeoalign
 ```
 
 Il est nécessaire de lui donner les droits d'exécution avant de pouvoir le lancer :
 
 ```bash
-chmod +x photogeoalign_linux
+chmod +x photogeoalign
 ```
 
 Ensuite, lancez-le avec :
 
 ```bash
-./photogeoalign_linux --no-gui <dossier_images> [options]
+./photogeoalign --no-gui <dossier_images> [options]
 ```
 
 Ceci est une mesure de sécurité standard sous Linux : tout fichier téléchargé n'est pas exécutable par défaut. 
