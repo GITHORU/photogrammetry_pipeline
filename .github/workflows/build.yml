@@ -47,10 +47,14 @@ jobs:
         if [[ "${{ matrix.container }}" == centos* ]] || [[ "${{ matrix.container }}" == rockylinux* ]]; then
           # CentOS/RHEL/Rocky setup avec Python 3.11.5 compilé (match cluster exact)
           yum update -y
+          # Activation EPEL pour PROJ
+          yum install -y epel-release
+          yum config-manager --set-enabled powertools || yum config-manager --set-enabled PowerTools
           yum install -y git gcc gcc-c++ make mesa-libGL libgomp zlib-devel file \
                          openssl-devel bzip2-devel libffi-devel sqlite-devel \
                          readline-devel tk-devel gdbm-devel \
-                         xz-devel expat-devel wget findutils
+                         xz-devel expat-devel wget findutils \
+                         proj-devel proj-epsg proj-nad
           
           # Compilation Python 3.11.5 (version exacte cluster)
           cd /tmp
