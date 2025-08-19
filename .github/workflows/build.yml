@@ -19,7 +19,7 @@ jobs:
         include:
           # Rocky Linux 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
           - container: rockylinux:8
-            python-version: '3.11'
+            python-version: '3.6'
             spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-rocky8-docker
             platform: linux
@@ -77,7 +77,12 @@ jobs:
       run: |
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
-        pip3 install pyinstaller
+        # PyInstaller compatible avec Python 3.6 pour Rocky 8
+        if [[ "${{ matrix.container }}" == rockylinux* ]]; then
+          pip3 install "pyinstaller>=4.10,<5.0.0"
+        else
+          pip3 install pyinstaller
+        fi
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
@@ -235,7 +240,7 @@ jobs:
         echo "🪟 Windows build: ${{ needs.build-windows.result }}"
         echo ""
         echo "📦 Expected artifacts:"
-        echo "  • photogeoalign-rocky8-docker (GLIBC 2.28 - RHEL 8.2)"
+        echo "  • photogeoalign-rocky8-docker (GLIBC 2.28 - RHEL 8.2 + Python 3.6)"
         echo "  • photogeoalign-ubuntu22-docker (GLIBC 2.35 - Moderne)" 
         echo "  • photogeoalign-windows-docker (.exe)"
         echo ""
