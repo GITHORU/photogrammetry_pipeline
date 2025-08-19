@@ -17,11 +17,11 @@ jobs:
     strategy:
       matrix:
         include:
-          # CentOS 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
-          - container: centos:8
+          # Rocky Linux 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
+          - container: rockylinux:8
             python-version: '3.11'
             spec-file: photogeoalign_linux.spec
-            artifact-name: photogeoalign-centos8-docker
+            artifact-name: photogeoalign-rocky8-docker
             platform: linux
             glibc-version: "2.28"
             
@@ -43,8 +43,8 @@ jobs:
         export TZ=Europe/Paris
         
         # 📦 Installation conditionnelle selon l'OS
-        if [[ "${{ matrix.container }}" == centos* ]]; then
-          # CentOS/RHEL setup
+        if [[ "${{ matrix.container }}" == centos* ]] || [[ "${{ matrix.container }}" == rockylinux* ]]; then
+          # CentOS/RHEL/Rocky setup
           yum update -y
           yum install -y python3 python3-pip python3-devel git gcc gcc-c++ make \
                          mesa-libGL libgomp zlib-devel
@@ -235,7 +235,7 @@ jobs:
         echo "🪟 Windows build: ${{ needs.build-windows.result }}"
         echo ""
         echo "📦 Expected artifacts:"
-        echo "  • photogeoalign-centos8-docker (GLIBC 2.28 - RHEL 8.2)"
+        echo "  • photogeoalign-rocky8-docker (GLIBC 2.28 - RHEL 8.2)"
         echo "  • photogeoalign-ubuntu22-docker (GLIBC 2.35 - Moderne)" 
         echo "  • photogeoalign-windows-docker (.exe)"
         echo ""
