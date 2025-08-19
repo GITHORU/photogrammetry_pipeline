@@ -45,7 +45,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='photogeoalign_linux',
+    name='photogeoalign',
     debug=False,
     bootloader_ignore_signals=False,
     strip=True,  # Optimisation taille
