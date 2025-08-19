@@ -20,7 +20,7 @@ jobs:
         include:
           # Rocky Linux 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
           - container: rockylinux:8
-            python-version: '3.9'
+            python-version: '3.11.5'
             spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-rocky8-docker
             platform: linux
@@ -45,16 +45,29 @@ jobs:
         
         # 📦 Installation conditionnelle selon l'OS
         if [[ "${{ matrix.container }}" == centos* ]] || [[ "${{ matrix.container }}" == rockylinux* ]]; then
-          # CentOS/RHEL/Rocky setup avec Python 3.11
+          # CentOS/RHEL/Rocky setup avec Python 3.11.5 compilé (match cluster exact)
           yum update -y
-          # Activer PowerTools et EPEL pour Python 3.11
-          yum install -y epel-release
-          yum config-manager --set-enabled powertools || yum config-manager --set-enabled PowerTools
-          yum install -y python39 python39-pip python39-devel git gcc gcc-c++ make \
-                         mesa-libGL libgomp zlib-devel file
-          ln -sf /usr/bin/python3.9 /usr/bin/python3
-          ln -sf /usr/bin/python3.9 /usr/bin/python
-          ln -sf /usr/bin/pip3.9 /usr/bin/pip3
+          yum install -y git gcc gcc-c++ make mesa-libGL libgomp zlib-devel file \
+                         openssl-devel bzip2-devel libffi-devel sqlite-devel \
+                         readline-devel tk-devel gdbm-devel db4-devel \
+                         libpcap-devel xz-devel expat-devel wget
+          
+          # Compilation Python 3.11.5 (version exacte cluster)
+          cd /tmp
+          wget https://www.python.org/ftp/python/3.11.5/Python-3.11.5.tgz
+          tar xvf Python-3.11.5.tgz
+          cd Python-3.11.5
+          ./configure --enable-optimizations --prefix=/usr/local
+          make -j$(nproc)
+          make altinstall
+          
+          # Liens pour utilisation standard
+          ln -sf /usr/local/bin/python3.11 /usr/bin/python3
+          ln -sf /usr/local/bin/python3.11 /usr/bin/python
+          ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3
+          
+          # Nettoyage
+          cd / && rm -rf /tmp/Python-3.11.5*
         else
           # Ubuntu/Debian setup  
           export DEBIAN_FRONTEND=noninteractive
@@ -242,8 +255,8 @@ jobs:
         echo "🪟 Windows build: ${{ needs.build-windows.result }}"
         echo ""
         echo "📦 Expected artifacts:"
-        echo "  • photogeoalign-rocky8-docker (GLIBC 2.28 - RHEL 8.2 + Python 3.6)"
-        echo "  • photogeoalign-ubuntu22-docker (GLIBC 2.35 - Moderne)" 
+        echo "  • photogeoalign-rocky8-docker (GLIBC 2.28 + Python 3.11.5 compilé - RHEL 8.2 EXACT)"
+        echo "  • photogeoalign-ubuntu22-docker (GLIBC 2.35 + Python 3.11 - Moderne)" 
         echo "  • photogeoalign-windows-docker (.exe)"
         echo ""
         echo "⚡ Docker benefits: Queue rapide + environnements précis!"
