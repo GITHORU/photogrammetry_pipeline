@@ -15,6 +15,7 @@ jobs:
   
   build-docker:
     strategy:
+      fail-fast: false  # Continue autres builds même si un échoue
       matrix:
         include:
           # Rocky Linux 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
