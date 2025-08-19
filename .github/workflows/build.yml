@@ -25,14 +25,6 @@ jobs:
             platform: linux
             glibc-version: "2.28"
             
-          # Ubuntu 20.04 - Compatibilité GLIBC clusters
-          - container: ubuntu:20.04
-            python-version: '3.11'
-            spec-file: photogeoalign_linux.spec
-            artifact-name: photogeoalign-ubuntu20-docker
-            platform: linux
-            glibc-version: "2.31"
-            
           # Ubuntu 22.04 - Moderne + performant  
           - container: ubuntu:22.04
             python-version: '3.11'
@@ -243,8 +235,8 @@ jobs:
         echo "🪟 Windows build: ${{ needs.build-windows.result }}"
         echo ""
         echo "📦 Expected artifacts:"
-        echo "  • photogeoalign-ubuntu20-docker (GLIBC 2.31)"
-        echo "  • photogeoalign-ubuntu22-docker (GLIBC 2.35)" 
+        echo "  • photogeoalign-centos8-docker (GLIBC 2.28 - RHEL 8.2)"
+        echo "  • photogeoalign-ubuntu22-docker (GLIBC 2.35 - Moderne)" 
         echo "  • photogeoalign-windows-docker (.exe)"
         echo ""
         echo "⚡ Docker benefits: Queue rapide + environnements précis!"
