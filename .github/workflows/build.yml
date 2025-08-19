@@ -9,69 +9,87 @@ on:
   workflow_dispatch:  # Permet le déclenchement manuel
 
 jobs:
-  build:
+  # ============================================================================
+  # 🐳 DOCKER BUILDS - Queue rapide + Environnements précis
+  # ============================================================================
+  
+  build-docker:
     strategy:
       matrix:
         include:
-          - os: windows-latest
-            python-version: '3.11'
-            spec-file: photogeoalign_windows.spec
-            artifact-name: photogeoalign-windows
-            executable-ext: .exe
-          - os: ubuntu-24.04
+          # Ubuntu 20.04 - Compatibilité GLIBC clusters
+          - container: ubuntu:20.04
             python-version: '3.11'
             spec-file: photogeoalign_linux.spec
-            artifact-name: photogeoalign-ubuntu24
-            executable-ext: ""
-          - os: ubuntu-20.04
+            artifact-name: photogeoalign-ubuntu20-docker
+            platform: linux
+            glibc-version: "2.31"
+            
+          # Ubuntu 22.04 - Moderne + performant  
+          - container: ubuntu:22.04
             python-version: '3.11'
             spec-file: photogeoalign_linux.spec
-            artifact-name: photogeoalign-ubuntu20
-            executable-ext: ""
+            artifact-name: photogeoalign-ubuntu22-docker
+            platform: linux
+            glibc-version: "2.35"
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest  # ⚡ Queue rapide garantie !
+    container: ${{ matrix.container }}
     
     steps:
+    - name: Setup container environment
+      run: |
+        apt-get update
+        apt-get install -y \
+          python3 \
+          python3-pip \
+          python3-dev \
+          git \
+          build-essential \
+          libgl1-mesa-glx \
+          libglib2.0-0 \
+          libsm6 \
+          libxext6 \
+          libxrender-dev \
+          libgomp1
+        
+        # Créer un lien python -> python3
+        ln -sf /usr/bin/python3 /usr/bin/python
+        
+        # Info version
+        echo "=== Container Info ==="
+        cat /etc/os-release
+        python3 --version
+        ldd --version | head -1
+    
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Fix Git ownership (Linux)
-      if: contains(matrix.os, 'ubuntu')
+    - name: Fix Git ownership
       run: |
         git config --global --add safe.directory $GITHUB_WORKSPACE
     
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install system dependencies (Linux)
-      if: contains(matrix.os, 'ubuntu')
+    - name: Install Python dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential
+        python3 -m pip install --upgrade pip
+        pip3 install -r requirements.txt
+        pip3 install pyinstaller
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: docker-${{ matrix.container }}-pip-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          docker-${{ matrix.container }}-pip-
     
-    - name: Install Python dependencies
+    - name: Create hooks directory
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-    
-    - name: Create hooks directory (cross-platform)
-      run: |
-        python -c "import os; os.makedirs('hooks', exist_ok=True); print('Hooks directory ready')"
+        python3 -c "import os; os.makedirs('hooks', exist_ok=True); print('Hooks directory ready')"
     
     - name: Verify spec file exists
       run: |
-        python -c "import os; print(f'Spec file: ${{ matrix.spec-file }}'); print('Exists:', os.path.exists('${{ matrix.spec-file }}'))"
+        python3 -c "import os; print(f'Spec file: ${{ matrix.spec-file }}'); print('Exists:', os.path.exists('${{ matrix.spec-file }}'))"
     
     - name: Build executable
       run: |
@@ -79,16 +97,27 @@ jobs:
     
     - name: Verify executable exists
       run: |
-        python -c "import os; print('Dist contents:'); [print(f'  {f}') for f in os.listdir('dist') if os.path.exists('dist')]"
+        python3 -c "import os; print('Dist contents:'); [print(f'  {f}') for f in os.listdir('dist') if os.path.exists('dist')]"
     
     - name: Test executable (basic smoke test)
       run: |
-        python -c "import os, sys; os.chdir('dist'); files=os.listdir('.'); exe_files=[f for f in files if f.startswith('photogeoalign') and (f.endswith('.exe') or '.' not in f.split('/')[-1])]; print(f'Found executables: {exe_files}'); sys.exit(0 if exe_files else 1)"
+        python3 -c "import os, sys; os.chdir('dist'); files=os.listdir('.'); exe_files=[f for f in files if f.startswith('photogeoalign') and '.' not in f.split('/')[-1]]; print(f'Found executables: {exe_files}'); sys.exit(0 if exe_files else 1)"
+    
+    - name: GLIBC compatibility check
+      run: |
+        echo "=== GLIBC Analysis ==="
+        echo "Expected GLIBC: ${{ matrix.glibc-version }}"
+        if [ -f dist/photogeoalign ]; then
+          echo "Executable dependencies:"
+          ldd dist/photogeoalign | grep -E "(libc|GLIBC)" || echo "No GLIBC deps found"
+          echo "Executable info:"
+          file dist/photogeoalign
+        fi
     
     - name: Prepare artifact
       run: |
-        python -c "import os, shutil; os.makedirs('release', exist_ok=True); files=[f for f in os.listdir('dist') if f.startswith('photogeoalign')]; [shutil.copy(f'dist/{f}', 'release/') for f in files]; print(f'Copied: {files}')"
-        python -c "import shutil; shutil.copy('README.md', 'release/'); shutil.copy('requirements.txt', 'release/'); print('Added README and requirements')"
+        python3 -c "import os, shutil; os.makedirs('release', exist_ok=True); files=[f for f in os.listdir('dist') if f.startswith('photogeoalign')]; [shutil.copy(f'dist/{f}', 'release/') for f in files]; print(f'Copied: {files}')"
+        python3 -c "import shutil; shutil.copy('README.md', 'release/'); shutil.copy('requirements.txt', 'release/'); print('Added README and requirements')"
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -101,30 +130,109 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         cd release
-        if [ "${{ matrix.os }}" == "windows-latest" ]; then
-          7z a ../photogeoalign-${{ github.ref_name }}-windows.zip *
-        else
-          tar -czf ../photogeoalign-${{ github.ref_name }}-linux.tar.gz *
-        fi
+        tar -czf ../photogeoalign-${{ github.ref_name }}-${{ matrix.artifact-name }}.tar.gz *
     
     - name: Upload to release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          photogeoalign-${{ github.ref_name }}-*.zip
           photogeoalign-${{ github.ref_name }}-*.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Job de notification des résultats
+  # ============================================================================
+  # 🪟 WINDOWS BUILD - Natif (pas de container Windows disponible)
+  # ============================================================================
+  
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: windows-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          windows-pip-
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    
+    - name: Create hooks directory
+      run: |
+        python -c "import os; os.makedirs('hooks', exist_ok=True); print('Hooks directory ready')"
+    
+    - name: Build executable
+      run: |
+        pyinstaller photogeoalign_windows.spec --clean --noconfirm
+    
+    - name: Verify executable exists
+      run: |
+        python -c "import os; print('Dist contents:'); [print(f'  {f}') for f in os.listdir('dist') if os.path.exists('dist')]"
+    
+    - name: Test executable (basic smoke test)
+      run: |
+        python -c "import os, sys; os.chdir('dist'); files=os.listdir('.'); exe_files=[f for f in files if f.endswith('.exe')]; print(f'Found executables: {exe_files}'); sys.exit(0 if exe_files else 1)"
+    
+    - name: Prepare artifact
+      run: |
+        python -c "import os, shutil; os.makedirs('release', exist_ok=True); files=[f for f in os.listdir('dist') if f.startswith('photogeoalign')]; [shutil.copy(f'dist/{f}', 'release/') for f in files]; print(f'Copied: {files}')"
+        python -c "import shutil; shutil.copy('README.md', 'release/'); shutil.copy('requirements.txt', 'release/'); print('Added README and requirements')"
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: photogeoalign-windows-docker
+        path: release/
+        retention-days: 30
+    
+    - name: Create release archive
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        cd release
+        7z a ../photogeoalign-${{ github.ref_name }}-windows.zip *
+    
+    - name: Upload to release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          photogeoalign-${{ github.ref_name }}-windows.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # 📊 NOTIFICATION - Status de tous les builds
+  # ============================================================================
+  
   notify:
-    needs: build
+    needs: [build-docker, build-windows]
     runs-on: ubuntu-latest
     if: always()
     steps:
-    - name: Build Status
+    - name: Build Status Summary
       run: |
-        echo "Build completed!"
-        echo "Windows build: ${{ needs.build.outputs.windows-status }}"
-        echo "Linux build: ${{ needs.build.outputs.linux-status }}"
+        echo "🏗️ Build Summary - Docker Strategy"
+        echo "=================================="
+        echo "🐳 Docker builds: ${{ needs.build-docker.result }}"
+        echo "🪟 Windows build: ${{ needs.build-windows.result }}"
+        echo ""
+        echo "📦 Expected artifacts:"
+        echo "  • photogeoalign-ubuntu20-docker (GLIBC 2.31)"
+        echo "  • photogeoalign-ubuntu22-docker (GLIBC 2.35)" 
+        echo "  • photogeoalign-windows-docker (.exe)"
+        echo ""
+        echo "⚡ Docker benefits: Queue rapide + environnements précis!"
