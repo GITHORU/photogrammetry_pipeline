@@ -20,7 +20,7 @@ jobs:
           # Rocky Linux 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
           - container: rockylinux:8
             python-version: '3.6'
-            spec-file: photogeoalign_linux.spec
+            spec-file: photogeoalign_rocky8.spec
             artifact-name: photogeoalign-rocky8-docker
             platform: linux
             glibc-version: "2.28"

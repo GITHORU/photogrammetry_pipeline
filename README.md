@@ -128,7 +128,8 @@ README_ORTHOIMAGE.md    # Documentation du pipeline géodésique
 build_windows.bat       # Script de build Windows
 build_linux.sh          # Script de build Linux
 photogeoalign_windows.spec  # Configuration PyInstaller Windows
-photogeoalign.spec    # Configuration PyInstaller Linux
+photogeoalign_linux.spec    # Configuration PyInstaller Linux (Ubuntu)
+photogeoalign_rocky8.spec   # Configuration PyInstaller Rocky Linux 8
 ```
 
 ## Prérequis
