@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QSpinBox, QDialogButtonBox
 
 class JobExportDialog(QDialog):
-    def __init__(self, parent=None, job_name="PhotoGeoAlign", output="PhotoGeoAlign.job", partition="ncpu", ntasks=32, time_limit="48:00:00", cli_cmd=""):
+    def __init__(self, parent=None, job_name="PhotoGeoAlign.job", output="PhotoGeoAlign.out", partition="ncpu", ntasks=32, time_limit="48:00:00", cli_cmd=""):
         super().__init__(parent)
         self.setWindowTitle("Exporter le batch SLURM (.job)")
         self.setModal(True)
@@ -30,7 +30,7 @@ class JobExportDialog(QDialog):
     def get_values(self):
         return {
             "job_name": self.job_name_edit.text().strip() or "PhotoGeoAlign",
-            "output": self.output_edit.text().strip() or "PhotoGeoAlign.job",
+            "output": self.output_edit.text().strip() or "PhotoGeoAlign.out",
             "partition": self.partition_combo.currentText(),
             "ntasks": self.ntasks_spin.value(),
             "time_limit": self.time_edit.text().strip() or "48:00:00",

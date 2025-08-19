@@ -1138,6 +1138,19 @@ def process_single_cloud_orthoimage(args):
         import rasterio
         from rasterio.transform import from_origin
         
+        # PATCH: Gérer l'absence de modules rasterio dans les nouvelles versions
+        try:
+            import rasterio.sample
+        except ImportError:
+            import types
+            rasterio.sample = types.ModuleType('rasterio.sample')
+        
+        try:
+            import rasterio.vrt
+        except ImportError:
+            import types
+            rasterio.vrt = types.ModuleType('rasterio.vrt')
+        
         # Lecture du nuage
         cloud = o3d.io.read_point_cloud(ply_file)
         if not cloud.has_points():
@@ -1339,6 +1352,20 @@ def create_unified_orthoimage_and_dtm(input_dir, logger, output_dir=None, resolu
         import numpy as np
         import rasterio
         from rasterio.transform import from_origin
+        
+        # PATCH: Gérer l'absence de modules rasterio dans les nouvelles versions
+        try:
+            import rasterio.sample
+        except ImportError:
+            import types
+            rasterio.sample = types.ModuleType('rasterio.sample')
+        
+        try:
+            import rasterio.vrt
+        except ImportError:
+            import types
+            rasterio.vrt = types.ModuleType('rasterio.vrt')
+        
         logger.info("Open3D et Rasterio importés avec succès")
     except ImportError as e:
         logger.error(f"Importation échouée : {e}")
@@ -1635,7 +1662,7 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
         from rasterio.warp import reproject, Resampling
         from rasterio.transform import from_origin
         
-        # PATCH: Gérer l'absence de rasterio.sample dans les nouvelles versions
+        # PATCH: Gérer l'absence de rasterio.sample et rasterio.vrt dans les nouvelles versions
         try:
             import rasterio.sample
         except ImportError:
@@ -1643,6 +1670,14 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
             import types
             rasterio.sample = types.ModuleType('rasterio.sample')
             logger.warning("rasterio.sample non disponible - patch appliqué")
+        
+        try:
+            import rasterio.vrt
+        except ImportError:
+            # Créer un module vrt vide si absent
+            import types
+            rasterio.vrt = types.ModuleType('rasterio.vrt')
+            logger.warning("rasterio.vrt non disponible - patch appliqué")
         
         logger.info("Rasterio importé avec succès")
     except ImportError as e:
