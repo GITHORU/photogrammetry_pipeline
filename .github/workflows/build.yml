@@ -39,6 +39,12 @@ jobs:
     steps:
     - name: Setup container environment
       run: |
+        # 🔧 Configuration non-interactive pour éviter les prompts
+        export DEBIAN_FRONTEND=noninteractive
+        export TZ=Europe/Paris
+        ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+        
+        # 📦 Installation des paquets sans interaction
         apt-get update
         apt-get install -y \
           python3 \
@@ -53,10 +59,10 @@ jobs:
           libxrender-dev \
           libgomp1
         
-        # Créer un lien python -> python3
+        # 🔗 Créer un lien python -> python3
         ln -sf /usr/bin/python3 /usr/bin/python
         
-        # Info version
+        # 📊 Info version
         echo "=== Container Info ==="
         cat /etc/os-release
         python3 --version
