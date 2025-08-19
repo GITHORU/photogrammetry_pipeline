@@ -43,7 +43,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='photogeoalign_windows.exe',
+    name='photogeoalign.exe',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

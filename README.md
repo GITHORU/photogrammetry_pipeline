@@ -41,7 +41,7 @@ python photogeoalign.py --no-gui <dossier_images> [options]
 Ou, si vous avez généré un exécutable Windows (PyInstaller) :
 
 ```bash
-photogeoalign_windows.exe --no-gui <dossier_images> [options]
+photogeoalign.exe --no-gui <dossier_images> [options]
 ```
 
 Ou, si vous avez généré un exécutable Linux (PyInstaller) :
@@ -209,13 +209,13 @@ Pour toute question, suggestion ou contribution : reveneau@ipgp.fr
 Après compilation ou téléchargement, l'exécutable Windows se nomme :
 
 ```
-photogeoalign_windows.exe
+photogeoalign.exe
 ```
 
 Lancez-le depuis l'explorateur ou un terminal :
 
 ```
-photogeoalign_windows.exe --no-gui <dossier_images> [options]
+photogeoalign.exe --no-gui <dossier_images> [options]
 ```
 
 ---
