@@ -76,12 +76,15 @@ jobs:
     - name: Install Python dependencies
       run: |
         python3 -m pip install --upgrade pip
-        pip3 install -r requirements.txt
-        # PyInstaller compatible avec Python 3.6 pour Rocky 8
+        
+        # Installation conditionnelle selon Python version
         if [[ "${{ matrix.container }}" == rockylinux* ]]; then
+          # Rocky 8: Python 3.6 → PyInstaller 4.10 + requirements sans pyinstaller
+          pip3 install PySide6 open3d numpy pyproj scipy Pillow rasterio pytest pytest-qt
           pip3 install "pyinstaller>=4.10,<5.0.0"
         else
-          pip3 install pyinstaller
+          # Ubuntu: Python 3.11 → requirements.txt complet
+          pip3 install -r requirements.txt
         fi
     
     - name: Cache pip dependencies
