@@ -54,7 +54,7 @@ jobs:
                          openssl-devel bzip2-devel libffi-devel sqlite-devel \
                          readline-devel tk-devel gdbm-devel \
                          xz-devel expat-devel wget findutils \
-                         proj-devel proj-epsg proj-nad
+                         proj-devel proj
           
           # Compilation Python 3.11.5 (version exacte cluster)
           cd /tmp
