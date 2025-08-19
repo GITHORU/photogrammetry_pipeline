@@ -20,8 +20,8 @@ jobs:
         include:
           # Rocky Linux 8 - Compatibilité RHEL 8.2 / GLIBC 2.28 
           - container: rockylinux:8
-            python-version: '3.6'
-            spec-file: photogeoalign_rocky8.spec
+            python-version: '3.11'
+            spec-file: photogeoalign_linux.spec
             artifact-name: photogeoalign-rocky8-docker
             platform: linux
             glibc-version: "2.28"
@@ -45,11 +45,13 @@ jobs:
         
         # 📦 Installation conditionnelle selon l'OS
         if [[ "${{ matrix.container }}" == centos* ]] || [[ "${{ matrix.container }}" == rockylinux* ]]; then
-          # CentOS/RHEL/Rocky setup
+          # CentOS/RHEL/Rocky setup avec Python 3.11
           yum update -y
-          yum install -y python3 python3-pip python3-devel git gcc gcc-c++ make \
+          yum install -y python311 python311-pip python311-devel git gcc gcc-c++ make \
                          mesa-libGL libgomp zlib-devel file
-          ln -sf /usr/bin/python3 /usr/bin/python
+          ln -sf /usr/bin/python3.11 /usr/bin/python3
+          ln -sf /usr/bin/python3.11 /usr/bin/python
+          ln -sf /usr/bin/pip3.11 /usr/bin/pip3
         else
           # Ubuntu/Debian setup  
           export DEBIAN_FRONTEND=noninteractive
@@ -78,14 +80,8 @@ jobs:
       run: |
         python3 -m pip install --upgrade pip
         
-        # Installation conditionnelle selon Python version
-        if [[ "${{ matrix.container }}" == rockylinux* ]]; then
-          # Rocky 8: Requirements spécialisés RHEL 8.2
-          pip3 install -r requirements_rocky8.txt
-        else
-          # Ubuntu: Requirements standard
-          pip3 install -r requirements.txt
-        fi
+        # Installation uniforme - Tous Python 3.11 maintenant !
+        pip3 install -r requirements.txt
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
