@@ -8,7 +8,8 @@ pyproj>=3.0.0,<3.1.0
 # SciPy version compatible Python 3.6 (max 1.5.4)
 scipy>=1.5.0,<1.6.0
 Pillow>=8.0.0,<9.0.0
-rasterio>=1.3.0,<1.4.0
+# Rasterio version compatible Python 3.6 (max 1.3a3)
+rasterio>=1.2.0,<1.3.0
 # Open3D version compatible Python 3.6
 open3d>=0.15.0,<0.16.0
 
