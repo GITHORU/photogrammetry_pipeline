@@ -1310,19 +1310,24 @@ class PhotogrammetryGUI(QWidget):
     def export_job_dialog(self):
         import sys
         import os
-        exe_path = sys.executable
-        script_path = os.path.abspath(__file__)
+        
         cli_cmd = self.cmd_line.text().strip()
         parts = cli_cmd.split()
         # On retire le premier mot (python ou exe)
         args = parts[1:]
         # On retire tout photogeoalign.py
         filtered_args = [arg for arg in args if not arg.endswith('photogeoalign.py') and not arg.endswith('photogeoalign.py"')]
+        
         if getattr(sys, 'frozen', False):
-            # Cas exécutable PyInstaller
+            # Cas exécutable PyInstaller - utiliser sys.executable (chemin réel exe)
+            exe_path = sys.executable
             cmd = [exe_path] + filtered_args
         else:
-            # Cas Python
+            # Cas Python - utiliser le script principal
+            exe_path = sys.executable
+            # Trouver photogeoalign.py dans le répertoire parent du projet
+            current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            script_path = os.path.join(current_dir, 'photogeoalign.py')
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
         dialog = JobExportDialog(self, job_name="PhotoGeoAlign_MicMac", output="PhotoGeoAlign_MicMac.job", cli_cmd=cli_cmd)
