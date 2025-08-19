@@ -122,8 +122,9 @@ modules/                 # Structure modulaire
     └── utils.py             # Utilitaires pour les threads
 resources/
 └── logo.png            # Logo de l'application
-requirements.txt        # Dépendances Python
-README.md               # Documentation principale
+requirements.txt          # Dépendances Python standard
+requirements_rocky8.txt   # Dépendances Python Rocky Linux 8/RHEL 8.2
+README.md                 # Documentation principale
 README_ORTHOIMAGE.md    # Documentation du pipeline géodésique
 build_windows.bat       # Script de build Windows
 build_linux.sh          # Script de build Linux
@@ -187,16 +188,21 @@ pyinstaller photogeoalign.spec      # Linux
 ### Dépannage clusters Linux
 
 **Erreur GLIBC** (`GLIBC_2.35' not found`) :
-- L'exécutable est construit sur Ubuntu 22.04 (GLIBC 2.35)
-- Compatible avec Ubuntu 22.04+, CentOS 9+, RHEL 9+
-- **Pour CentOS 7/8** : buildez directement sur le cluster
-- Si votre cluster est plus ancien, buildez directement dessus :
+- Utilisez l'exécutable Rocky Linux 8 (GLIBC 2.28)
+- Compatible RHEL 8.2+, CentOS 8+, Rocky Linux 8+
+
+**Erreur NumPy/libgfortran** (`ELF load command address/offset not properly aligned`) :
+- Problème résolu avec `requirements_rocky8.txt` (NumPy 1.18.x)
+- L'exécutable Rocky Linux 8 utilise des versions compatibles RHEL 8.2
+
+**Build manuel si problème persistant :**
 ```bash
 # Sur le cluster directement
 git clone https://github.com/GITHORU/photogrammetry_pipeline.git
 cd photogrammetry_pipeline
-pip install -r requirements.txt
-pip install pyinstaller
+pip install -r requirements_rocky8.txt  # Pour RHEL 8.2
+# ou
+pip install -r requirements.txt         # Pour systèmes récents
 ./build_linux.sh
 ```
 

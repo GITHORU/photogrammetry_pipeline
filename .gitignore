@@ -4,6 +4,7 @@
 # Sauf les scripts Python, requirements.txt, README.md, .gitignore et logo.png
 !*.py
 !requirements.txt
+!requirements_rocky8.txt
 !README.md
 !.gitignore
 !logo.png 

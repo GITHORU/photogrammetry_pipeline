@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Spec spécialisé pour Rocky Linux 8 / PyInstaller 4.10 / Python 3.6
+# Compatible RHEL 8.2 / GLIBC 2.28 / libgfortran 5.0
+# Utilise requirements_rocky8.txt avec NumPy 1.18.x
 
 a = Analysis(
     ['photogeoalign.py'],
