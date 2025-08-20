@@ -1144,12 +1144,36 @@ def process_single_cloud_orthoimage(args):
         except ImportError:
             import types
             rasterio.sample = types.ModuleType('rasterio.sample')
+            logger.warning("rasterio.sample non disponible - patch appliqué")
         
         try:
             import rasterio.vrt
         except ImportError:
             import types
             rasterio.vrt = types.ModuleType('rasterio.vrt')
+            logger.warning("rasterio.vrt non disponible - patch appliqué")
+        
+        try:
+            import rasterio._features
+        except ImportError:
+            import types
+            rasterio._features = types.ModuleType('rasterio._features')
+            logger.warning("rasterio._features non disponible - patch appliqué")
+        
+        try:
+            import rasterio.coords
+        except ImportError:
+            import types
+            rasterio.coords = types.ModuleType('rasterio.coords')
+            # Créer une classe BoundingBox basique si nécessaire
+            class BoundingBox:
+                def __init__(self, left, bottom, right, top):
+                    self.left = left
+                    self.bottom = bottom
+                    self.right = right
+                    self.top = top
+            rasterio.coords.BoundingBox = BoundingBox
+            logger.warning("rasterio.coords non disponible - patch appliqué avec BoundingBox basique")
         
         # Lecture du nuage
         cloud = o3d.io.read_point_cloud(ply_file)
@@ -1359,12 +1383,36 @@ def create_unified_orthoimage_and_dtm(input_dir, logger, output_dir=None, resolu
         except ImportError:
             import types
             rasterio.sample = types.ModuleType('rasterio.sample')
+            logger.warning("rasterio.sample non disponible - patch appliqué")
         
         try:
             import rasterio.vrt
         except ImportError:
             import types
             rasterio.vrt = types.ModuleType('rasterio.vrt')
+            logger.warning("rasterio.vrt non disponible - patch appliqué")
+        
+        try:
+            import rasterio._features
+        except ImportError:
+            import types
+            rasterio._features = types.ModuleType('rasterio._features')
+            logger.warning("rasterio._features non disponible - patch appliqué")
+        
+        try:
+            import rasterio.coords
+        except ImportError:
+            import types
+            rasterio.coords = types.ModuleType('rasterio.coords')
+            # Créer une classe BoundingBox basique si nécessaire
+            class BoundingBox:
+                def __init__(self, left, bottom, right, top):
+                    self.left = left
+                    self.bottom = bottom
+                    self.right = right
+                    self.top = top
+            rasterio.coords.BoundingBox = BoundingBox
+            logger.warning("rasterio.coords non disponible - patch appliqué avec BoundingBox basique")
         
         logger.info("Open3D et Rasterio importés avec succès")
     except ImportError as e:
@@ -1678,6 +1726,30 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
             import types
             rasterio.vrt = types.ModuleType('rasterio.vrt')
             logger.warning("rasterio.vrt non disponible - patch appliqué")
+        
+        try:
+            import rasterio._features
+        except ImportError:
+            # Créer un module _features vide si absent
+            import types
+            rasterio._features = types.ModuleType('rasterio._features')
+            logger.warning("rasterio._features non disponible - patch appliqué")
+        
+        try:
+            import rasterio.coords
+        except ImportError:
+            # Créer un module coords vide si absent
+            import types
+            rasterio.coords = types.ModuleType('rasterio.coords')
+            # Créer une classe BoundingBox basique si nécessaire
+            class BoundingBox:
+                def __init__(self, left, bottom, right, top):
+                    self.left = left
+                    self.bottom = bottom
+                    self.right = right
+                    self.top = top
+            rasterio.coords.BoundingBox = BoundingBox
+            logger.warning("rasterio.coords non disponible - patch appliqué avec BoundingBox basique")
         
         logger.info("Rasterio importé avec succès")
     except ImportError as e:
