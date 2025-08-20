@@ -1178,8 +1178,30 @@ def process_single_cloud_orthoimage(args):
         import open3d as o3d
         import numpy as np
         from PIL import Image
-        import rasterio
-        from rasterio.transform import from_origin
+        
+        # DEBUG: Import rasterio avec gestion d'erreur détaillée
+        try:
+            print("DEBUG: Tentative d'import rasterio...")
+            import rasterio
+            print(f"DEBUG: rasterio importé avec succès, version: {rasterio.__version__}")
+            print(f"DEBUG: Modules rasterio disponibles: {[x for x in dir(rasterio) if not x.startswith('_')]}")
+        except ImportError as e:
+            print(f"DEBUG: Erreur import rasterio: {e}")
+            raise
+        except Exception as e:
+            print(f"DEBUG: Erreur inattendue import rasterio: {e}")
+            raise
+        
+        try:
+            print("DEBUG: Tentative d'import from_origin...")
+            from rasterio.transform import from_origin
+            print("DEBUG: from_origin importé avec succès")
+        except ImportError as e:
+            print(f"DEBUG: Erreur import from_origin: {e}")
+            raise
+        except Exception as e:
+            print(f"DEBUG: Erreur inattendue import from_origin: {e}")
+            raise
         
         # PATCH: Modules rasterio gérés globalement par patch_rasterio_essentials()
         
