@@ -1330,7 +1330,7 @@ class PhotogrammetryGUI(QWidget):
             script_path = os.path.join(current_dir, 'photogeoalign.py')
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
-        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_MicMac", output="PhotoGeoAlign_MicMac.job", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_MicMac", output="PhotoGeoAlign_MicMac.out", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
             job_content = self.generate_job_script(vals, "micmac")
@@ -1361,7 +1361,7 @@ class PhotogrammetryGUI(QWidget):
             # Cas Python
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
-        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_Geodetic", output="PhotoGeoAlign_Geodetic.job", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_Geodetic", output="PhotoGeoAlign_Geodetic.out", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
             job_content = self.generate_job_script(vals, "geodetic")
@@ -1426,7 +1426,7 @@ class PhotogrammetryGUI(QWidget):
             # Cas Python
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
-        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_New", output="PhotoGeoAlign_New.job", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_New", output="PhotoGeoAlign_New.out", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
             job_content = self.generate_job_script(vals, "new")
