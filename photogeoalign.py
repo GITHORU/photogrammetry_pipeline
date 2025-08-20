@@ -17,9 +17,18 @@ from PySide6.QtGui import QPixmap, QIcon, QAction
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
-# PATCH RASTERIO UNIVERSEL - Exécuté au démarrage
+# Import rasterio AVANT le patch
+try:
+    import rasterio
+except ImportError:
+    rasterio = None
+
+# PATCH RASTERIO UNIVERSEL - Exécuté APRÈS l'import de rasterio
 def patch_rasterio_essentials():
     """Patch universel pour les modules rasterio essentiels"""
+    if rasterio is None:
+        return  # Pas de rasterio, pas de patch
+    
     import types
     import logging
     
@@ -59,7 +68,7 @@ def patch_rasterio_essentials():
             
             logging.getLogger(__name__).warning(f"PATCH: {module_name} créé (module minimal)")
 
-# Appliquer le patch au démarrage
+# Appliquer le patch APRÈS l'import de rasterio
 patch_rasterio_essentials()
 
 # Import des modules refactorisés
