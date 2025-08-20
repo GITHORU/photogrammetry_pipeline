@@ -17,60 +17,6 @@ from PySide6.QtGui import QPixmap, QIcon, QAction
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
-# Import rasterio AVANT le patch
-try:
-    import rasterio
-except ImportError:
-    rasterio = None
-
-# PATCH RASTERIO UNIVERSEL - Exécuté APRÈS l'import de rasterio
-def patch_rasterio_essentials():
-    """Patch universel pour les modules rasterio essentiels"""
-    if rasterio is None:
-        return  # Pas de rasterio, pas de patch
-    
-    import types
-    import logging
-    
-    # Modules vraiment utilisés dans le code
-    essential_modules = [
-        'rasterio.sample',    # Utilisé dans process_single_cloud_orthoimage
-        'rasterio.vrt',       # Utilisé dans process_single_cloud_orthoimage  
-        'rasterio._features', # Erreur actuelle
-        'rasterio.coords',    # Utilisé pour BoundingBox
-    ]
-    
-    for module_name in essential_modules:
-        try:
-            __import__(module_name)
-        except ImportError:
-            # Créer un module minimal avec seulement ce qui est nécessaire
-            module = types.ModuleType(module_name)
-            
-            # Cas spéciaux pour certains modules
-            if module_name == 'rasterio.coords':
-                class BoundingBox:
-                    def __init__(self, left, bottom, right, top):
-                        self.left = left
-                        self.bottom = bottom
-                        self.right = right
-                        self.top = top
-                module.BoundingBox = BoundingBox
-                logging.getLogger(__name__).warning(f"PATCH: {module_name}.BoundingBox créé")
-            
-            # Injecter le module dans rasterio
-            module_parts = module_name.split('.')
-            if len(module_parts) == 2:
-                parent_name, child_name = module_parts
-                if parent_name in globals():
-                    parent = globals()[parent_name]
-                    setattr(parent, child_name, module)
-            
-            logging.getLogger(__name__).warning(f"PATCH: {module_name} créé (module minimal)")
-
-# Appliquer le patch APRÈS l'import de rasterio
-patch_rasterio_essentials()
-
 # Import des modules refactorisés
 from modules.core.utils import setup_logger, resource_path
 from modules.core.micmac import (
