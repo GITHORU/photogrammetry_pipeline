@@ -28,7 +28,22 @@ a = Analysis(
         'scipy.sparse.csgraph._validation',
         'scipy.special._ufuncs_cxx',
         # Open3D - géré par le hook personnalisé
-        'open3d'
+        'open3d',
+        # Rasterio - modules manquants forcés
+        'rasterio',
+        'rasterio.sample',
+        'rasterio.vrt',
+        'rasterio._features', 
+        'rasterio.coords',
+        'rasterio.transform',
+        'rasterio.warp',
+        'rasterio.io',
+        'rasterio.crs',
+        'rasterio._base',
+        'rasterio._env',
+        'rasterio._err',
+        'rasterio._filepath',
+        'rasterio._version',
     ],
     hookspath=['hooks'],
     hooksconfig={},
