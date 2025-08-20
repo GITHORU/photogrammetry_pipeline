@@ -1,13 +1,12 @@
 # Hook personnalisé pour rasterio
 # Force l'emballage de TOUS les modules rasterio
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+# Pas de collect_all car rasterio peut ne pas être importable encore
+# On force directement les imports nécessaires
 
-# Collecter TOUS les modules rasterio
-datas, binaries, hiddenimports = collect_all('rasterio')
-
-# Ajouter explicitement les modules manquants
-hiddenimports += [
+# Modules rasterio essentiels
+hiddenimports = [
+    'rasterio',
     'rasterio.sample',
     'rasterio.vrt', 
     'rasterio._features',
@@ -21,14 +20,21 @@ hiddenimports += [
     'rasterio._err',
     'rasterio._filepath',
     'rasterio._version',
+    'rasterio._io',
+    'rasterio._shim',
+    'rasterio._warp',
+    'rasterio._features',
+    'rasterio._env',
+    'rasterio._err',
+    'rasterio._filepath',
+    'rasterio._version',
+    'rasterio._base',
+    'rasterio._io',
+    'rasterio._shim',
+    'rasterio._warp',
 ]
 
-# Collecter tous les sous-modules rasterio
-hiddenimports += collect_submodules('rasterio')
+# Données rasterio
+datas = []
 
-# Forcer l'emballage des données rasterio
-datas += [
-    ('rasterio', 'rasterio'),
-]
-
-print(f"HOOK RASTERIO: {len(hiddenimports)} modules cachés, {len(datas)} données")
+print(f"HOOK RASTERIO SIMPLIFIÉ: {len(hiddenimports)} modules cachés")
