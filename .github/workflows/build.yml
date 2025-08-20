@@ -97,6 +97,34 @@ jobs:
                              libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 \
                              libxrender-dev libgomp1 file
           ln -sf /usr/bin/python3 /usr/bin/python
+          
+          # 🔧 DÉPENDANCES RASTERIO/GDAL pour Ubuntu 22.04
+          apt-get install -y \
+            libgdal-dev \
+            gdal-bin \
+            libproj-dev \
+            proj-data \
+            proj-bin \
+            libgeotiff-dev \
+            libtiff5-dev \
+            libjpeg-turbo8-dev \
+            libpng-dev \
+            libwebp-dev \
+            libhdf5-dev \
+            libnetcdf-dev \
+            libspatialite-dev \
+            libsqlite3-dev \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            libexpat1-dev \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libgdk-pixbuf2.0-dev \
+            libatlas-base-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            gfortran
         fi
         
         # 📊 Info version
