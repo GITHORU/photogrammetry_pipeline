@@ -148,11 +148,44 @@ jobs:
         if [[ "${{ matrix.container }}" == rockylinux* ]]; then
           # Versions cluster-compatible pour RHEL 8.2 (évite OpenBLAS64 alignment errors)
           # Force wheels pré-compilés pour éviter erreurs compilation
-          pip3 install --only-binary=:all: -r requirements_cluster.txt
+          echo "🔧 Installation Rocky Linux avec requirements_cluster.txt"
+          pip3 install --only-binary=:all: -r requirements_cluster.txt --verbose
         else
           # Versions standard pour autres OS
-          pip3 install -r requirements.txt
+          echo "🔧 Installation Ubuntu avec requirements.txt"
+          pip3 install -r requirements.txt --verbose
         fi
+        
+        echo "=== LISTE DES PACKAGES INSTALLÉS ==="
+        pip3 list | grep -E "(rasterio|numpy|scipy|pyproj)"
+        echo "=== FIN LISTE ==="
+        
+        # 🔧 FALLBACK : Installation manuelle de rasterio si échec
+        if ! python3 -c "import rasterio" 2>/dev/null; then
+          echo "🚨 RASTERIO NON INSTALLÉ - Tentative d'installation manuelle"
+          echo "=== INSTALLATION MANUELLE RASTERIO ==="
+          
+          if [[ "${{ matrix.container }}" == rockylinux* ]]; then
+            # Rocky Linux : version spécifique cluster
+            pip3 install --only-binary=:all: rasterio==1.3.11 --verbose
+          else
+            # Ubuntu : version standard
+            pip3 install rasterio==1.3.11 --verbose
+          fi
+          
+          echo "=== VÉRIFICATION APRÈS FALLBACK ==="
+          python3 -c "import rasterio; print(f'✅ Rasterio installé: {rasterio.__version__}')" || echo "❌ ÉCHEC INSTALLATION RASTERIO"
+        fi
+    
+    - name: Verify rasterio installation
+      run: |
+        echo "=== VÉRIFICATION RASTERIO ==="
+        python3 -c "import rasterio; print(f'✅ Rasterio installé: {rasterio.__version__}')"
+        python3 -c "import rasterio.sample; print('✅ rasterio.sample disponible')"
+        python3 -c "import rasterio.vrt; print('✅ rasterio.vrt disponible')"
+        python3 -c "import rasterio._features; print('✅ rasterio._features disponible')"
+        python3 -c "import rasterio.coords; print('✅ rasterio.coords disponible')"
+        echo "=== FIN VÉRIFICATION ==="
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
