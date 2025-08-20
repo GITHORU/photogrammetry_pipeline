@@ -4,6 +4,49 @@ import logging
 import xml.etree.ElementTree as ET
 from multiprocessing import Pool, cpu_count
 
+# PATCH RASTERIO CIBLÉ - Seulement les modules vraiment nécessaires
+def patch_rasterio_essentials():
+    """Patch ciblé pour les modules rasterio essentiels"""
+    import types
+    
+    # Modules vraiment utilisés dans le code
+    essential_modules = [
+        'rasterio.sample',    # Utilisé dans process_single_cloud_orthoimage
+        'rasterio.vrt',       # Utilisé dans process_single_cloud_orthoimage  
+        'rasterio._features', # Erreur actuelle
+        'rasterio.coords',    # Utilisé pour BoundingBox
+    ]
+    
+    for module_name in essential_modules:
+        try:
+            __import__(module_name)
+        except ImportError:
+            # Créer un module minimal avec seulement ce qui est nécessaire
+            module = types.ModuleType(module_name)
+            
+            # Cas spéciaux pour certains modules
+            if module_name == 'rasterio.coords':
+                class BoundingBox:
+                    def __init__(self, left, bottom, right, top):
+                        self.left = left
+                        self.bottom = bottom
+                        self.right = right
+                        self.top = top
+                module.BoundingBox = BoundingBox
+                logging.getLogger(__name__).warning(f"PATCH: {module_name}.BoundingBox créé")
+            
+            # Injecter le module dans rasterio
+            module_parts = module_name.split('.')
+            if len(module_parts) == 2:
+                parent_name, child_name = module_parts
+                if parent_name in globals():
+                    parent = globals()[parent_name]
+                    setattr(parent, child_name, module)
+                    logging.getLogger(__name__).warning(f"PATCH: {module_name} créé (module minimal)")
+
+# Appliquer le patch au démarrage
+patch_rasterio_essentials()
+
 def process_single_cloud_add_offset(args):
     """Fonction de traitement d'un seul nuage pour l'ajout d'offset (pour multiprocessing)"""
     ply_file, output_dir, coord_file, extra_params = args
@@ -1138,42 +1181,7 @@ def process_single_cloud_orthoimage(args):
         import rasterio
         from rasterio.transform import from_origin
         
-        # PATCH: Gérer l'absence de modules rasterio dans les nouvelles versions
-        try:
-            import rasterio.sample
-        except ImportError:
-            import types
-            rasterio.sample = types.ModuleType('rasterio.sample')
-            logger.warning("rasterio.sample non disponible - patch appliqué")
-        
-        try:
-            import rasterio.vrt
-        except ImportError:
-            import types
-            rasterio.vrt = types.ModuleType('rasterio.vrt')
-            logger.warning("rasterio.vrt non disponible - patch appliqué")
-        
-        try:
-            import rasterio._features
-        except ImportError:
-            import types
-            rasterio._features = types.ModuleType('rasterio._features')
-            logger.warning("rasterio._features non disponible - patch appliqué")
-        
-        try:
-            import rasterio.coords
-        except ImportError:
-            import types
-            rasterio.coords = types.ModuleType('rasterio.coords')
-            # Créer une classe BoundingBox basique si nécessaire
-            class BoundingBox:
-                def __init__(self, left, bottom, right, top):
-                    self.left = left
-                    self.bottom = bottom
-                    self.right = right
-                    self.top = top
-            rasterio.coords.BoundingBox = BoundingBox
-            logger.warning("rasterio.coords non disponible - patch appliqué avec BoundingBox basique")
+        # PATCH: Modules rasterio gérés globalement par patch_rasterio_essentials()
         
         # Lecture du nuage
         cloud = o3d.io.read_point_cloud(ply_file)
@@ -1377,42 +1385,7 @@ def create_unified_orthoimage_and_dtm(input_dir, logger, output_dir=None, resolu
         import rasterio
         from rasterio.transform import from_origin
         
-        # PATCH: Gérer l'absence de modules rasterio dans les nouvelles versions
-        try:
-            import rasterio.sample
-        except ImportError:
-            import types
-            rasterio.sample = types.ModuleType('rasterio.sample')
-            logger.warning("rasterio.sample non disponible - patch appliqué")
-        
-        try:
-            import rasterio.vrt
-        except ImportError:
-            import types
-            rasterio.vrt = types.ModuleType('rasterio.vrt')
-            logger.warning("rasterio.vrt non disponible - patch appliqué")
-        
-        try:
-            import rasterio._features
-        except ImportError:
-            import types
-            rasterio._features = types.ModuleType('rasterio._features')
-            logger.warning("rasterio._features non disponible - patch appliqué")
-        
-        try:
-            import rasterio.coords
-        except ImportError:
-            import types
-            rasterio.coords = types.ModuleType('rasterio.coords')
-            # Créer une classe BoundingBox basique si nécessaire
-            class BoundingBox:
-                def __init__(self, left, bottom, right, top):
-                    self.left = left
-                    self.bottom = bottom
-                    self.right = right
-                    self.top = top
-            rasterio.coords.BoundingBox = BoundingBox
-            logger.warning("rasterio.coords non disponible - patch appliqué avec BoundingBox basique")
+        # PATCH: Modules rasterio gérés globalement par patch_rasterio_essentials()
         
         logger.info("Open3D et Rasterio importés avec succès")
     except ImportError as e:
@@ -1710,46 +1683,7 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
         from rasterio.warp import reproject, Resampling
         from rasterio.transform import from_origin
         
-        # PATCH: Gérer l'absence de rasterio.sample et rasterio.vrt dans les nouvelles versions
-        try:
-            import rasterio.sample
-        except ImportError:
-            # Créer un module sample vide si absent
-            import types
-            rasterio.sample = types.ModuleType('rasterio.sample')
-            logger.warning("rasterio.sample non disponible - patch appliqué")
-        
-        try:
-            import rasterio.vrt
-        except ImportError:
-            # Créer un module vrt vide si absent
-            import types
-            rasterio.vrt = types.ModuleType('rasterio.vrt')
-            logger.warning("rasterio.vrt non disponible - patch appliqué")
-        
-        try:
-            import rasterio._features
-        except ImportError:
-            # Créer un module _features vide si absent
-            import types
-            rasterio._features = types.ModuleType('rasterio._features')
-            logger.warning("rasterio._features non disponible - patch appliqué")
-        
-        try:
-            import rasterio.coords
-        except ImportError:
-            # Créer un module coords vide si absent
-            import types
-            rasterio.coords = types.ModuleType('rasterio.coords')
-            # Créer une classe BoundingBox basique si nécessaire
-            class BoundingBox:
-                def __init__(self, left, bottom, right, top):
-                    self.left = left
-                    self.bottom = bottom
-                    self.right = right
-                    self.top = top
-            rasterio.coords.BoundingBox = BoundingBox
-            logger.warning("rasterio.coords non disponible - patch appliqué avec BoundingBox basique")
+        # PATCH: Modules rasterio gérés globalement par patch_rasterio_essentials()
         
         logger.info("Rasterio importé avec succès")
     except ImportError as e:
