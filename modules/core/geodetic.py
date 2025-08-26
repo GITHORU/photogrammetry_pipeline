@@ -2380,35 +2380,50 @@ def process_zone_with_orthos(zone_data):
                                     diff_G = ortho_arrays[ref_index][1, overlap_mask] - ortho[1, overlap_mask]
                                     diff_B = ortho_arrays[ref_index][2, overlap_mask] - ortho[2, overlap_mask]
                                     
-                                    # Calculer les différences médianes
-                                    diff_mediane_R = np.median(diff_R)
-                                    diff_mediane_G = np.median(diff_G)
-                                    diff_mediane_B = np.median(diff_B)
+                                    # 🆕 HARMONISATION MULTI-QUANTILES : Q25, Q50 (médiane), Q75
+                                    print(f"                  📊 Analyse multi-quantiles des différences...")
                                     
-                                    print(f"                  📊 Différences médianes: R={diff_mediane_R:.1f}, G={diff_mediane_G:.1f}, B={diff_mediane_B:.1f}")
+                                    # Calculer les quantiles des différences pour chaque bande
+                                    diff_Q25_R = np.percentile(diff_R, 25)
+                                    diff_Q50_R = np.percentile(diff_R, 50)  # Médiane
+                                    diff_Q75_R = np.percentile(diff_R, 75)
                                     
-                                    # Calculer les facteurs correcteurs pour minimiser les différences
-                                    # Facteur = 1 + (différence_médiane / valeur_référence) pour rapprocher vers la référence
+                                    diff_Q25_G = np.percentile(diff_G, 25)
+                                    diff_Q50_G = np.percentile(diff_G, 50)  # Médiane
+                                    diff_Q75_G = np.percentile(diff_G, 75)
+                                    
+                                    diff_Q25_B = np.percentile(diff_B, 25)
+                                    diff_Q50_B = np.percentile(diff_B, 50)  # Médiane
+                                    diff_Q75_B = np.percentile(diff_B, 75)
+                                    
+                                    print(f"                  📈 Bande R - Q25={diff_Q25_R:.1f}, Q50={diff_Q50_R:.1f}, Q75={diff_Q75_R:.1f}")
+                                    print(f"                  📈 Bande G - Q25={diff_Q25_G:.1f}, Q50={diff_Q50_G:.1f}, Q75={diff_Q75_G:.1f}")
+                                    print(f"                  📈 Bande B - Q25={diff_Q25_B:.1f}, Q50={diff_Q50_B:.1f}, Q75={diff_Q75_B:.1f}")
+                                    
+                                    # Calculer les facteurs correcteurs multi-quantiles
+                                    # Facteur = 1 + (Q50 / ref_mean) + (Q75 - Q25) / (2 * ref_mean)
+                                    # Q50 : correction centrale, (Q75-Q25) : correction de la dispersion
                                     ref_mean_R = np.mean(ortho_arrays[ref_index][0, overlap_mask])
                                     ref_mean_G = np.mean(ortho_arrays[ref_index][1, overlap_mask])
                                     ref_mean_B = np.mean(ortho_arrays[ref_index][2, overlap_mask])
                                     
                                     if ref_mean_R != 0:
-                                        facteur_R = 1 + (diff_mediane_R / ref_mean_R)
+                                        # Correction centrale + correction de dispersion
+                                        facteur_R = 1 + (diff_Q50_R / ref_mean_R) + (diff_Q75_R - diff_Q25_R) / (2 * ref_mean_R)
                                     else:
                                         facteur_R = 1.0
                                         
                                     if ref_mean_G != 0:
-                                        facteur_G = 1 + (diff_mediane_G / ref_mean_G)
+                                        facteur_G = 1 + (diff_Q50_G / ref_mean_G) + (diff_Q75_G - diff_Q25_G) / (2 * ref_mean_G)
                                     else:
                                         facteur_G = 1.0
                                         
                                     if ref_mean_B != 0:
-                                        facteur_B = 1 + (diff_mediane_B / ref_mean_B)
+                                        facteur_B = 1 + (diff_Q50_B / ref_mean_B) + (diff_Q75_B - diff_Q25_B) / (2 * ref_mean_B)
                                     else:
                                         facteur_B = 1.0
                                     
-                                    print(f"                  🎯 Facteurs correcteurs: R={facteur_R:.3f}, G={facteur_G:.3f}, B={facteur_B:.3f}")
+                                    print(f"                  🎯 Facteurs multi-quantiles: R={facteur_R:.3f}, G={facteur_G:.3f}, B={facteur_B:.3f}")
                                     
                                     # Appliquer les facteurs correcteurs à toute l'ortho
                                     harmonized_ortho = np.copy(ortho)
@@ -2688,10 +2703,10 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
                 # Si la taille de grille n'est pas spécifiée, l'utiliser pour contraindre
                 if grid_size_meters is not None:
                     grid_size = grid_size_meters
-                    adjusted_left = round(global_left / grid_size) * grid_size
-                    adjusted_bottom = round(global_bottom / grid_size) * grid_size
-                    adjusted_right = round(global_right / grid_size) * grid_size
-                    adjusted_top = round(global_top / grid_size) * grid_size
+                    adjusted_left = global_left #round(global_left / grid_size) * grid_size
+                    adjusted_bottom = global_bottom #round(global_bottom / grid_size) * grid_size
+                    adjusted_right = global_right #round(global_right / grid_size) * grid_size
+                    adjusted_top = global_top #round(global_top / grid_size) * grid_size
                     
                     # S'assurer que l'étendue couvre au moins la zone des orthos
                     if adjusted_right < global_right:
@@ -2704,7 +2719,7 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
                         right=adjusted_right, top=adjusted_top
                     )
                 else:
-                    # Utiliser l'étendue réelle des orthos
+                    # Utiliser l'étendue réelle des orthos (SANS ARRONDI)
                     global_bounds = BoundingBox(
                         left=global_left, bottom=global_bottom,
                         right=global_right, top=global_top
@@ -2735,6 +2750,30 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     
     logger.info(f"Résolution finale : {final_resolution}m")
     logger.info(f"Taille des zones : {zone_size_meters}m × {zone_size_meters}m")
+    
+    # 🔧 CORRECTION CRITIQUE : Adapter la taille des zones à la résolution exacte des pixels
+    # Calculer combien de pixels correspondent exactement à la taille demandée
+    pixels_per_zone = zone_size_meters / final_resolution
+    logger.info(f"🔍 Calcul pixels par zone : {zone_size_meters}m ÷ {final_resolution}m = {pixels_per_zone:.6f} pixels")
+    
+    # Adapter la taille des zones pour qu'elles correspondent à un nombre entier de pixels
+    # OPTION 1 : Troncature (zones légèrement plus petites)
+    zone_size_adjusted_down = int(pixels_per_zone) * final_resolution
+    # OPTION 2 : Arrondi (zones légèrement plus grandes)
+    zone_size_adjusted_up = round(pixels_per_zone) * final_resolution
+    
+    logger.info(f"🔍 Option 1 (troncature) : {int(pixels_per_zone)} pixels × {final_resolution}m = {zone_size_adjusted_down:.6f}m")
+    logger.info(f"🔍 Option 2 (arrondi) : {round(pixels_per_zone)} pixels × {final_resolution}m = {zone_size_adjusted_up:.6f}m")
+    
+    # Choisir l'option qui minimise le décalage avec la taille demandée
+    if abs(zone_size_adjusted_down - zone_size_meters) <= abs(zone_size_adjusted_up - zone_size_meters):
+        zone_size = zone_size_adjusted_down
+        logger.info(f"✅ Choix : Option 1 (troncature) - Taille finale des zones : {zone_size:.6f}m × {zone_size:.6f}m")
+        logger.info(f"   → Décalage : {zone_size - zone_size_meters:.6f}m ({((zone_size - zone_size_meters) * 1000):.3f}mm)")
+    else:
+        zone_size = zone_size_adjusted_up
+        logger.info(f"✅ Choix : Option 2 (arrondi) - Taille finale des zones : {zone_size:.6f}m × {zone_size:.6f}m")
+        logger.info(f"   → Décalage : {zone_size - zone_size_meters:.6f}m ({((zone_size - zone_size_meters) * 1000):.3f}mm)")
     
     # ÉTAPE 1.2 : Créer des zones paramétrables parfaitement alignées
     zone_size = zone_size_meters
@@ -2822,6 +2861,156 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     total_orthos_assigned = sum(len(orthos) for orthos in zone_assignments.values())
     zones_with_ortho = sum(1 for orthos in zone_assignments.values() if len(orthos) > 0)
     logger.info(f"📊 Résumé : {total_orthos_assigned} assignations totales, {zones_with_ortho}/{len(zones)} zones avec orthos")
+    
+    # 🆕 CRÉATION DE L'IMAGE DE DEBUG AVEC CONTOURS DES ZONES (AVANT traitement parallèle)
+    logger.info("🎨 Création de l'image de debug avec contours des zones...")
+    
+    try:
+        # Créer une image de debug avec les contours des zones
+        debug_image_path = os.path.join(output_dir, "debug_zones_contours.png")
+        
+        # Calculer les dimensions de l'image de debug
+        # Utiliser les bounds globaux ORIGINAUX des orthos (pas ceux des zones)
+        # Les zones peuvent avoir des décalages d'arrondi, les orthos non !
+        global_bounds = BoundingBox(
+            left=aligned_left,      # Coordonnée exacte des orthos
+            bottom=aligned_bottom,  # Coordonnée exacte des orthos
+            right=aligned_right,    # Coordonnée exacte des orthos
+            top=aligned_top         # Coordonnée exacte des orthos
+        )
+        
+        # Ajouter des logs pour debug
+        logger.info(f"🔍 Debug - Bounds globaux : {global_bounds}")
+        logger.info(f"🔍 Debug - Résolution finale : {final_resolution}m")
+        
+        # Créer une image de debug avec le MÊME géoréférencement que les orthos finales
+        debug_resolution = final_resolution  # 0.003m/pixel (même que les orthos)
+        
+        debug_width = int((global_bounds.right - global_bounds.left) / debug_resolution)
+        debug_height = int((global_bounds.top - global_bounds.bottom) / debug_resolution)
+        
+        logger.info(f"🔍 Debug - Résolution debug : {debug_resolution}m/pixel (même que les orthos)")
+        logger.info(f"🔍 Debug - Dimensions image : {debug_width} × {debug_height} pixels")
+        logger.info(f"🔍 Debug - Dimensions physiques : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+        
+        # Créer une image vide (noire)
+        debug_image = np.zeros((debug_height, debug_width, 3), dtype=np.uint8)
+        
+        # Dessiner les contours de chaque zone
+        for zone in zones:
+            zone_bounds = zone['bounds']  # (x, y, x + zone_size, y + zone_size)
+            
+            # Extraire les coordonnées du tuple
+            zone_left = zone_bounds[0]
+            zone_bottom = zone_bounds[1]
+            zone_right = zone_bounds[2]
+            zone_top = zone_bounds[3]
+            
+            # Convertir les coordonnées géographiques en pixels (avec résolution debug)
+            # Utiliser round() au lieu de int() pour éviter les troncatures
+            zone_left_px = round((zone_left - global_bounds.left) / debug_resolution)
+            zone_right_px = round((zone_right - global_bounds.left) / debug_resolution)
+            # CORRECTION : Pas d'inversion Y, utiliser directement les coordonnées
+            zone_bottom_px = round((zone_bottom - global_bounds.bottom) / debug_resolution)
+            zone_top_px = round((zone_top - global_bounds.bottom) / debug_resolution)
+            
+            # Log de debug pour cette zone
+            logger.info(f"🔍 Zone {zone['id']} - Coord: ({zone_left:.3f}, {zone_bottom:.3f}) à ({zone_right:.3f}, {zone_top:.3f})")
+            logger.info(f"🔍 Zone {zone['id']} - Pixels: ({zone_left_px}, {zone_top_px}) à ({zone_right_px}, {zone_bottom_px})")
+            
+            # Couleur unique pour chaque zone (cycle de couleurs)
+            colors = [
+                (255, 0, 0),    # Rouge
+                (0, 255, 0),    # Vert
+                (0, 0, 255),    # Bleu
+                (255, 255, 0),  # Jaune
+                (255, 0, 255),  # Magenta
+                (0, 255, 255),  # Cyan
+                (255, 128, 0),  # Orange
+                (128, 0, 255),  # Violet
+                (0, 128, 255),  # Bleu clair
+                (255, 0, 128),  # Rose
+                (128, 255, 0),  # Vert clair
+                (255, 128, 128) # Rose clair
+            ]
+            color = colors[zone['id'] % len(colors)]
+            
+            # Dessiner le contour de la zone (2 pixels d'épaisseur)
+            thickness = 2
+            
+            # Lignes horizontales
+            logger.info(f"🔍 Zone {zone['id']} - Dessin lignes horizontales: y={zone_top_px} à {zone_bottom_px}, x={zone_left_px} à {zone_right_px}")
+            for y in range(max(0, zone_top_px), min(debug_height, zone_bottom_px + 1)):
+                if 0 <= zone_left_px < debug_width:
+                    debug_image[y, zone_left_px:min(zone_left_px + thickness, debug_width)] = color
+                    logger.info(f"🔍 Zone {zone['id']} - Ligne horizontale basse à y={y}, x={zone_left_px} à {zone_left_px + thickness}")
+                if 0 <= zone_right_px < debug_width:
+                    debug_image[y, max(0, zone_right_px - thickness):zone_right_px] = color
+                    logger.info(f"🔍 Zone {zone['id']} - Ligne horizontale haute à y={y}, x={zone_right_px - thickness} à {zone_right_px}")
+            
+            # Lignes verticales
+            logger.info(f"🔍 Zone {zone['id']} - Dessin lignes verticales: x={zone_left_px} à {zone_right_px}, y={zone_top_px} à {zone_bottom_px}")
+            for x in range(max(0, zone_left_px), min(debug_width, zone_right_px + 1)):
+                if 0 <= zone_top_px < debug_height:
+                    debug_image[max(0, zone_top_px):min(zone_top_px + thickness, debug_height), x] = color
+                    logger.info(f"🔍 Zone {zone['id']} - Ligne verticale gauche à x={x}, y={zone_top_px} à {zone_top_px + thickness}")
+                if 0 <= zone_bottom_px < debug_height:
+                    debug_image[max(0, zone_bottom_px - thickness):zone_bottom_px, x] = color
+                    logger.info(f"🔍 Zone {zone['id']} - Ligne verticale droite à x={x}, y={zone_bottom_px - thickness} à {zone_bottom_px}")
+            
+            # Ajouter le numéro de zone au centre
+            center_x = (zone_left_px + zone_right_px) // 2
+            center_y = (zone_top_px + zone_bottom_px) // 2
+            
+            if 0 <= center_x < debug_width and 0 <= center_y < debug_height:
+                # Créer un petit carré blanc avec le numéro
+                label_size = 20
+                label_left = max(0, center_x - label_size // 2)
+                label_right = min(debug_width, center_x + label_size // 2)
+                label_top = max(0, center_y - label_size // 2)
+                label_bottom = min(debug_height, center_y + label_size // 2)
+                
+                debug_image[label_top:label_bottom, label_left:label_right] = [255, 255, 255]  # Blanc
+        
+        # Sauvegarder l'image de debug en GeoTIFF avec le bon géoréférencement
+        import rasterio
+        from rasterio.transform import from_origin
+        
+        # Créer le transform pour le géoréférencement (même que les orthos)
+        transform = from_origin(global_bounds.left, global_bounds.top, debug_resolution, debug_resolution)
+        
+        # Récupérer le CRS des orthos unitaires (même que les orthos finales)
+        ortho_crs = None
+        try:
+            with rasterio.open(ortho_files[0]) as src:
+                ortho_crs = src.crs
+                logger.info(f"🔍 Debug - CRS des orthos : {ortho_crs}")
+        except Exception as e:
+            logger.warning(f"⚠️ Impossible de lire le CRS des orthos : {e}")
+            ortho_crs = 'EPSG:4326'  # Fallback
+        
+        # Sauvegarder en GeoTIFF avec géoréférencement
+        with rasterio.open(
+            debug_image_path.replace('.png', '.tif'),
+            'w',
+            driver='GTiff',
+            height=debug_height,
+            width=debug_width,
+            count=3,
+            dtype=debug_image.dtype,
+            crs=ortho_crs,  # Même CRS que les orthos
+            transform=transform
+        ) as dst:
+            dst.write(debug_image.transpose(2, 0, 1))  # PIL attend (channels, height, width)
+        
+        logger.info(f"✅ GeoTIFF de debug créé : {debug_image_path.replace('.png', '.tif')}")
+        logger.info(f"   📏 Dimensions : {debug_width} × {debug_height} pixels")
+        logger.info(f"   🎨 {len(zones)} zones avec contours colorés")
+        logger.info(f"   🗺️ Géoréférencement : {transform}")
+        logger.info(f"   🗺️ CRS : {ortho_crs}")
+        
+    except Exception as e:
+        logger.error(f"⚠️ Erreur lors de la création de l'image de debug : {e}")
     
     # ÉTAPE 1.3 : PARALLÉLISATION - TRAITEMENT DES ZONES AVEC ORTHOS RÉELLES
     logger.info("🚀 DÉMARRAGE DE LA PARALLÉLISATION - Traitement des zones avec orthos réelles...")
