@@ -2600,174 +2600,6 @@ def process_zone_with_orthos(zone_data):
         'message': f"Zone {zone_id}: {len(ortho_color_files)} orthos couleur + {len(ortho_height_files)} MNT hauteur"
     }
 
-def individual_zone_equalization(zone_ortho_path, logger):
-    """
-    Égalisation individuelle par zone (sans recouvrement)
-    Exclut les pixels noirs (0,0,0) des statistiques
-    PRÉSERVE LA GÉOSPATIALITÉ (CRS + géotransformation)
-    
-    Args:
-        zone_ortho_path: Chemin vers l'ortho de zone à égaliser
-        logger: Logger pour les messages
-    
-    Returns:
-        str: Chemin vers la zone égalisée
-    """
-    import numpy as np
-    import os
-    import rasterio
-    
-    logger.info(f"🎨 ÉGALISATION INDIVIDUELLE DE LA ZONE : {os.path.basename(zone_ortho_path)}")
-    
-    try:
-        # ÉTAPE 1 : Lire l'image avec rasterio pour préserver la géospatialité
-        logger.info(f"  📖 Lecture de la zone avec rasterio...")
-        with rasterio.open(zone_ortho_path) as src:
-            # Lire les 3 bandes RGB
-            zone_image = src.read()  # (3, H, W)
-            height, width = src.height, src.width
-            crs = src.crs
-            transform = src.transform
-            bounds = src.bounds
-            
-            logger.info(f"  📏 Dimensions : {width} × {height} pixels")
-            logger.info(f"  🌍 CRS : {crs}")
-            logger.info(f"  📍 Bounds : {bounds}")
-        
-        # Convertir en format (H, W, 3) pour le traitement
-        zone_image_rgb = zone_image.transpose(1, 2, 0)  # (H, W, 3)
-        
-        # ÉTAPE 2 : Créer un masque pour exclure les pixels noirs (0,0,0)
-        logger.info(f"  🔍 Création du masque des pixels valides...")
-        black_pixels_mask = np.all(zone_image_rgb == [0, 0, 0], axis=2)
-        valid_pixels_mask = ~black_pixels_mask
-        
-        valid_pixels_count = np.sum(valid_pixels_mask)
-        total_pixels = height * width
-        
-        logger.info(f"  🔍 Pixels valides : {valid_pixels_count}/{total_pixels} ({valid_pixels_count/total_pixels*100:.1f}%)")
-        
-        if valid_pixels_count == 0:
-            logger.warning(f"  ⚠️ Aucun pixel valide trouvé dans la zone")
-            return zone_ortho_path
-        
-        # ÉTAPE 3 : Calculer les statistiques sur les pixels valides uniquement
-        logger.info(f"  📊 Calcul des statistiques par bande...")
-        valid_pixels = zone_image_rgb[valid_pixels_mask]
-        
-        # Statistiques par bande (R, G, B)
-        stats_per_band = []
-        for band_idx in range(3):
-            band_values = valid_pixels[:, band_idx]
-            
-            # Calcul des quantiles robustes (exclure les outliers)
-            q25 = np.percentile(band_values, 25)
-            q50 = np.percentile(band_values, 50)  # Médiane
-            q75 = np.percentile(band_values, 75)
-            
-            # Moyenne et écart-type sur les pixels valides
-            mean_val = np.mean(band_values)
-            std_val = np.std(band_values)
-            
-            stats_per_band.append({
-                'q25': q25,
-                'q50': q50,
-                'q75': q75,
-                'mean': mean_val,
-                'std': std_val,
-                'min': np.min(band_values),
-                'max': np.max(band_values)
-            })
-        
-        logger.info(f"  📊 Statistiques par bande (pixels valides uniquement):")
-        for i, band_name in enumerate(['Rouge', 'Vert', 'Bleu']):
-            stats = stats_per_band[i]
-            logger.info(f"    {band_name}: Q25={stats['q25']:.1f}, Q50={stats['q50']:.1f}, Q75={stats['q75']:.1f}")
-            logger.info(f"      Moyenne={stats['mean']:.1f}, Écart-type={stats['std']:.1f}")
-        
-        # ÉTAPE 4 : Égalisation simple par normalisation (sans CLAHE pour l'instant)
-        logger.info(f"  🔧 Application de l'égalisation par normalisation...")
-        
-        # Créer une image de sortie
-        equalized_image = np.zeros_like(zone_image_rgb)
-        
-        # Normalisation simple vers une luminosité cible
-        target_mean = 128
-        normalization_factors = []
-        
-        for band_idx in range(3):
-            # Extraire la bande
-            band = zone_image_rgb[:, :, band_idx]
-            
-            # Calculer la moyenne sur les pixels valides uniquement
-            valid_band_values = band[valid_pixels_mask]
-            current_mean = np.mean(valid_band_values)
-            
-            # Facteur de normalisation (éviter la division par zéro)
-            if current_mean > 0:
-                factor = target_mean / current_mean
-                # Limiter le facteur pour éviter les artefacts
-                factor = np.clip(factor, 0.5, 2.0)
-            else:
-                factor = 1.0
-            
-            normalization_factors.append(factor)
-            
-            # Appliquer la normalisation
-            equalized_band = np.clip(band * factor, 0, 255).astype(np.uint8)
-            equalized_image[:, :, band_idx] = equalized_band
-        
-        logger.info(f"  📊 Facteurs de normalisation: R={normalization_factors[0]:.3f}, G={normalization_factors[1]:.3f}, B={normalization_factors[2]:.3f}")
-        
-        # ÉTAPE 5 : Sauvegarder avec rasterio pour préserver la géospatialité
-        logger.info(f"  💾 Sauvegarde avec rasterio (géospatialité préservée)...")
-        
-        # Créer le nom de fichier de sortie
-        base_name = os.path.splitext(os.path.basename(zone_ortho_path))[0]
-        output_path = zone_ortho_path.replace(
-            base_name, 
-            f"{base_name}_equalized_normalized"
-        )
-        
-        # Sauvegarder avec rasterio en préservant CRS et géotransformation
-        with rasterio.open(
-            output_path,
-            'w',
-            driver='GTiff',
-            height=height,
-            width=width,
-            count=3,
-            dtype=np.uint8,
-            crs=crs,  # ✅ PRÉSERVE LE CRS
-            transform=transform,  # ✅ PRÉSERVE LA GÉOTRANSFORMATION
-            photometric='rgb'
-        ) as dst:
-            # Écrire les 3 bandes RGB (format rasterio : (3, H, W))
-            equalized_image_rasterio = equalized_image.transpose(2, 0, 1)  # (H, W, 3) → (3, H, W)
-            dst.write(equalized_image_rasterio)
-            
-            # Métadonnées
-            dst.update_tags(
-                Software='PhotoGeoAlign Zone Equalization',
-                Method='Normalization to target mean',
-                Target_Mean=str(target_mean),
-                Factors_RGB=f"{normalization_factors}",
-                Pixels_Excluded=str(total_pixels - valid_pixels_count)
-            )
-        
-        logger.info(f"  ✅ Zone égalisée sauvegardée : {os.path.basename(output_path)}")
-        logger.info(f"  📋 Métadonnées d'égalisation:")
-        logger.info(f"    - Méthode: Normalisation vers moyenne {target_mean}")
-        logger.info(f"    - Pixels exclus: {total_pixels - valid_pixels_count} (noirs)")
-        logger.info(f"    - Facteurs R/G/B: {normalization_factors}")
-        logger.info(f"    - Géospatialité: CRS et géotransformation préservés ✅")
-        
-        return output_path
-        
-    except Exception as e:
-        logger.error(f"  ❌ Erreur lors de l'égalisation de la zone : {e}")
-        return None
-
 def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolution=0.003, grid_size_meters=None, zone_size_meters=5.0, max_workers=None):
     """
     TEST ÉTAPE 1 : Création de zones avec orthos réelles et fusion parallèle
@@ -3247,38 +3079,16 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     logger.info(f"✅ TEST ÉTAPE 1 TERMINÉ : Fusion parallèle des zones terminée")
     logger.info(f"Résultat attendu : {len(results)} zones traitées avec orthos fusionnées")
     
-    # 🆕 ÉTAPE 2 : ÉGALISATION COLORIMÉTRIQUE DES ZONES
-    logger.info("🎨 LANCEMENT DE L'ÉGALISATION COLORIMÉTRIQUE DES ZONES...")
+    # 🆕 ÉTAPE 2 : ÉGALISATION DÉSACTIVÉE POUR LE MOMENT
+    logger.info("⏸️ ÉGALISATION COLORIMÉTRIQUE DÉSACTIVÉE - Utilisation des zones originales")
     
-    try:
-        # Chercher les zones fusionnées pour les égaliser
-        equalized_zones = []
-        for file in os.listdir(output_dir):
-            if file.endswith('_fused_color_median_harmonized.tif'):
-                zone_path = os.path.join(output_dir, file)
-                logger.info(f"  🔄 Égalisation de la zone : {os.path.basename(file)}")
-                
-                # Appliquer l'égalisation
-                equalized_path = individual_zone_equalization(zone_path, logger)
-                
-                if equalized_path:
-                    equalized_zones.append(equalized_path)
-                    logger.info(f"  ✅ Zone égalisée : {os.path.basename(equalized_path)}")
-                else:
-                    logger.warning(f"  ⚠️ Égalisation échouée pour : {os.path.basename(file)}")
-                    # Utiliser la zone originale si l'égalisation échoue
-                    equalized_zones.append(zone_path)
-        
-        logger.info(f"🎨 ÉGALISATION TERMINÉE : {len(equalized_zones)} zones traitées")
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur lors de l'égalisation des zones : {e}")
-        logger.warning(f"⚠️ L'égalisation a échoué, utilisation des zones originales")
-        # En cas d'erreur, utiliser les zones originales
-        equalized_zones = []
-        for file in os.listdir(output_dir):
-            if file.endswith('_fused_color_median_harmonized.tif'):
-                equalized_zones.append(os.path.join(output_dir, file))
+    # Utiliser directement les zones fusionnées sans égalisation
+    equalized_zones = []
+    for file in os.listdir(output_dir):
+        if file.endswith('_fused_color_median_harmonized.tif'):
+            equalized_zones.append(os.path.join(output_dir, file))
+    
+    logger.info(f"📁 Zones utilisées (sans égalisation) : {len(equalized_zones)}")
     
     # 🆕 ÉTAPE 3 : ASSEMBLAGE AUTOMATIQUE DES ORTHOS UNIFIÉES
     logger.info("🚀 LANCEMENT AUTOMATIQUE DE L'ASSEMBLAGE DES ORTHOS...")
@@ -3335,48 +3145,11 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     zone_ortho_files = []
     zone_bounds_list = []
     
-    # Chercher d'abord les zones égalisées, puis les zones originales
+    # Utiliser directement les zones originales (sans égalisation)
+    logger.info("  🔄 Lecture des zones originales (sans égalisation)...")
     for file in os.listdir(zones_output_dir):
-        if file.endswith('_equalized_normalized.tif'):
-            # Priorité aux zones égalisées
+        if file.endswith('_fused_color_median_harmonized.tif'):
             file_path = os.path.join(zones_output_dir, file)
-            
-            try:
-                with rasterio.open(file_path) as src:
-                    bounds = src.bounds
-                    transform = src.transform
-                    width = src.width
-                    height = src.height
-                    crs = src.crs
-                    
-                    # Extraire l'ID de zone du nom de fichier (retirer le suffixe _equalized_clahe)
-                    zone_id = int(file.split('_')[1])
-                    
-                    zone_ortho_files.append({
-                        'file_path': file_path,
-                        'zone_id': zone_id,
-                        'bounds': bounds,
-                        'transform': transform,
-                        'width': width,
-                        'height': height,
-                        'crs': crs,
-                        'equalized': True
-                    })
-                    
-                    zone_bounds_list.append(bounds)
-                    
-                    logger.info(f"  ✅ Zone {zone_id} (ÉGALISÉE): {width}×{height} pixels, bounds: {bounds}")
-                    
-            except Exception as e:
-                logger.warning(f"  ⚠️ Impossible de lire {file}: {e}")
-                continue
-    
-    # Si pas de zones égalisées, utiliser les zones originales
-    if not zone_ortho_files:
-        logger.info("  🔄 Aucune zone égalisée trouvée, utilisation des zones originales...")
-        for file in os.listdir(zones_output_dir):
-            if file.endswith('_fused_color_median_harmonized.tif'):
-                file_path = os.path.join(zones_output_dir, file)
             
             try:
                 with rasterio.open(file_path) as src:
@@ -3568,3 +3341,279 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     logger.info(f"   🎯 Zones assemblées : {zones_placed}")
     
     return output_path
+
+def calculate_global_histogram_and_quantiles(zones_output_dir, logger):
+    """
+    CALCUL GLOBAL : Histogramme et quantiles de référence sur TOUTES les zones
+    Exclut les pixels noirs ET très sombres (seuil réaliste)
+    
+    Args:
+        zones_output_dir: Répertoire contenant toutes les zones
+        logger: Logger pour les messages
+    
+    Returns:
+        dict: Quantiles globaux de référence par bande
+    """
+    import numpy as np
+    import os
+    import rasterio
+    
+    logger.info("🌍 CALCUL GLOBAL : Histogramme et quantiles de référence sur toutes les zones...")
+    
+    # ÉTAPE 1 : Trouver tous les fichiers de zones
+    zone_files = []
+    for file in os.listdir(zones_output_dir):
+        if file.endswith('_fused_color_median_harmonized.tif'):
+            zone_files.append(os.path.join(zones_output_dir, file))
+    
+    if not zone_files:
+        logger.warning("⚠️ Aucune zone trouvée pour le calcul global")
+        return None
+    
+    logger.info(f"  📁 Zones trouvées : {len(zone_files)}")
+    
+    # ÉTAPE 2 : Calculer l'histogramme global de toutes les zones
+    logger.info("  📊 Calcul de l'histogramme global...")
+    global_histogram = np.zeros((3, 256))  # R, G, B, 0-255
+    
+    total_pixels_processed = 0
+    total_valid_pixels = 0
+    
+    for zone_file in zone_files:
+        try:
+            with rasterio.open(zone_file) as src:
+                zone_image = src.read()  # (3, H, W)
+                height, width = src.height, src.width
+                
+                # Convertir en format (H, W, 3) pour le traitement
+                zone_image_rgb = zone_image.transpose(1, 2, 0)
+                
+                # Créer un masque pour exclure UNIQUEMENT les pixels noirs (0,0,0)
+                black_pixels_mask = np.all(zone_image_rgb == [0, 0, 0], axis=2)
+                valid_pixels_mask = ~black_pixels_mask
+                
+                valid_pixels_count = np.sum(valid_pixels_mask)
+                total_pixels_processed += height * width
+                total_valid_pixels += valid_pixels_count
+                
+                # Ajouter à l'histogramme global (pixels valides uniquement)
+                for band_idx in range(3):
+                    band = zone_image_rgb[:, :, band_idx]
+                    valid_band_values = band[valid_pixels_mask]
+                    
+                    if len(valid_band_values) > 0:
+                        hist, _ = np.histogram(valid_band_values, bins=256, range=(0, 256))
+                        global_histogram[band_idx] += hist
+                
+                logger.info(f"    ✅ {os.path.basename(zone_file)}: {valid_pixels_count}/{height*width} pixels valides")
+                
+        except Exception as e:
+            logger.warning(f"    ⚠️ Erreur lors du traitement de {os.path.basename(zone_file)}: {e}")
+            continue
+    
+    logger.info(f"  📊 Total global : {total_valid_pixels}/{total_pixels_processed} pixels valides ({total_valid_pixels/total_pixels_processed*100:.1f}%)")
+    
+    # ÉTAPE 3 : Calculer les quantiles de référence globaux
+    logger.info("  🎯 Calcul des quantiles de référence globaux...")
+    global_quantiles = {}
+    
+    for band_idx in range(3):
+        cumulative_hist = np.cumsum(global_histogram[band_idx])
+        total_pixels_band = cumulative_hist[-1]
+        
+        if total_pixels_band == 0:
+            logger.warning(f"    ⚠️ Bande {['Rouge', 'Vert', 'Bleu'][band_idx]} : aucun pixel valide")
+            global_quantiles[band_idx] = {'q25': 128, 'q50': 128, 'q75': 128}
+            continue
+        
+        # Trouver les indices des quantiles
+        q25_idx = np.searchsorted(cumulative_hist, total_pixels_band * 0.25)
+        q50_idx = np.searchsorted(cumulative_hist, total_pixels_band * 0.50)
+        q75_idx = np.searchsorted(cumulative_hist, total_pixels_band * 0.75)
+        
+        global_quantiles[band_idx] = {
+            'q25': int(q25_idx),
+            'q50': int(q50_idx), 
+            'q75': int(q75_idx)
+        }
+        
+        logger.info(f"    {['Rouge', 'Vert', 'Bleu'][band_idx]}: Q25={q25_idx}, Q50={q50_idx}, Q75={q75_idx}")
+    
+    logger.info("  ✅ Quantiles globaux calculés avec succès")
+    return global_quantiles
+
+def equalize_zone_to_global_quantiles(zone_ortho_path, global_quantiles, logger):
+    """
+    ÉGALISATION GLOBALE : Égalise une zone vers les quantiles globaux de référence
+    PRÉSERVE LA GÉOSPATIALITÉ (CRS + géotransformation)
+    
+    Args:
+        zone_ortho_path: Chemin vers l'ortho de zone à égaliser
+        global_quantiles: Quantiles globaux de référence
+        logger: Logger pour les messages
+    
+    Returns:
+        str: Chemin vers la zone égalisée
+    """
+    import numpy as np
+    import os
+    import rasterio
+    
+    logger.info(f"🎨 ÉGALISATION GLOBALE DE LA ZONE : {os.path.basename(zone_ortho_path)}")
+    
+    try:
+        # ÉTAPE 1 : Lire l'image avec rasterio pour préserver la géospatialité
+        logger.info(f"  📖 Lecture de la zone avec rasterio...")
+        with rasterio.open(zone_ortho_path) as src:
+            zone_image = src.read()  # (3, H, W)
+            height, width = src.height, src.width
+            crs = src.crs
+            transform = src.transform
+            bounds = src.bounds
+            
+            logger.info(f"  📏 Dimensions : {width} × {height} pixels")
+            logger.info(f"  🌍 CRS : {crs}")
+            logger.info(f"  📍 Bounds : {bounds}")
+        
+        # Convertir en format (H, W, 3) pour le traitement
+        zone_image_rgb = zone_image.transpose(1, 2, 0)  # (H, W, 3)
+        
+        # ÉTAPE 2 : Créer un masque pour exclure UNIQUEMENT les pixels noirs (0,0,0)
+        logger.info(f"  🔍 Création du masque des pixels valides...")
+        black_pixels_mask = np.all(zone_image_rgb == [0, 0, 0], axis=2)
+        valid_pixels_mask = ~black_pixels_mask
+        
+        valid_pixels_count = np.sum(valid_pixels_mask)
+        total_pixels = height * width
+        
+        logger.info(f"  🔍 Pixels valides : {valid_pixels_count}/{total_pixels} ({valid_pixels_count/total_pixels*100:.1f}%)")
+        
+        if valid_pixels_count == 0:
+            logger.warning(f"  ⚠️ Aucun pixel valide trouvé dans la zone")
+            return zone_ortho_path
+        
+        # ÉTAPE 3 : Égalisation vers les quantiles globaux
+        logger.info(f"  🔧 Application de l'égalisation vers les quantiles globaux...")
+        
+        # Créer une image de sortie
+        equalized_image = np.zeros_like(zone_image_rgb)
+        
+        # Égalisation par bande vers les quantiles globaux
+        equalization_factors = []
+        
+        for band_idx in range(3):
+            band = zone_image_rgb[:, :, band_idx]
+            valid_band_values = band[valid_pixels_mask]
+            
+            if len(valid_band_values) == 0:
+                equalized_image[:, :, band_idx] = band
+                equalization_factors.append(1.0)
+                continue
+            
+            # Calculer les quantiles actuels de la zone
+            current_q25 = np.percentile(valid_band_values, 25)
+            current_q50 = np.percentile(valid_band_values, 50)
+            current_q75 = np.percentile(valid_band_values, 75)
+            
+            # Quantiles globaux de référence
+            target_q25 = global_quantiles[band_idx]['q25']
+            target_q50 = global_quantiles[band_idx]['q50']
+            target_q75 = global_quantiles[band_idx]['q75']
+            
+            logger.info(f"    {['Rouge', 'Vert', 'Bleu'][band_idx]}:")
+            logger.info(f"      Actuel: Q25={current_q25:.1f}, Q50={current_q50:.1f}, Q75={current_q75:.1f}")
+            logger.info(f"      Cible: Q25={target_q25}, Q50={target_q50}, Q75={target_q75}")
+            
+            # ÉTAPE 4 : Égalisation par transformation de quantiles
+            # Utiliser une transformation linéaire basée sur les quantiles
+            if current_q75 > current_q25:  # Éviter division par zéro
+                # Transformation linéaire : (x - q25) / (q75 - q25) * (target_q75 - target_q25) + target_q25
+                scale_factor = (target_q75 - target_q25) / (current_q75 - current_q25)
+                offset = target_q25 - current_q25 * scale_factor
+                
+                # Appliquer la transformation
+                equalized_band = np.clip(band * scale_factor + offset, 0, 255).astype(np.uint8)
+                
+                # Calculer le facteur d'égalisation pour les logs
+                factor = scale_factor
+            else:
+                # Si pas de variation, appliquer un décalage simple
+                offset = target_q50 - current_q50
+                equalized_band = np.clip(band + offset, 0, 255).astype(np.uint8)
+                factor = 1.0
+            
+            equalized_image[:, :, band_idx] = equalized_band
+            equalization_factors.append(factor)
+        
+        logger.info(f"  📊 Facteurs d'égalisation: R={equalization_factors[0]:.3f}, G={equalization_factors[1]:.3f}, B={equalization_factors[2]:.3f}")
+        
+        # ÉTAPE 5 : Sauvegarder avec rasterio pour préserver la géospatialité
+        logger.info(f"  💾 Sauvegarde avec rasterio (géospatialité préservée)...")
+        
+        # Créer le nom de fichier de sortie
+        base_name = os.path.splitext(os.path.basename(zone_ortho_path))[0]
+        output_path = zone_ortho_path.replace(
+            base_name, 
+            f"{base_name}_equalized_global_quantiles"
+        )
+        
+        # Sauvegarder avec rasterio en préservant CRS et géotransformation
+        with rasterio.open(
+            output_path,
+            'w',
+            driver='GTiff',
+            height=height,
+            width=width,
+            count=3,
+            dtype=np.uint8,
+            crs=crs,  # ✅ PRÉSERVE LE CRS
+            transform=transform,  # ✅ PRÉSERVE LA GÉOTRANSFORMATION
+            photometric='rgb'
+        ) as dst:
+            # Écrire les 3 bandes RGB (format rasterio : (3, H, W))
+            equalized_image_rasterio = equalized_image.transpose(2, 0, 1)  # (H, W, 3) → (3, H, W)
+            dst.write(equalized_image_rasterio)
+            
+            # Métadonnées
+            dst.update_tags(
+                Software='PhotoGeoAlign Global Quantile Equalization',
+                Method='Global quantile transformation',
+                Global_Q25=f"{[global_quantiles[i]['q25'] for i in range(3)]}",
+                Global_Q50=f"{[global_quantiles[i]['q50'] for i in range(3)]}",
+                Global_Q75=f"{[global_quantiles[i]['q75'] for i in range(3)]}",
+                Equalization_Factors=f"{equalization_factors}",
+                Pixels_Excluded=str(total_pixels - valid_pixels_count)
+            )
+        
+        logger.info(f"  ✅ Zone égalisée sauvegardée : {os.path.basename(output_path)}")
+        logger.info(f"  📋 Métadonnées d'égalisation:")
+        logger.info(f"    - Méthode: Égalisation vers quantiles globaux")
+        logger.info(f"    - Pixels exclus: {total_pixels - valid_pixels_count} (noirs [0,0,0])")
+        logger.info(f"    - Facteurs R/G/B: {equalization_factors}")
+        logger.info(f"    - Géospatialité: CRS et géotransformation préservés ✅")
+        
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"  ❌ Erreur lors de l'égalisation de la zone : {e}")
+        return None
+
+def individual_zone_equalization(zone_ortho_path, logger):
+    """
+    ÉGALISATION GLOBALE : Interface principale pour l'égalisation des zones
+    Utilise la nouvelle stratégie d'égalisation globale basée sur les quantiles
+    
+    Args:
+        zone_ortho_path: Chemin vers l'ortho de zone à égaliser
+        logger: Logger pour les messages
+    
+    Returns:
+        str: Chemin vers la zone égalisée
+    """
+    # Cette fonction est maintenant une interface qui appelle l'égalisation globale
+    # Elle sera remplacée par l'appel direct dans le pipeline principal
+    logger.warning("⚠️ Cette fonction est obsolète. Utilisez l'égalisation globale directement.")
+    return zone_ortho_path
+
+ 
+
