@@ -3193,8 +3193,18 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     logger.info(f"  📏 Hauteur : {global_bounds.top - global_bounds.bottom:.3f}m")
     
     # Calculer les dimensions de la grille finale
-    final_width = int((global_bounds.right - global_bounds.left) / final_resolution)
-    final_height = int((global_bounds.top - global_bounds.bottom) / final_resolution)
+    # CORRECTION : Utiliser round() au lieu de int() pour éviter les lignes noires
+    width_pixels = (global_bounds.right - global_bounds.left) / final_resolution
+    height_pixels = (global_bounds.top - global_bounds.bottom) / final_resolution
+    
+    final_width = round(width_pixels)
+    final_height = round(height_pixels)
+    
+    logger.info(f"🔍 DEBUG Dimensions calculées:")
+    logger.info(f"  Largeur brute: {width_pixels:.6f} pixels -> arrondie: {final_width}")
+    logger.info(f"  Hauteur brute: {height_pixels:.6f} pixels -> arrondie: {final_height}")
+    logger.info(f"  Différence largeur: {abs(width_pixels - final_width):.6f} pixels")
+    logger.info(f"  Différence hauteur: {abs(height_pixels - final_height):.6f} pixels")
     
     logger.info(f"🖼️ Grille finale : {final_width} × {final_height} pixels")
     
