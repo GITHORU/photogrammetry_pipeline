@@ -3328,4 +3328,166 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     
     return output_path
 
+def individual_zone_equalization(zone_ortho_path, logger):
+    """
+    Égalisation individuelle par zone (sans recouvrement)
+    Exclut les pixels noirs (0,0,0) des statistiques
+    
+    Args:
+        zone_ortho_path: Chemin vers l'ortho de zone à égaliser
+        logger: Logger pour les messages
+    
+    Returns:
+        str: Chemin vers la zone égalisée
+    """
+    import cv2
+    import numpy as np
+    import os
+    
+    logger.info(f"🎨 ÉGALISATION INDIVIDUELLE DE LA ZONE : {os.path.basename(zone_ortho_path)}")
+    
+    try:
+        # Lire l'image de la zone
+        zone_image = cv2.imread(zone_ortho_path, cv2.IMREAD_COLOR)
+        if zone_image is None:
+            logger.error(f"❌ Impossible de lire l'image : {zone_ortho_path}")
+            return None
+        
+        # Convertir BGR vers RGB (OpenCV lit en BGR)
+        zone_image_rgb = cv2.cvtColor(zone_image, cv2.COLOR_BGR2RGB)
+        
+        logger.info(f"  📏 Dimensions : {zone_image_rgb.shape}")
+        
+        # ÉTAPE 1 : Créer un masque pour exclure les pixels noirs (0,0,0)
+        # Pixels noirs = pixels avec toutes les valeurs RGB = 0
+        black_pixels_mask = np.all(zone_image_rgb == [0, 0, 0], axis=2)
+        valid_pixels_mask = ~black_pixels_mask
+        
+        valid_pixels_count = np.sum(valid_pixels_mask)
+        total_pixels = zone_image_rgb.shape[0] * zone_image_rgb.shape[1]
+        
+        logger.info(f"  🔍 Pixels valides : {valid_pixels_count}/{total_pixels} ({valid_pixels_count/total_pixels*100:.1f}%)")
+        
+        if valid_pixels_count == 0:
+            logger.warning(f"  ⚠️ Aucun pixel valide trouvé dans la zone")
+            return zone_ortho_path
+        
+        # ÉTAPE 2 : Calculer les statistiques sur les pixels valides uniquement
+        valid_pixels = zone_image_rgb[valid_pixels_mask]
+        
+        # Statistiques par bande (R, G, B)
+        stats_per_band = []
+        for band_idx in range(3):
+            band_values = valid_pixels[:, band_idx]
+            
+            # Calcul des quantiles robustes (exclure les outliers)
+            q25 = np.percentile(band_values, 25)
+            q50 = np.percentile(band_values, 50)  # Médiane
+            q75 = np.percentile(band_values, 75)
+            
+            # Moyenne et écart-type sur les pixels valides
+            mean_val = np.mean(band_values)
+            std_val = np.std(band_values)
+            
+            stats_per_band.append({
+                'q25': q25,
+                'q50': q50,
+                'q75': q75,
+                'mean': mean_val,
+                'std': std_val,
+                'min': np.min(band_values),
+                'max': np.max(band_values)
+            })
+        
+        logger.info(f"  📊 Statistiques par bande (pixels valides uniquement):")
+        for i, band_name in enumerate(['Rouge', 'Vert', 'Bleu']):
+            stats = stats_per_band[i]
+            logger.info(f"    {band_name}: Q25={stats['q25']:.1f}, Q50={stats['q50']:.1f}, Q75={stats['q75']:.1f}")
+            logger.info(f"      Moyenne={stats['mean']:.1f}, Écart-type={stats['std']:.1f}")
+        
+        # ÉTAPE 3 : Égalisation par bande avec CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        logger.info(f"  🔧 Application de l'égalisation CLAHE par bande...")
+        
+        # Créer une image de sortie
+        equalized_image = np.zeros_like(zone_image_rgb)
+        
+        # Paramètres CLAHE optimisés pour les orthoimages aériennes
+        clahe = cv2.createCLAHE(
+            clipLimit=2.0,      # Limite de contraste (évite l'amplification du bruit)
+            tileGridSize=(8, 8) # Taille des tuiles (adapté aux zones de 5m)
+        )
+        
+        for band_idx in range(3):
+            # Extraire la bande
+            band = zone_image_rgb[:, :, band_idx]
+            
+            # Appliquer CLAHE
+            equalized_band = clahe.apply(band)
+            
+            # Stocker le résultat
+            equalized_image[:, :, band_idx] = equalized_band
+        
+        # ÉTAPE 4 : Normalisation finale pour harmoniser les couleurs
+        logger.info(f"  🎨 Normalisation finale des couleurs...")
+        
+        # Calculer les facteurs de normalisation par bande
+        normalization_factors = []
+        target_mean = 128  # Valeur cible pour harmoniser
+        
+        for band_idx in range(3):
+            # Statistiques sur la bande égalisée (pixels valides uniquement)
+            equalized_band = equalized_image[:, :, band_idx]
+            valid_equalized_values = equalized_band[valid_pixels_mask]
+            
+            current_mean = np.mean(valid_equalized_values)
+            
+            # Facteur de normalisation (éviter la division par zéro)
+            if current_mean > 0:
+                factor = target_mean / current_mean
+                # Limiter le facteur pour éviter les artefacts
+                factor = np.clip(factor, 0.5, 2.0)
+            else:
+                factor = 1.0
+            
+            normalization_factors.append(factor)
+            
+            # Appliquer la normalisation
+            equalized_image[:, :, band_idx] = np.clip(
+                equalized_image[:, :, band_idx] * factor, 0, 255
+            ).astype(np.uint8)
+        
+        logger.info(f"  📊 Facteurs de normalisation: R={normalization_factors[0]:.3f}, G={normalization_factors[1]:.3f}, B={normalization_factors[2]:.3f}")
+        
+        # ÉTAPE 5 : Sauvegarder la zone égalisée
+        # Convertir RGB vers BGR pour OpenCV
+        equalized_image_bgr = cv2.cvtColor(equalized_image, cv2.COLOR_RGB2BGR)
+        
+        # Créer le nom de fichier de sortie
+        base_name = os.path.splitext(os.path.basename(zone_ortho_path))[0]
+        output_path = zone_ortho_path.replace(
+            base_name, 
+            f"{base_name}_equalized_clahe"
+        )
+        
+        # Sauvegarder
+        success = cv2.imwrite(output_path, equalized_image_bgr)
+        
+        if success:
+            logger.info(f"  ✅ Zone égalisée sauvegardée : {os.path.basename(output_path)}")
+            
+            # Ajouter des métadonnées dans le nom du fichier
+            logger.info(f"  📋 Métadonnées d'égalisation:")
+            logger.info(f"    - Méthode: CLAHE + Normalisation")
+            logger.info(f"    - Pixels exclus: {total_pixels - valid_pixels_count} (noirs)")
+            logger.info(f"    - Facteurs R/G/B: {normalization_factors}")
+            
+            return output_path
+        else:
+            logger.error(f"  ❌ Erreur lors de la sauvegarde de la zone égalisée")
+            return None
+            
+    except Exception as e:
+        logger.error(f"  ❌ Erreur lors de l'égalisation de la zone : {e}")
+        return None
+
  
