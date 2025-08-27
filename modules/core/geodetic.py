@@ -3080,4 +3080,189 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     
     return output_dir
 
+def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
+    """
+    Simple assemblage des orthos de zones (pas de fusion)
+    
+    Args:
+        zones_output_dir: Répertoire contenant les orthos fusionnées par zones
+        logger: Logger pour les messages
+        final_resolution: Résolution finale en mètres (défaut: 0.003m)
+    
+    Returns:
+        str: Chemin vers l'ortho unifiée créée
+    """
+    import os
+    import numpy as np
+    import rasterio
+    from rasterio.coords import BoundingBox
+    from rasterio.transform import from_origin
+    
+    logger.info("🔧 ASSEMBLAGE SIMPLE DES ORTHOS DE ZONES (pas de fusion)")
+    logger.info(f"📁 Répertoire des zones : {zones_output_dir}")
+    logger.info(f"📏 Résolution finale : {final_resolution}m")
+    
+    # ÉTAPE 1 : Lire toutes les orthos de zones
+    logger.info("📖 Lecture des orthos de zones...")
+    
+    zone_ortho_files = []
+    zone_bounds_list = []
+    
+    for file in os.listdir(zones_output_dir):
+        if file.endswith('_fused_color_median_harmonized.tif'):
+            file_path = os.path.join(zones_output_dir, file)
+            
+            try:
+                with rasterio.open(file_path) as src:
+                    bounds = src.bounds
+                    transform = src.transform
+                    width = src.width
+                    height = src.height
+                    crs = src.crs
+                    
+                    # Extraire l'ID de zone du nom de fichier
+                    zone_id = int(file.split('_')[1])
+                    
+                    zone_ortho_files.append({
+                        'file_path': file_path,
+                        'zone_id': zone_id,
+                        'bounds': bounds,
+                        'transform': transform,
+                        'width': width,
+                        'height': height,
+                        'crs': crs
+                    })
+                    
+                    zone_bounds_list.append(bounds)
+                    
+                    logger.info(f"  ✅ Zone {zone_id}: {width}×{height} pixels, bounds: {bounds}")
+                    
+            except Exception as e:
+                logger.warning(f"  ⚠️ Impossible de lire {file}: {e}")
+                continue
+    
+    if not zone_ortho_files:
+        logger.error("❌ Aucune ortho de zone trouvée !")
+        return None
+    
+    logger.info(f"📊 Total : {len(zone_ortho_files)} orthos de zones trouvées")
+    
+    # ÉTAPE 2 : Calculer la grille finale unifiée
+    logger.info("🧮 Calcul de la grille finale unifiée...")
+    
+    # Calculer l'étendue globale
+    global_left = min(bounds.left for bounds in zone_bounds_list)
+    global_bottom = min(bounds.bottom for bounds in zone_bounds_list)
+    global_right = max(bounds.right for bounds in zone_bounds_list)
+    global_top = max(bounds.top for bounds in zone_bounds_list)
+    
+    global_bounds = BoundingBox(
+        left=global_left,
+        bottom=global_bottom,
+        right=global_right,
+        top=global_top
+    )
+    
+    logger.info(f"🌍 Étendue globale : {global_bounds}")
+    logger.info(f"  📏 Largeur : {global_bounds.right - global_bounds.left:.3f}m")
+    logger.info(f"  📏 Hauteur : {global_bounds.top - global_bounds.bottom:.3f}m")
+    
+    # Calculer les dimensions de la grille finale
+    final_width = int((global_bounds.right - global_bounds.left) / final_resolution)
+    final_height = int((global_bounds.top - global_bounds.bottom) / final_resolution)
+    
+    logger.info(f"🖼️ Grille finale : {final_width} × {final_height} pixels")
+    
+    # ÉTAPE 3 : Créer la grille finale vide
+    logger.info("🎨 Création de la grille finale vide...")
+    
+    # Initialiser avec des valeurs nodata (noir)
+    final_ortho = np.zeros((final_height, final_width, 3), dtype=np.uint8)
+    
+    # Créer le transform pour la grille finale
+    final_transform = from_origin(global_bounds.left, global_bounds.top, final_resolution, final_resolution)
+    
+    # ÉTAPE 4 : Placer chaque ortho de zone à sa position exacte
+    logger.info("🔧 Placement des orthos de zones...")
+    
+    zones_placed = 0
+    
+    for zone_data in zone_ortho_files:
+        try:
+            logger.info(f"  🔄 Placement Zone {zone_data['zone_id']}...")
+            
+            # Lire l'ortho de la zone
+            with rasterio.open(zone_data['file_path']) as src:
+                zone_image = src.read([1, 2, 3])  # RGB
+                zone_bounds = zone_data['bounds']
+            
+            # Calculer la position dans la grille finale
+            start_x = int((zone_bounds.left - global_bounds.left) / final_resolution)
+            start_y = int((global_bounds.top - zone_bounds.top) / final_resolution)
+            end_x = start_x + zone_data['width']
+            end_y = start_y + zone_data['height']
+            
+            logger.info(f"    📍 Position dans la grille : ({start_x}, {start_y}) à ({end_x}, {end_y})")
+            
+            # Vérifier les limites
+            if (start_x < 0 or start_y < 0 or 
+                end_x > final_width or end_y > final_height):
+                logger.warning(f"    ⚠️ Zone {zone_data['zone_id']} dépasse les limites de la grille finale")
+                continue
+            
+            # Placer l'ortho de la zone dans la grille finale
+            # Note : zone_image est (3, height, width), on transpose pour (height, width, 3)
+            zone_image_rgb = zone_image.transpose(1, 2, 0)
+            
+            final_ortho[start_y:end_y, start_x:end_x] = zone_image_rgb
+            
+            zones_placed += 1
+            logger.info(f"    ✅ Zone {zone_data['zone_id']} placée avec succès")
+            
+        except Exception as e:
+            logger.error(f"    ❌ Erreur lors du placement de la Zone {zone_data['zone_id']}: {e}")
+            continue
+    
+    logger.info(f"📊 Zones placées : {zones_placed}/{len(zone_ortho_files)}")
+    
+    # ÉTAPE 5 : Sauvegarder l'ortho unifiée finale
+    logger.info("💾 Sauvegarde de l'ortho unifiée finale...")
+    
+    output_path = os.path.join(zones_output_dir, "ortho_unified_final.tif")
+    
+    # Récupérer le CRS de la première zone (toutes devraient avoir le même)
+    reference_crs = zone_ortho_files[0]['crs']
+    
+    with rasterio.open(
+        output_path,
+        'w',
+        driver='GTiff',
+        height=final_height,
+        width=final_width,
+        count=3,
+        dtype=np.uint8,
+        crs=reference_crs,
+        transform=final_transform,
+        photometric='rgb'
+    ) as dst:
+        # Écrire les 3 bandes RGB
+        dst.write(final_ortho[:, :, 0], 1)  # Rouge
+        dst.write(final_ortho[:, :, 1], 2)  # Vert
+        dst.write(final_ortho[:, :, 2], 3)  # Bleu
+        
+        # Métadonnées
+        dst.update_tags(
+            Software='PhotoGeoAlign Simple Ortho Assembly',
+            Resolution=f'{final_resolution}m per pixel',
+            Zones_Processed=str(zones_placed),
+            Assembly_Method='Simple placement without fusion'
+        )
+    
+    logger.info(f"🎉 ORTHO UNIFIÉE CRÉÉE : {output_path}")
+    logger.info(f"   📏 Dimensions : {final_width} × {final_height} pixels")
+    logger.info(f"   📏 Étendue : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+    logger.info(f"   🎯 Zones assemblées : {zones_placed}")
+    
+    return output_path
+
  
