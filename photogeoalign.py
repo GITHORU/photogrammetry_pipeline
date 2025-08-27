@@ -141,6 +141,10 @@ if __name__ == "__main__":
         parser.add_argument('--orthoimage-resolution', type=float, default=0.1, help='Résolution de l\'orthoimage en mètres (défaut: 0.1)')
         parser.add_argument('--unified-orthoimage-resolution', type=float, default=0.1, help='Résolution de l\'orthoimage unifiée en mètres (défaut: 0.1)')
         
+        # Arguments pour les paramètres de taille de grille et de zones
+        parser.add_argument('--grid-size', type=str, default='auto', help='Taille de la grille en mètres ou "auto" pour calcul automatique (défaut: auto)')
+        parser.add_argument('--zone-size', type=float, default=5.0, help='Taille de chaque zone en mètres (défaut: 5.0)')
+        
         # Arguments pour la méthode de fusion des couleurs
         parser.add_argument('--color-fusion-median', action='store_true', help='Utiliser la méthode de médiane pour la fusion des couleurs')
 
@@ -197,6 +201,17 @@ if __name__ == "__main__":
                 # Méthode de fusion des couleurs
                 color_fusion_method = "median" if args.color_fusion_median else "average"
                 
+                # Paramètres de taille de grille et de zones
+                if args.grid_size == 'auto':
+                    grid_size = 0.0  # 0 = automatique (comme dans la GUI)
+                else:
+                    try:
+                        grid_size = float(args.grid_size)
+                    except ValueError:
+                        print(f"Erreur : taille de grille invalide : {args.grid_size}")
+                        sys.exit(1)
+                zone_size = args.zone_size
+                
                 # Création d'une instance du thread pour gérer les dossiers d'entrée/sortie
                 geodetic_thread = GeodeticTransformThread(
                     args.input_dir, coord_file, deformation_type, deformation_params,
@@ -204,7 +219,8 @@ if __name__ == "__main__":
                     run_add_offset, run_itrf_to_enu, run_deform, run_orthoimage, run_unified_orthoimage,
                     add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
                     add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
-                    itrf_to_enu_ref_point, deform_bascule_xml, args.orthoimage_resolution, "z", "rgb", args.unified_orthoimage_resolution, args.max_workers, color_fusion_method
+                    itrf_to_enu_ref_point, deform_bascule_xml, args.orthoimage_resolution, "z", "rgb", args.unified_orthoimage_resolution, args.max_workers, color_fusion_method,
+                    grid_size, zone_size
                 )
                 
                 # Exécution des transformations
@@ -252,4 +268,5 @@ if __name__ == "__main__":
                 app.setWindowIcon(QIcon(logo_path))
             gui = PhotogrammetryGUI()
             gui.show()
-            sys.exit(app.exec()) 
+            sys.exit(app.exec()) #   C a c h e   i n v a l i d a t i o n   -   0 8 / 2 7 / 2 0 2 5   1 4 : 4 4 : 3 4  
+ 

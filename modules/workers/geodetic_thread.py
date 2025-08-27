@@ -2,7 +2,7 @@ import logging
 import os
 from PySide6.QtCore import QThread, Signal
 from ..core.geodetic import (
-    add_offset_to_clouds, convert_itrf_to_enu, deform_clouds, create_orthoimage_from_pointcloud, merge_orthoimages_and_dtm
+    add_offset_to_clouds, convert_itrf_to_enu, deform_clouds, create_orthoimage_from_pointcloud, merge_orthoimages_and_dtm, test_zone_fusion_with_borders
 )
 from .utils import QtLogHandler
 
@@ -10,7 +10,7 @@ class GeodeticTransformThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None, color_fusion_method="average"):
+    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None, color_fusion_method="average", grid_size_meters=20.0, zone_size_meters=5.0):
         super().__init__()
         self.input_dir = input_dir
         self.coord_file = coord_file
@@ -48,6 +48,10 @@ class GeodeticTransformThread(QThread):
         self.unified_orthoimage_resolution = unified_orthoimage_resolution
         self.max_workers = max_workers
         self.color_fusion_method = color_fusion_method
+        
+        # Paramètres de taille de grille et de zones
+        self.grid_size_meters = grid_size_meters
+        self.zone_size_meters = zone_size_meters
 
     def run(self):
         logger = logging.getLogger(f"GeodeticTransform_{id(self)}")
@@ -132,12 +136,26 @@ class GeodeticTransformThread(QThread):
                     # Utiliser le dossier de l'étape précédente qui contient les orthoimages .tif
                     step_input_dir = current_input_dir
                 
-                # IMPORTANT: Passer la résolution unifiée pour contrôler la résolution finale
-                merge_orthoimages_and_dtm(step_input_dir, logger, self.unified_orthoimage_output_dir, self.unified_orthoimage_resolution, self.max_workers, self.color_fusion_method)
+                # 🧪 TEST ÉTAPE 1 : Utiliser la fonction de test simple au lieu de la fusion complexe
+                # Déterminer le dossier de sortie pour le test
                 if self.unified_orthoimage_output_dir:
-                    current_input_dir = self.unified_orthoimage_output_dir
+                    test_output_dir = self.unified_orthoimage_output_dir
                 else:
-                    current_input_dir = os.path.join(os.path.dirname(step_input_dir), "unified_orthoimage_dtm")
+                    test_output_dir = os.path.join(os.path.dirname(step_input_dir), "test_zones_with_borders")
+                
+                # Appeler la fonction de test simple
+                from ..core.geodetic import test_zone_fusion_with_borders
+                # Test avec grille paramétrable depuis l'interface (ou automatique si None)
+                test_zone_fusion_with_borders(
+                    step_input_dir, 
+                    logger, 
+                    test_output_dir, 
+                    self.unified_orthoimage_resolution,
+                    grid_size_meters=self.grid_size_meters if self.grid_size_meters > 0 else None,  # Automatique si 0
+                    zone_size_meters=self.zone_size_meters,   # Depuis l'interface
+                    max_workers=self.max_workers              # Nombre de workers parallèles
+                )
+                current_input_dir = test_output_dir
                 self.log_signal.emit("Fusion des orthoimages et MNT unifiés terminée.\n")
                 print("Fusion des orthoimages et MNT unifiés terminée.")
 
