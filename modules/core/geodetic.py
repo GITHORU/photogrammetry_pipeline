@@ -2877,9 +2877,14 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
         debug_image_path = os.path.join(output_dir, "debug_zones_contours.png")
         
         # Calculer les dimensions de l'image de debug
-        # Utiliser les bounds globaux ORIGINAUX des orthos (pas ceux des zones)
-        # Les zones peuvent avoir des décalages d'arrondi, les orthos non !
-        debug_bounds = original_ortho_bounds  # Utiliser les bounds originaux des orthos
+        # IMPORTANT : L'image doit couvrir TOUTES les zones, pas seulement les orthos !
+        # Les zones s'étendent souvent au-delà des bounds des orthos pour l'alignement
+        debug_bounds = BoundingBox(
+            left=aligned_left,      # Coordonnée la plus à gauche des zones
+            bottom=aligned_bottom,  # Coordonnée la plus basse des zones  
+            right=aligned_right,    # Coordonnée la plus à droite des zones
+            top=aligned_top         # Coordonnée la plus haute des zones
+        )
         
         # Ajouter des logs pour debug
         logger.info(f"🔍 Debug - Bounds originaux des orthos : {debug_bounds}")
