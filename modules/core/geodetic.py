@@ -2776,10 +2776,17 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
         logger.info(f"   → Décalage : {zone_size - zone_size_meters:.6f}m ({((zone_size - zone_size_meters) * 1000):.3f}mm)")
     
     # ÉTAPE 1.2 : Créer des zones paramétrables parfaitement alignées
-    zone_size = zone_size_meters
     zones = []
     
     # OPTION 2 : Aligner la grille directement sur les coordonnées des orthos
+    # Sauvegarder les bounds originaux des orthos AVANT modification
+    original_ortho_bounds = BoundingBox(
+        left=global_bounds.left,
+        bottom=global_bounds.bottom,
+        right=global_bounds.right,
+        top=global_bounds.top
+    )
+    
     aligned_left = global_bounds.left
     aligned_bottom = global_bounds.bottom
     
@@ -2872,26 +2879,22 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
         # Calculer les dimensions de l'image de debug
         # Utiliser les bounds globaux ORIGINAUX des orthos (pas ceux des zones)
         # Les zones peuvent avoir des décalages d'arrondi, les orthos non !
-        global_bounds = BoundingBox(
-            left=aligned_left,      # Coordonnée exacte des orthos
-            bottom=aligned_bottom,  # Coordonnée exacte des orthos
-            right=aligned_right,    # Coordonnée exacte des orthos
-            top=aligned_top         # Coordonnée exacte des orthos
-        )
+        debug_bounds = original_ortho_bounds  # Utiliser les bounds originaux des orthos
         
         # Ajouter des logs pour debug
-        logger.info(f"🔍 Debug - Bounds globaux : {global_bounds}")
+        logger.info(f"🔍 Debug - Bounds originaux des orthos : {debug_bounds}")
+        logger.info(f"🔍 Debug - Bounds alignés des zones : left={aligned_left:.6f}, bottom={aligned_bottom:.6f}, right={aligned_right:.6f}, top={aligned_top:.6f}")
         logger.info(f"🔍 Debug - Résolution finale : {final_resolution}m")
         
         # Créer une image de debug avec le MÊME géoréférencement que les orthos finales
         debug_resolution = final_resolution  # 0.003m/pixel (même que les orthos)
         
-        debug_width = int((global_bounds.right - global_bounds.left) / debug_resolution)
-        debug_height = int((global_bounds.top - global_bounds.bottom) / debug_resolution)
+        debug_width = int((debug_bounds.right - debug_bounds.left) / debug_resolution)
+        debug_height = int((debug_bounds.top - debug_bounds.bottom) / debug_resolution)
         
         logger.info(f"🔍 Debug - Résolution debug : {debug_resolution}m/pixel (même que les orthos)")
         logger.info(f"🔍 Debug - Dimensions image : {debug_width} × {debug_height} pixels")
-        logger.info(f"🔍 Debug - Dimensions physiques : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+        logger.info(f"🔍 Debug - Dimensions physiques : {(debug_bounds.right - debug_bounds.left):.3f}m × {(debug_bounds.top - debug_bounds.bottom):.3f}m")
         
         # Créer une image vide (noire)
         debug_image = np.zeros((debug_height, debug_width, 3), dtype=np.uint8)
@@ -2908,11 +2911,11 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
             
             # Convertir les coordonnées géographiques en pixels (avec résolution debug)
             # Utiliser round() au lieu de int() pour éviter les troncatures
-            zone_left_px = round((zone_left - global_bounds.left) / debug_resolution)
-            zone_right_px = round((zone_right - global_bounds.left) / debug_resolution)
+            zone_left_px = round((zone_left - debug_bounds.left) / debug_resolution)
+            zone_right_px = round((zone_right - debug_bounds.left) / debug_resolution)
             # CORRECTION : Pas d'inversion Y, utiliser directement les coordonnées
-            zone_bottom_px = round((zone_bottom - global_bounds.bottom) / debug_resolution)
-            zone_top_px = round((zone_top - global_bounds.bottom) / debug_resolution)
+            zone_bottom_px = round((zone_bottom - debug_bounds.bottom) / debug_resolution)
+            zone_top_px = round((zone_top - debug_bounds.bottom) / debug_resolution)
             
             # Log de debug pour cette zone
             logger.info(f"🔍 Zone {zone['id']} - Coord: ({zone_left:.3f}, {zone_bottom:.3f}) à ({zone_right:.3f}, {zone_top:.3f})")
@@ -2939,25 +2942,19 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
             thickness = 2
             
             # Lignes horizontales
-            logger.info(f"🔍 Zone {zone['id']} - Dessin lignes horizontales: y={zone_top_px} à {zone_bottom_px}, x={zone_left_px} à {zone_right_px}")
             for y in range(max(0, zone_top_px), min(debug_height, zone_bottom_px + 1)):
                 if 0 <= zone_left_px < debug_width:
                     debug_image[y, zone_left_px:min(zone_left_px + thickness, debug_width)] = color
-                    logger.info(f"🔍 Zone {zone['id']} - Ligne horizontale basse à y={y}, x={zone_left_px} à {zone_left_px + thickness}")
                 if 0 <= zone_right_px < debug_width:
                     debug_image[y, max(0, zone_right_px - thickness):zone_right_px] = color
-                    logger.info(f"🔍 Zone {zone['id']} - Ligne horizontale haute à y={y}, x={zone_right_px - thickness} à {zone_right_px}")
-            
+                    
             # Lignes verticales
-            logger.info(f"🔍 Zone {zone['id']} - Dessin lignes verticales: x={zone_left_px} à {zone_right_px}, y={zone_top_px} à {zone_bottom_px}")
             for x in range(max(0, zone_left_px), min(debug_width, zone_right_px + 1)):
                 if 0 <= zone_top_px < debug_height:
                     debug_image[max(0, zone_top_px):min(zone_top_px + thickness, debug_height), x] = color
-                    logger.info(f"🔍 Zone {zone['id']} - Ligne verticale gauche à x={x}, y={zone_top_px} à {zone_top_px + thickness}")
                 if 0 <= zone_bottom_px < debug_height:
                     debug_image[max(0, zone_bottom_px - thickness):zone_bottom_px, x] = color
-                    logger.info(f"🔍 Zone {zone['id']} - Ligne verticale droite à x={x}, y={zone_bottom_px - thickness} à {zone_bottom_px}")
-            
+                    
             # Ajouter le numéro de zone au centre
             center_x = (zone_left_px + zone_right_px) // 2
             center_y = (zone_top_px + zone_bottom_px) // 2
@@ -2977,7 +2974,7 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
         from rasterio.transform import from_origin
         
         # Créer le transform pour le géoréférencement (même que les orthos)
-        transform = from_origin(global_bounds.left, global_bounds.top, debug_resolution, debug_resolution)
+        transform = from_origin(debug_bounds.left, debug_bounds.top, debug_resolution, debug_resolution)
         
         # Récupérer le CRS des orthos unitaires (même que les orthos finales)
         ortho_crs = None
