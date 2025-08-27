@@ -3079,7 +3079,40 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     logger.info(f"✅ TEST ÉTAPE 1 TERMINÉ : Fusion parallèle des zones terminée")
     logger.info(f"Résultat attendu : {len(results)} zones traitées avec orthos fusionnées")
     
-    # 🆕 ÉTAPE 2 : ASSEMBLAGE AUTOMATIQUE DES ORTHOS UNIFIÉES
+    # 🆕 ÉTAPE 2 : ÉGALISATION COLORIMÉTRIQUE DES ZONES
+    logger.info("🎨 LANCEMENT DE L'ÉGALISATION COLORIMÉTRIQUE DES ZONES...")
+    
+    try:
+        # Chercher les zones fusionnées pour les égaliser
+        equalized_zones = []
+        for file in os.listdir(output_dir):
+            if file.endswith('_fused_color_median_harmonized.tif'):
+                zone_path = os.path.join(output_dir, file)
+                logger.info(f"  🔄 Égalisation de la zone : {os.path.basename(file)}")
+                
+                # Appliquer l'égalisation
+                equalized_path = individual_zone_equalization(zone_path, logger)
+                
+                if equalized_path:
+                    equalized_zones.append(equalized_path)
+                    logger.info(f"  ✅ Zone égalisée : {os.path.basename(equalized_path)}")
+                else:
+                    logger.warning(f"  ⚠️ Égalisation échouée pour : {os.path.basename(file)}")
+                    # Utiliser la zone originale si l'égalisation échoue
+                    equalized_zones.append(zone_path)
+        
+        logger.info(f"🎨 ÉGALISATION TERMINÉE : {len(equalized_zones)} zones traitées")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de l'égalisation des zones : {e}")
+        logger.warning(f"⚠️ L'égalisation a échoué, utilisation des zones originales")
+        # En cas d'erreur, utiliser les zones originales
+        equalized_zones = []
+        for file in os.listdir(output_dir):
+            if file.endswith('_fused_color_median_harmonized.tif'):
+                equalized_zones.append(os.path.join(output_dir, file))
+    
+    # 🆕 ÉTAPE 3 : ASSEMBLAGE AUTOMATIQUE DES ORTHOS UNIFIÉES
     logger.info("🚀 LANCEMENT AUTOMATIQUE DE L'ASSEMBLAGE DES ORTHOS...")
     
     try:
@@ -3134,9 +3167,48 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     zone_ortho_files = []
     zone_bounds_list = []
     
+    # Chercher d'abord les zones égalisées, puis les zones originales
     for file in os.listdir(zones_output_dir):
-        if file.endswith('_fused_color_median_harmonized.tif'):
+        if file.endswith('_equalized_clahe.tif'):
+            # Priorité aux zones égalisées
             file_path = os.path.join(zones_output_dir, file)
+            
+            try:
+                with rasterio.open(file_path) as src:
+                    bounds = src.bounds
+                    transform = src.transform
+                    width = src.width
+                    height = src.height
+                    crs = src.crs
+                    
+                    # Extraire l'ID de zone du nom de fichier (retirer le suffixe _equalized_clahe)
+                    zone_id = int(file.split('_')[1])
+                    
+                    zone_ortho_files.append({
+                        'file_path': file_path,
+                        'zone_id': zone_id,
+                        'bounds': bounds,
+                        'transform': transform,
+                        'width': width,
+                        'height': height,
+                        'crs': crs,
+                        'equalized': True
+                    })
+                    
+                    zone_bounds_list.append(bounds)
+                    
+                    logger.info(f"  ✅ Zone {zone_id} (ÉGALISÉE): {width}×{height} pixels, bounds: {bounds}")
+                    
+            except Exception as e:
+                logger.warning(f"  ⚠️ Impossible de lire {file}: {e}")
+                continue
+    
+    # Si pas de zones égalisées, utiliser les zones originales
+    if not zone_ortho_files:
+        logger.info("  🔄 Aucune zone égalisée trouvée, utilisation des zones originales...")
+        for file in os.listdir(zones_output_dir):
+            if file.endswith('_fused_color_median_harmonized.tif'):
+                file_path = os.path.join(zones_output_dir, file)
             
             try:
                 with rasterio.open(file_path) as src:
