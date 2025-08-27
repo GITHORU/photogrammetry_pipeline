@@ -3078,6 +3078,31 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     logger.info(f"✅ TEST ÉTAPE 1 TERMINÉ : Fusion parallèle des zones terminée")
     logger.info(f"Résultat attendu : {len(results)} zones traitées avec orthos fusionnées")
     
+    # 🆕 ÉTAPE 2 : ASSEMBLAGE AUTOMATIQUE DES ORTHOS UNIFIÉES
+    logger.info("🚀 LANCEMENT AUTOMATIQUE DE L'ASSEMBLAGE DES ORTHOS...")
+    
+    try:
+        # Récupérer la résolution finale depuis les paramètres
+        final_resolution = 0.003  # Résolution par défaut
+        
+        # Lancer l'assemblage automatique
+        unified_ortho_path = simple_ortho_assembly(
+            zones_output_dir=output_dir,
+            logger=logger,
+            final_resolution=final_resolution
+        )
+        
+        if unified_ortho_path:
+            logger.info(f"🎉 ASSEMBLAGE AUTOMATIQUE RÉUSSI !")
+            logger.info(f"📁 Ortho unifiée créée : {unified_ortho_path}")
+            logger.info(f"✅ PIPELINE COMPLET TERMINÉ : Zones + Assemblage")
+        else:
+            logger.warning(f"⚠️ Assemblage automatique échoué, mais zones créées avec succès")
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de l'assemblage automatique : {e}")
+        logger.warning(f"⚠️ Les zones ont été créées, mais l'assemblage a échoué")
+    
     return output_dir
 
 def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
