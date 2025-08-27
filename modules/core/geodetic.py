@@ -2870,149 +2870,152 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     logger.info(f"📊 Résumé : {total_orthos_assigned} assignations totales, {zones_with_ortho}/{len(zones)} zones avec orthos")
     
     # 🆕 CRÉATION DE L'IMAGE DE DEBUG AVEC CONTOURS DES ZONES (AVANT traitement parallèle)
-    logger.info("🎨 Création de l'image de debug avec contours des zones...")
+    # DÉSACTIVÉE - Problèmes d'affichage et non critique pour le fonctionnement
+    # logger.info("🎨 Création de l'image de debug avec contours des zones...")
     
-    try:
-        # Créer une image de debug avec les contours des zones
-        debug_image_path = os.path.join(output_dir, "debug_zones_contours.png")
-        
-        # Calculer les dimensions de l'image de debug
-        # IMPORTANT : L'image doit couvrir TOUTES les zones, pas seulement les orthos !
-        # Les zones s'étendent souvent au-delà des bounds des orthos pour l'alignement
-        debug_bounds = BoundingBox(
-            left=aligned_left,      # Coordonnée la plus à gauche des zones
-            bottom=aligned_bottom,  # Coordonnée la plus basse des zones  
-            right=aligned_right,    # Coordonnée la plus à droite des zones
-            top=aligned_top         # Coordonnée la plus haute des zones
-        )
-        
-        # Ajouter des logs pour debug
-        logger.info(f"🔍 Debug - Bounds originaux des orthos : {debug_bounds}")
-        logger.info(f"🔍 Debug - Bounds alignés des zones : left={aligned_left:.6f}, bottom={aligned_bottom:.6f}, right={aligned_right:.6f}, top={aligned_top:.6f}")
-        logger.info(f"🔍 Debug - Résolution finale : {final_resolution}m")
-        
-        # Créer une image de debug avec le MÊME géoréférencement que les orthos finales
-        debug_resolution = final_resolution  # 0.003m/pixel (même que les orthos)
-        
-        debug_width = int((debug_bounds.right - debug_bounds.left) / debug_resolution)
-        debug_height = int((debug_bounds.top - debug_bounds.bottom) / debug_resolution)
-        
-        logger.info(f"🔍 Debug - Résolution debug : {debug_resolution}m/pixel (même que les orthos)")
-        logger.info(f"🔍 Debug - Dimensions image : {debug_width} × {debug_height} pixels")
-        logger.info(f"🔍 Debug - Dimensions physiques : {(debug_bounds.right - debug_bounds.left):.3f}m × {(debug_bounds.top - debug_bounds.bottom):.3f}m")
-        
-        # Créer une image vide (noire)
-        debug_image = np.zeros((debug_height, debug_width, 3), dtype=np.uint8)
-        
-        # Dessiner les contours de chaque zone
-        for zone in zones:
-            zone_bounds = zone['bounds']  # (x, y, x + zone_size, y + zone_size)
-            
-            # Extraire les coordonnées du tuple
-            zone_left = zone_bounds[0]
-            zone_bottom = zone_bounds[1]
-            zone_right = zone_bounds[2]
-            zone_top = zone_bounds[3]
-            
-            # Convertir les coordonnées géographiques en pixels (avec résolution debug)
-            # Utiliser round() au lieu de int() pour éviter les troncatures
-            zone_left_px = round((zone_left - debug_bounds.left) / debug_resolution)
-            zone_right_px = round((zone_right - debug_bounds.left) / debug_resolution)
-            # CORRECTION : Pas d'inversion Y, utiliser directement les coordonnées
-            zone_bottom_px = round((zone_bottom - debug_bounds.bottom) / debug_resolution)
-            zone_top_px = round((zone_top - debug_bounds.bottom) / debug_resolution)
-            
-            # Log de debug pour cette zone
-            logger.info(f"🔍 Zone {zone['id']} - Coord: ({zone_left:.3f}, {zone_bottom:.3f}) à ({zone_right:.3f}, {zone_top:.3f})")
-            logger.info(f"🔍 Zone {zone['id']} - Pixels: ({zone_left_px}, {zone_top_px}) à ({zone_right_px}, {zone_bottom_px})")
-            
-            # Couleur unique pour chaque zone (cycle de couleurs)
-            colors = [
-                (255, 0, 0),    # Rouge
-                (0, 255, 0),    # Vert
-                (0, 0, 255),    # Bleu
-                (255, 255, 0),  # Jaune
-                (255, 0, 255),  # Magenta
-                (0, 255, 255),  # Cyan
-                (255, 128, 0),  # Orange
-                (128, 0, 255),  # Violet
-                (0, 128, 255),  # Bleu clair
-                (255, 0, 128),  # Rose
-                (128, 255, 0),  # Vert clair
-                (255, 128, 128) # Rose clair
-            ]
-            color = colors[zone['id'] % len(colors)]
-            
-            # Dessiner le contour de la zone (2 pixels d'épaisseur)
-            thickness = 2
-            
-            # Lignes horizontales
-            for y in range(max(0, zone_top_px), min(debug_height, zone_bottom_px + 1)):
-                if 0 <= zone_left_px < debug_width:
-                    debug_image[y, zone_left_px:min(zone_left_px + thickness, debug_width)] = color
-                if 0 <= zone_right_px < debug_width:
-                    debug_image[y, max(0, zone_right_px - thickness):zone_right_px] = color
-                    
-            # Lignes verticales
-            for x in range(max(0, zone_left_px), min(debug_width, zone_right_px + 1)):
-                if 0 <= zone_top_px < debug_height:
-                    debug_image[max(0, zone_top_px):min(zone_top_px + thickness, debug_height), x] = color
-                if 0 <= zone_bottom_px < debug_height:
-                    debug_image[max(0, zone_bottom_px - thickness):zone_bottom_px, x] = color
-                    
-            # Ajouter le numéro de zone au centre
-            center_x = (zone_left_px + zone_right_px) // 2
-            center_y = (zone_top_px + zone_bottom_px) // 2
-            
-            if 0 <= center_x < debug_width and 0 <= center_y < debug_height:
-                # Créer un petit carré blanc avec le numéro
-                label_size = 20
-                label_left = max(0, center_x - label_size // 2)
-                label_right = min(debug_width, center_x + label_size // 2)
-                label_top = max(0, center_y - label_size // 2)
-                label_bottom = min(debug_height, center_y + label_size // 2)
-                
-                debug_image[label_top:label_bottom, label_left:label_right] = [255, 255, 255]  # Blanc
-        
-        # Sauvegarder l'image de debug en GeoTIFF avec le bon géoréférencement
-        import rasterio
-        from rasterio.transform import from_origin
-        
-        # Créer le transform pour le géoréférencement (même que les orthos)
-        transform = from_origin(debug_bounds.left, debug_bounds.top, debug_resolution, debug_resolution)
-        
-        # Récupérer le CRS des orthos unitaires (même que les orthos finales)
-        ortho_crs = None
-        try:
-            with rasterio.open(ortho_files[0]) as src:
-                ortho_crs = src.crs
-                logger.info(f"🔍 Debug - CRS des orthos : {ortho_crs}")
-        except Exception as e:
-            logger.warning(f"⚠️ Impossible de lire le CRS des orthos : {e}")
-            ortho_crs = 'EPSG:4326'  # Fallback
-        
-        # Sauvegarder en GeoTIFF avec géoréférencement
-        with rasterio.open(
-            debug_image_path.replace('.png', '.tif'),
-            'w',
-            driver='GTiff',
-            height=debug_height,
-            width=debug_width,
-            count=3,
-            dtype=debug_image.dtype,
-            crs=ortho_crs,  # Même CRS que les orthos
-            transform=transform
-        ) as dst:
-            dst.write(debug_image.transpose(2, 0, 1))  # PIL attend (channels, height, width)
-        
-        logger.info(f"✅ GeoTIFF de debug créé : {debug_image_path.replace('.png', '.tif')}")
-        logger.info(f"   📏 Dimensions : {debug_width} × {debug_height} pixels")
-        logger.info(f"   🎨 {len(zones)} zones avec contours colorés")
-        logger.info(f"   🗺️ Géoréférencement : {transform}")
-        logger.info(f"   🗺️ CRS : {ortho_crs}")
-        
-    except Exception as e:
-        logger.error(f"⚠️ Erreur lors de la création de l'image de debug : {e}")
+    # try:
+    #     # Créer une image de debug avec les contours des zones
+    #     debug_image_path = os.path.join(output_dir, "debug_zones_contours.png")
+    #     
+    #     # Calculer les dimensions de l'image de debug
+    #     # IMPORTANT : L'image doit couvrir TOUTES les zones, pas seulement les orthos !
+    #     # Les zones s'étendent souvent au-delà des bounds des orthos pour l'alignement
+    #     debug_bounds = BoundingBox(
+    #         left=aligned_left,      # Coordonnée la plus à gauche des zones
+    #         bottom=aligned_bottom,  # Coordonnée la plus basse des zones  
+    #         right=aligned_right,    # Coordonnée la plus à droite des zones
+    #         top=aligned_top         # Coordonnée la plus haute des zones
+    #     )
+    #     
+    #     # Ajouter des logs pour debug
+    #     logger.info(f"🔍 Debug - Bounds originaux des orthos : {original_ortho_bounds}")
+    #     logger.info(f"🔍 Debug - Bounds étendus pour toutes les zones : {debug_bounds}")
+    #     logger.info(f"🔍 Debug - Résolution finale : {final_resolution}m")
+    #     
+    #     # Créer une image de debug avec le MÊME géoréférencement que les orthos finales
+    #     debug_resolution = final_resolution  # 0.003m/pixel (même que les orthos)
+    #     
+    #     debug_width = int((debug_bounds.right - debug_bounds.left) / debug_resolution)
+    #     debug_height = int((debug_bounds.top - debug_bounds.bottom) / debug_resolution)
+    #     
+    #     logger.info(f"🔍 Debug - Résolution debug : {debug_resolution}m/pixel (même que les orthos)")
+    #     logger.info(f"🔍 Debug - Dimensions image : {debug_width} × {debug_height} pixels")
+    #     logger.info(f"🔍 Debug - Dimensions physiques : {(debug_bounds.right - debug_bounds.left):.3f}m × {(debug_bounds.top - debug_bounds.bottom):.3f}m")
+    #     
+    #     # Créer une image vide (noire)
+    #     debug_image = np.zeros((debug_height, debug_width, 3), dtype=np.uint8)
+    #     
+    #     # Dessiner les contours de chaque zone
+    #     for zone in zones:
+    #         zone_bounds = zone['bounds']  # (x, y, x + zone_size, y + zone_size)
+    #         
+    #         # Extraire les coordonnées du tuple
+    #         zone_left = zone_bounds[0]
+    #         zone_bottom = zone_bounds[1]
+    #         zone_right = zone_bounds[2]
+    #         zone_top = zone_bounds[3]
+    #         
+    #         # Convertir les coordonnées géographiques en pixels (avec résolution debug)
+    #         # Utiliser round() au lieu de int() pour éviter les troncatures
+    #         zone_left_px = round((zone_left - debug_bounds.left) / debug_resolution)
+    #         zone_right_px = round((zone_right - debug_bounds.left) / debug_resolution)
+    #         # CORRECTION : Pas d'inversion Y, utiliser directement les coordonnées
+    #         zone_bottom_px = round((zone_bottom - debug_bounds.bottom) / debug_resolution)
+    #         zone_top_px = round((zone_top - debug_bounds.bottom) / debug_resolution)
+    #         
+    #         # Log de debug pour cette zone
+    #         logger.info(f"🔍 Zone {zone['id']} - Coord: ({zone_left:.3f}, {zone_bottom:.3f}) à ({zone_right:.3f}, {zone_top:.3f})")
+    #         logger.info(f"🔍 Zone {zone['id']} - Pixels: ({zone_left_px}, {zone_top_px}) à ({zone_right_px}, {zone_bottom_px})")
+    #         
+    #         # Couleur unique pour chaque zone (cycle de couleurs)
+    #         colors = [
+    #             (255, 0, 0),    # Rouge
+    #             (0, 255, 0),    # Vert
+    #             (0, 0, 255),    # Bleu
+    #             (255, 255, 0),  # Jaune
+    #             (255, 0, 255),  # Magenta
+    #             (0, 255, 255),  # Cyan
+    #             (255, 128, 0),  # Orange
+    #             (128, 0, 255),  # Violet
+    #             (0, 128, 255),  # Bleu clair
+    #             (255, 0, 128),  # Rose
+    #             (128, 255, 0),  # Vert clair
+    #             (255, 128, 128) # Rose clair
+    #         ]
+    #         color = colors[zone['id'] % len(colors)]
+    #         
+    #         # Dessiner le contour de la zone (2 pixels d'épaisseur)
+    #         thickness = 2
+    #         
+    #         # Lignes horizontales
+    #         for y in range(max(0, zone_top_px), min(debug_height, zone_bottom_px + 1)):
+    #             if 0 <= zone_left_px < debug_width:
+    #                 debug_image[y, zone_left_px:min(zone_left_px + thickness, debug_width)] = color
+    #             if 0 <= zone_right_px < debug_width:
+    #                 debug_image[y, max(0, zone_right_px - thickness):zone_right_px] = color
+    #                 
+    #         # Lignes verticales
+    #         for x in range(max(0, zone_left_px), min(debug_width, zone_right_px + 1)):
+    #             if 0 <= zone_top_px < debug_height:
+    #                 debug_image[max(0, zone_top_px):min(zone_top_px + thickness, debug_height), x] = color
+    #             if 0 <= zone_bottom_px < debug_height:
+    #                 debug_image[max(0, zone_bottom_px - thickness):zone_bottom_px, x] = color
+    #                 
+    #         # Ajouter le numéro de zone au centre
+    #         center_x = (zone_left_px + zone_right_px) // 2
+    #         center_y = (zone_top_px + zone_bottom_px) // 2
+    #         
+    #         if 0 <= center_x < debug_width and 0 <= center_y < debug_height:
+    #             # Créer un petit carré blanc avec le numéro
+    #             label_size = 20
+    #             label_left = max(0, center_x - label_size // 2)
+    #             label_right = min(debug_width, center_x + label_size // 2)
+    #             label_top = max(0, center_y - label_size // 2)
+    #             label_bottom = min(debug_height, center_y + label_size // 2)
+    #             
+    #             debug_image[label_top:label_bottom, label_left:label_right] = [255, 255, 255]  # Blanc
+    #         
+    #     # Sauvegarder l'image de debug en GeoTIFF avec le bon géoréférencement
+    #     import rasterio
+    #     from rasterio.transform import from_origin
+    #     
+    #     # Créer le transform pour le géoréférencement (même que les orthos)
+    #     transform = from_origin(debug_bounds.left, debug_bounds.top, debug_resolution, debug_resolution)
+    #     
+    #     # Récupérer le CRS des orthos unitaires (même que les orthos finales)
+    #     ortho_crs = None
+    #     try:
+    #         with rasterio.open(ortho_files[0]) as src:
+    #             ortho_crs = src.crs
+    #             logger.info(f"🔍 Debug - CRS des orthos : {ortho_crs}")
+    #     except Exception as e:
+    #         logger.warning(f"⚠️ Impossible de lire le CRS des orthos : {e}")
+    #         ortho_crs = 'EPSG:4326'  # Fallback
+    #     
+    #     # Sauvegarder en GeoTIFF avec géoréférencement
+    #     with rasterio.open(
+    #         debug_image_path.replace('.png', '.tif'),
+    #         'w',
+    #         driver='GTiff',
+    #         height=debug_height,
+    #         width=debug_width,
+    #         count=3,
+    #         dtype=debug_image.dtype,
+    #         crs=ortho_crs,  # Même CRS que les orthos
+    #         transform=transform
+    #     ) as dst:
+    #         dst.write(debug_image.transpose(2, 0, 1))  # PIL attend (channels, height, width)
+    #     
+    #     logger.info(f"✅ GeoTIFF de debug créé : {debug_image_path.replace('.png', '.tif')}")
+    #     logger.info(f"   📏 Dimensions : {debug_width} × {debug_height} pixels")
+    #     logger.info(f"   🎨 {len(zones)} zones avec contours colorés")
+    #     logger.info(f"   🗺️ Géoréférencement : {transform}")
+    #     logger.info(f"   🗺️ CRS : {ortho_crs}")
+    #     
+    # except Exception as e:
+    #     logger.error(f"⚠️ Erreur lors de la création de l'image de debug : {e}")
+    
+    logger.info("🎨 Image de debug désactivée - Passage direct à la parallélisation")
     
     # ÉTAPE 1.3 : PARALLÉLISATION - TRAITEMENT DES ZONES AVEC ORTHOS RÉELLES
     logger.info("🚀 DÉMARRAGE DE LA PARALLÉLISATION - Traitement des zones avec orthos réelles...")
