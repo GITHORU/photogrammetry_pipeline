@@ -3241,11 +3241,21 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
                 zone_bounds = zone_data['bounds']
             
             # Calculer la position dans la grille finale
-            start_x = int((zone_bounds.left - global_bounds.left) / final_resolution)
-            # CORRECTION : Calculer start_y depuis le bas de la grille (y=0 en haut)
-            start_y = int((global_bounds.top - zone_bounds.top) / final_resolution)
+            # CORRECTION COMPLÈTE : Utiliser round() pour éviter les décalages d'un pixel
+            x_pos = (zone_bounds.left - global_bounds.left) / final_resolution
+            y_pos = (global_bounds.top - zone_bounds.top) / final_resolution
+            
+            start_x = round(x_pos)
+            start_y = round(y_pos)
             end_x = start_x + zone_data['width']
             end_y = start_y + zone_data['height']
+            
+            # DEBUG : Vérifier les arrondis de position
+            logger.info(f"    🔍 DEBUG Position calculée:")
+            logger.info(f"      x_pos brute: {x_pos:.6f} -> arrondie: {start_x}")
+            logger.info(f"      y_pos brute: {y_pos:.6f} -> arrondie: {start_y}")
+            logger.info(f"      décalage x: {abs(x_pos - start_x):.6f} pixels")
+            logger.info(f"      décalage y: {abs(y_pos - start_y):.6f} pixels")
             
             # DEBUG : Afficher les calculs détaillés pour vérifier l'alignement
             logger.info(f"    🔍 DEBUG Alignement Y:")
