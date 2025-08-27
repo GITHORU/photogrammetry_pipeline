@@ -3205,7 +3205,16 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     final_ortho = np.zeros((final_height, final_width, 3), dtype=np.uint8)
     
     # Créer le transform pour la grille finale
-    final_transform = from_origin(global_bounds.left, global_bounds.top, final_resolution, final_resolution)
+    # CORRECTION : Utiliser from_bounds pour un alignement parfait
+    final_transform = rasterio.transform.from_bounds(
+        global_bounds.left, global_bounds.bottom, 
+        global_bounds.right, global_bounds.top, 
+        final_width, final_height
+    )
+    
+    logger.info(f"🔍 DEBUG Transform final:")
+    logger.info(f"  from_origin: left={global_bounds.left:.6f}, top={global_bounds.top:.6f}")
+    logger.info(f"  from_bounds: {final_transform}")
     
     # ÉTAPE 4 : Placer chaque ortho de zone à sa position exacte
     logger.info("🔧 Placement des orthos de zones...")
@@ -3223,9 +3232,18 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
             
             # Calculer la position dans la grille finale
             start_x = int((zone_bounds.left - global_bounds.left) / final_resolution)
+            # CORRECTION : Calculer start_y depuis le bas de la grille (y=0 en haut)
             start_y = int((global_bounds.top - zone_bounds.top) / final_resolution)
             end_x = start_x + zone_data['width']
             end_y = start_y + zone_data['height']
+            
+            # DEBUG : Afficher les calculs détaillés pour vérifier l'alignement
+            logger.info(f"    🔍 DEBUG Alignement Y:")
+            logger.info(f"      global_bounds.top: {global_bounds.top:.6f}m")
+            logger.info(f"      zone_bounds.top: {zone_bounds.top:.6f}m")
+            logger.info(f"      diff_y: {global_bounds.top - zone_bounds.top:.6f}m")
+            logger.info(f"      start_y pixels: {start_y}")
+            logger.info(f"      zone height: {zone_data['height']} pixels")
             
             logger.info(f"    📍 Position dans la grille : ({start_x}, {start_y}) à ({end_x}, {end_y})")
             
