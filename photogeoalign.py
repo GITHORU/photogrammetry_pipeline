@@ -269,3 +269,5 @@ if __name__ == "__main__":
             gui = PhotogrammetryGUI()
             gui.show()
             sys.exit(app.exec())
+
+# Cache invalidation - 2025-08-27 15:00:00
