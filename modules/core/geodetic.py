@@ -2791,14 +2791,15 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     aligned_bottom = global_bounds.bottom
     
     # Étendre légèrement la grille en bas et à droite pour couvrir complètement
-    aligned_right = global_bounds.right + (zone_size_meters - (global_bounds.right - global_bounds.left) % zone_size_meters) % zone_size_meters
-    aligned_top = global_bounds.top + (zone_size_meters - (global_bounds.top - global_bounds.bottom) % zone_size_meters) % zone_size_meters
+    # CORRECTION : Utiliser zone_size (ajustée) au lieu de zone_size_meters
+    aligned_right = global_bounds.right + (zone_size - (global_bounds.right - global_bounds.left) % zone_size) % zone_size
+    aligned_top = global_bounds.top + (zone_size - (global_bounds.top - global_bounds.bottom) % zone_size) % zone_size
     
     # S'assurer que l'extension ne dépasse pas une zone complète
-    if aligned_right > global_bounds.right + zone_size_meters:
-        aligned_right = global_bounds.right + zone_size_meters
-    if aligned_top > global_bounds.top + zone_size_meters:
-        aligned_top = global_bounds.top + zone_size_meters
+    if aligned_right > global_bounds.right + zone_size:
+        aligned_right = global_bounds.right + zone_size
+    if aligned_top > global_bounds.top + zone_size:
+        aligned_top = global_bounds.top + zone_size
     
     logger.info(f"Coordonnées des orthos (sans arrondi) : left={aligned_left:.6f}, bottom={aligned_bottom:.6f}, right={aligned_right:.6f}, top={aligned_top:.6f}")
     logger.info(f"  → Grille alignée directement sur les orthos (pas de décalage de résolution)")
