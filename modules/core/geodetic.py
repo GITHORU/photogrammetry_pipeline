@@ -719,29 +719,12 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
         logger.info(f"   Centre de transformation: ({tr_center[0]:.6f}, {tr_center[1]:.6f}, {tr_center[2]:.6f})")
         logger.info(f"   Premier fichier: {os.path.basename(ply_files[0]) if ply_files else 'Aucun'}")
         
-        # TEMPORAIRE : Forcer le traitement séquentiel pour voir les logs de debug
-        logger.info("🔧 DEBUG - FORÇAGE DU TRAITEMENT SÉQUENTIEL POUR DIAGNOSTIC")
-        logger.info("🔧 Les logs de debug des coordonnées n'apparaissent qu'en séquentiel")
-        
-        # Traitement séquentiel forcé pour debug
-        results = []
-        for i, args in enumerate(process_args):
-            logger.info(f"🔍 DEBUG - Traitement séquentiel du fichier {i+1}/{len(process_args)}")
+        # Traitement parallèle avec Pool
+        with Pool(processes=max_workers) as pool:
+            # Lancement du traitement parallèle
             # Ajout des paramètres du point global aux arguments
-            extended_args = args + (global_ref_point, force_global_ref)
-            result = process_single_cloud_itrf_to_enu(extended_args)
-            results.append(result)
-            if result[0]:
-                logger.info(f"✅ {result[1]}")
-            else:
-                logger.error(f"❌ {result[1]}")
-        
-        # Code parallèle commenté temporairement
-        # with Pool(processes=max_workers) as pool:
-        #     # Lancement du traitement parallèle
-        #     # Ajout des paramètres du point global aux arguments
-        #     extended_process_args = [args + (global_ref_point, force_global_ref) for args in process_args]
-        #     results = pool.map(process_single_cloud_itrf_to_enu, extended_process_args)
+            extended_process_args = [args + (global_ref_point, force_global_ref) for args in process_args]
+            results = pool.map(process_single_cloud_itrf_to_enu, extended_process_args)
             
             # Analyse des résultats
             for i, (success, message) in enumerate(results):
@@ -2793,8 +2776,8 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=Non
                 
                 # S'assurer que la résolution finale est valide
                 if final_resolution <= 0:
-                    logger.warning(f"  ⚠️ Résolution invalide détectée : {final_resolution}, utilisation de 0.003m")
-                    final_resolution = 0.003
+                    logger.warning(f"  ⚠️ Résolution invalide détectée : {final_resolution}, utilisation de 0.1m")
+                    final_resolution = 0.1
                 
                 # Calculer l'étendue globale en analysant toutes les orthos
                 all_bounds = [bounds]
@@ -2835,8 +2818,8 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=Non
     
     # S'assurer que la résolution finale est valide
     if final_resolution is None or final_resolution <= 0:
-        logger.warning(f"⚠️ Résolution finale invalide : {final_resolution}, utilisation de 0.003m")
-        final_resolution = 0.003
+        logger.warning(f"⚠️ Résolution finale invalide : {final_resolution}, utilisation de 0.1m")
+        final_resolution = 0.1
     
     # S'assurer que la taille des zones est valide
     if zone_size_meters <= 0:
