@@ -3630,205 +3630,7 @@ def individual_zone_equalization(zone_ortho_path, logger):
     logger.warning("⚠️ Cette fonction est obsolète. Utilisez l'égalisation globale directement.")
     return zone_ortho_path
 
-def simple_mnt_assembly(zones_output_dir, logger, final_resolution=0.003):
-    """
-    Simple assemblage des MNT de zones (pas de fusion)
-    
-    Args:
-        zones_output_dir: Répertoire contenant les MNT fusionnés par zones
-        logger: Logger pour les messages
-        final_resolution: Résolution finale en mètres (défaut: 0.003m)
-    
-    Returns:
-        str: Chemin vers le MNT unifié créé
-    """
-    import os
-    import numpy as np
-    import rasterio
-    from rasterio.coords import BoundingBox
-    from rasterio.transform import from_origin
-    
-    logger.info("🔧 ASSEMBLAGE SIMPLE DES MNT DE ZONES (pas de fusion)")
-    logger.info(f"📁 Répertoire des zones : {zones_output_dir}")
-    logger.info(f"📏 Résolution finale : {final_resolution}m")
-    
-    # ÉTAPE 1 : Lire tous les MNT de zones
-    logger.info("📖 Lecture des MNT de zones...")
-    
-    zone_mnt_files = []
-    zone_bounds_list = []
-    
-    # Chercher les fichiers MNT de zones
-    logger.info("  🔄 Lecture des MNT de zones...")
-    for file in os.listdir(zones_output_dir):
-        if file.endswith('_fused_height_median_harmonized.tif'):
-            file_path = os.path.join(zones_output_dir, file)
-            
-            try:
-                with rasterio.open(file_path) as src:
-                    bounds = src.bounds
-                    transform = src.transform
-                    width = src.width
-                    height = src.height
-                    crs = src.crs
-                    
-                    # Extraire l'ID de zone du nom de fichier
-                    zone_id = int(file.split('_')[1])
-                    
-                    zone_mnt_files.append({
-                        'file_path': file_path,
-                        'zone_id': zone_id,
-                        'bounds': bounds,
-                        'transform': transform,
-                        'width': width,
-                        'height': height,
-                        'crs': crs
-                    })
-                    
-                    zone_bounds_list.append(bounds)
-                    
-                    logger.info(f"  ✅ Zone {zone_id}: {width}×{height} pixels, bounds: {bounds}")
-                    
-            except Exception as e:
-                logger.warning(f"  ⚠️ Impossible de lire {file}: {e}")
-                continue
-    
-    if not zone_mnt_files:
-        logger.error("❌ Aucun MNT de zone trouvé !")
-        return None
-    
-    logger.info(f"📊 Total : {len(zone_mnt_files)} MNT de zones trouvés")
-    
-    # ÉTAPE 2 : Calculer la grille finale unifiée
-    logger.info("🧮 Calcul de la grille finale unifiée...")
-    
-    # Calculer l'étendue globale
-    global_left = min(bounds.left for bounds in zone_bounds_list)
-    global_bottom = min(bounds.bottom for bounds in zone_bounds_list)
-    global_right = max(bounds.right for bounds in zone_bounds_list)
-    global_top = max(bounds.top for bounds in zone_bounds_list)
-    
-    global_bounds = BoundingBox(
-        left=global_left,
-        bottom=global_bottom,
-        right=global_right,
-        top=global_top
-    )
-    
-    logger.info(f"🌍 Étendue globale : {global_bounds}")
-    logger.info(f"  📏 Largeur : {global_bounds.right - global_bounds.left:.3f}m")
-    logger.info(f"  📏 Hauteur : {global_bounds.top - global_bounds.bottom:.3f}m")
-    
-    # Calculer les dimensions de la grille finale
-    width_pixels = (global_bounds.right - global_bounds.left) / final_resolution
-    height_pixels = (global_bounds.top - global_bounds.bottom) / final_resolution
-    
-    final_width = round(width_pixels)
-    final_height = round(height_pixels)
-    
-    logger.info(f"🔍 DEBUG Dimensions calculées:")
-    logger.info(f"  Largeur brute: {width_pixels:.6f} pixels -> arrondie: {final_width}")
-    logger.info(f"  Hauteur brute: {height_pixels:.6f} pixels -> arrondie: {final_height}")
-    
-    # Créer la transformation finale
-    final_transform = rasterio.transform.from_bounds(
-        global_bounds.left, global_bounds.bottom,
-        global_bounds.right, global_bounds.top,
-        final_width, final_height
-    )
-    
-    logger.info(f"🎯 Transformation finale créée")
-    
-    # ÉTAPE 3 : Créer le MNT unifié
-    logger.info("🏗️ Création du MNT unifié...")
-    
-    # Créer le MNT final avec des valeurs NaN
-    final_mnt = np.full((final_height, final_width), np.nan, dtype=np.float32)
-    
-    # ÉTAPE 4 : Placer chaque MNT de zone dans le MNT final
-    logger.info("📍 Placement des MNT de zones dans le MNT final...")
-    
-    for zone_data in zone_mnt_files:
-        zone_id = zone_data['zone_id']
-        zone_file = zone_data['file_path']
-        zone_bounds = zone_data['bounds']
-        
-        try:
-            # Lire le MNT de la zone
-            with rasterio.open(zone_file) as src:
-                zone_mnt = src.read(1)  # Premier band (hauteur)
-                
-                # Calculer la position dans le MNT final
-                start_x = round((zone_bounds.left - global_bounds.left) / final_resolution)
-                start_y = round((zone_bounds.bottom - global_bounds.bottom) / final_resolution)
-                
-                # Dimensions de la zone
-                zone_height, zone_width = zone_mnt.shape
-                
-                # Placer la zone dans le MNT final
-                end_x = start_x + zone_width
-                end_y = start_y + zone_height
-                
-                # Vérifier les limites
-                if (start_x >= 0 and start_y >= 0 and 
-                    end_x <= final_width and end_y <= final_height):
-                    
-                    # Copier les données de la zone (ignorer les pixels NaN)
-                    zone_mask = ~np.isnan(zone_mnt)
-                    final_mnt[start_y:end_y, start_x:end_x][zone_mask] = zone_mnt[zone_mask]
-                    
-                    logger.info(f"  ✅ Zone {zone_id}: placée à ({start_x}, {start_y}) -> ({end_x}, {end_y})")
-                else:
-                    logger.warning(f"  ⚠️ Zone {zone_id}: hors limites, ignorée")
-                    
-        except Exception as e:
-            logger.error(f"  ❌ Erreur lors du placement de la zone {zone_id}: {e}")
-            continue
-    
-    # ÉTAPE 5 : Sauvegarder le MNT unifié
-    logger.info("💾 Sauvegarde du MNT unifié...")
-    
-    # Créer le nom du fichier
-    base_name = os.path.basename(zones_output_dir)
-    mnt_filename = f"{base_name}_unified_mnt.tif"
-    mnt_path = os.path.join(zones_output_dir, mnt_filename)
-    
-    try:
-        with rasterio.open(
-            mnt_path,
-            'w',
-            driver='GTiff',
-            height=final_height,
-            width=final_width,
-            count=1,
-            dtype=np.float32,
-            crs=zone_mnt_files[0]['crs'],
-            transform=final_transform,
-            nodata=np.nan
-        ) as dst:
-            dst.write(final_mnt, 1)
-            
-        logger.info(f"🎉 MNT UNIFIÉ CRÉÉ AVEC SUCCÈS !")
-        logger.info(f"📁 Fichier : {mnt_path}")
-        logger.info(f"📏 Dimensions : {final_width}×{final_height} pixels")
-        logger.info(f"📏 Résolution : {final_resolution}m")
-        logger.info(f"🌍 Étendue : {global_bounds}")
-        
-        # Statistiques
-        valid_pixels = np.sum(~np.isnan(final_mnt))
-        total_pixels = final_width * final_height
-        coverage = (valid_pixels / total_pixels) * 100
-        
-        logger.info(f"📊 Statistiques :")
-        logger.info(f"  Pixels valides : {valid_pixels:,}")
-        logger.info(f"  Pixels totaux : {total_pixels:,}")
-        logger.info(f"  Couverture : {coverage:.1f}%")
-        
-        return mnt_path
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur lors de la sauvegarde du MNT unifié : {e}")
-        return None
+
 
 def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     """
@@ -4552,6 +4354,213 @@ def individual_zone_equalization(zone_ortho_path, logger):
     # Elle sera remplacée par l'appel direct dans le pipeline principal
     logger.warning("⚠️ Cette fonction est obsolète. Utilisez l'égalisation globale directement.")
     return zone_ortho_path
+
+def simple_mnt_assembly(zones_output_dir, final_resolution, logger):
+    """
+    ASSEMBLAGE SIMPLE DES MNT : Place les MNT de zones côte à côte sans fusion
+    Utilise la même logique de géoréférencement que simple_ortho_assembly
+    
+    Args:
+        zones_output_dir: Répertoire contenant les zones avec leurs MNT
+        final_resolution: Résolution finale en mètres par pixel
+        logger: Logger pour les messages
+    
+    Returns:
+        str: Chemin vers le MNT unifié final
+    """
+    import os
+    import numpy as np
+    import rasterio
+    import re
+    from rasterio.coords import BoundingBox
+    from rasterio.transform import Affine
+    
+    logger.info("🔧 ASSEMBLAGE SIMPLE DES MNT DE ZONES (pas de fusion)")
+    logger.info(f"📁 Répertoire des zones : {zones_output_dir}")
+    logger.info(f"📏 Résolution finale : {final_resolution}m")
+    
+    # ÉTAPE 1 : Lire les MNT de zones
+    logger.info("📖 Lecture des MNT de zones...")
+    
+    zone_mnt_files = []
+    for file in os.listdir(zones_output_dir):
+        if file.endswith('_fused_height.tif'):
+            file_path = os.path.join(zones_output_dir, file)
+            try:
+                with rasterio.open(file_path) as src:
+                    # Extraire les informations de la zone
+                    zone_bounds = src.bounds
+                    zone_data = {
+                        'file_path': file_path,
+                        'bounds': zone_bounds,
+                        'width': src.width,
+                        'height': src.height,
+                        'crs': src.crs,
+                        'transform': src.transform
+                    }
+                    
+                    # Extraire l'ID de zone du nom de fichier
+                    zone_id_match = re.search(r'zone_(\d+)_', file)
+                    if zone_id_match:
+                        zone_data['zone_id'] = int(zone_id_match.group(1))
+                    else:
+                        zone_data['zone_id'] = len(zone_mnt_files)
+                    
+                    zone_mnt_files.append(zone_data)
+                    logger.info(f"  ✅ {file}: {src.width}×{src.height} pixels, CRS: {src.crs}")
+                    
+            except Exception as e:
+                logger.warning(f"  ⚠️ Erreur lors de la lecture de {file}: {e}")
+                continue
+    
+    if not zone_mnt_files:
+        logger.error("❌ Aucun MNT de zone trouvé !")
+        return None
+    
+    logger.info(f"📊 MNT de zones trouvés : {len(zone_mnt_files)}")
+    
+    # ÉTAPE 2 : Calculer les bornes globales
+    logger.info("🌍 Calcul des bornes globales...")
+    
+    # Initialiser avec la première zone
+    global_bounds = zone_mnt_files[0]['bounds']
+    
+    for zone_data in zone_mnt_files[1:]:
+        zone_bounds = zone_data['bounds']
+        global_bounds = BoundingBox(
+            left=min(global_bounds.left, zone_bounds.left),
+            bottom=min(global_bounds.bottom, zone_bounds.bottom),
+            right=max(global_bounds.right, zone_bounds.right),
+            top=max(global_bounds.top, zone_bounds.top)
+        )
+    
+    logger.info(f"📏 Bornes globales : {global_bounds}")
+    
+    # ÉTAPE 3 : Calculer les dimensions de la grille finale
+    logger.info("📐 Calcul des dimensions de la grille finale...")
+    
+    # Calculer la taille en pixels (arrondir pour éviter les décalages)
+    final_width = round((global_bounds.right - global_bounds.left) / final_resolution)
+    final_height = round((global_bounds.top - global_bounds.bottom) / final_resolution)
+    
+    logger.info(f"📏 Grille finale : {final_width} × {final_height} pixels")
+    logger.info(f"📏 Étendue : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+    
+    # Créer la transformation affine finale
+    # IMPORTANT : Pour les MNT, on inverse l'axe Y car rasterio attend que Y augmente vers le bas
+    # mais les coordonnées géographiques augmentent vers le haut
+    final_transform = Affine.translation(global_bounds.left, global_bounds.top) * Affine.scale(final_resolution, -final_resolution)
+    
+    # ÉTAPE 4 : Créer la grille finale et placer les MNT
+    logger.info("🔧 Placement des MNT de zones dans la grille finale...")
+    
+    # Grille finale pour les MNT (1 bande, données float32)
+    final_mnt = np.full((final_height, final_width), np.nan, dtype=np.float32)
+    
+    zones_placed = 0
+    
+    for zone_data in zone_mnt_files:
+        try:
+            logger.info(f"  🔄 Placement Zone {zone_data['zone_id']}...")
+            
+            # Lire le MNT de la zone
+            with rasterio.open(zone_data['file_path']) as src:
+                zone_mnt = src.read(1)  # 1 bande de hauteur
+            
+            zone_bounds = zone_data['bounds']
+            
+            # Calculer la position dans la grille finale (même logique que pour les orthos)
+            x_pos = (zone_bounds.left - global_bounds.left) / final_resolution
+            y_pos = (global_bounds.top - zone_bounds.top) / final_resolution
+            
+            # Arrondir pour éviter les décalages de pixels
+            start_x = round(x_pos)
+            start_y = round(y_pos)
+            end_x = start_x + zone_data['width']
+            end_y = start_y + zone_data['height']
+            
+            # DEBUG : Vérifier les arrondis de position
+            logger.info(f"    🔍 DEBUG Position calculée:")
+            logger.info(f"      x_pos brute: {x_pos:.6f} -> arrondie: {start_x}")
+            logger.info(f"      y_pos brute: {y_pos:.6f} -> arrondie: {start_y}")
+            logger.info(f"      décalage x: {abs(x_pos - start_x):.6f} pixels")
+            logger.info(f"      décalage y: {abs(y_pos - start_y):.6f} pixels")
+            
+            # DEBUG : Afficher les calculs détaillés pour vérifier l'alignement
+            logger.info(f"    🔍 DEBUG Alignement Y:")
+            logger.info(f"      global_bounds.top: {global_bounds.top:.6f}m")
+            logger.info(f"      zone_bounds.top: {zone_bounds.top:.6f}m")
+            logger.info(f"      diff_y: {global_bounds.top - zone_bounds.top:.6f}m")
+            logger.info(f"      start_y pixels: {start_y}")
+            logger.info(f"      zone height: {zone_data['height']} pixels")
+            
+            logger.info(f"    📍 Position dans la grille : ({start_x}, {start_y}) à ({end_x}, {end_y})")
+            
+            # Vérifier les limites
+            if (start_x < 0 or start_y < 0 or 
+                end_x > final_width or end_y > final_height):
+                logger.warning(f"    ⚠️ Zone {zone_data['zone_id']} dépasse les limites de la grille finale")
+                continue
+            
+            # Placer le MNT de la zone dans la grille finale
+            final_mnt[start_y:end_y, start_x:end_x] = zone_mnt
+            
+            zones_placed += 1
+            logger.info(f"    ✅ Zone {zone_data['zone_id']} placée avec succès")
+            
+        except Exception as e:
+            logger.error(f"    ❌ Erreur lors du placement de la Zone {zone_data['zone_id']}: {e}")
+            continue
+    
+    logger.info(f"📊 Zones placées : {zones_placed}/{len(zone_mnt_files)}")
+    
+    # ÉTAPE 5 : Sauvegarder le MNT unifié final
+    logger.info("💾 Sauvegarde du MNT unifié final...")
+    
+    output_path = os.path.join(zones_output_dir, "mnt_unified_final.tif")
+    
+    # Récupérer le CRS de la première zone (toutes devraient avoir le même)
+    reference_crs = zone_mnt_files[0]['crs']
+    
+    with rasterio.open(
+        output_path,
+        'w',
+        driver='GTiff',
+        height=final_height,
+        width=final_width,
+        count=1,  # 1 bande pour les MNT
+        dtype=np.float32,  # Données de hauteur en float32
+        crs=reference_crs,
+        transform=final_transform,
+        nodata=np.nan  # Valeur nodata pour les pixels sans données
+    ) as dst:
+        # Écrire la bande de hauteur
+        dst.write(final_mnt, 1)
+        
+        # Métadonnées
+        dst.update_tags(
+            Software='PhotoGeoAlign Simple MNT Assembly',
+            Resolution=f'{final_resolution}m per pixel',
+            Zones_Processed=str(zones_placed),
+            Assembly_Method='Simple placement without fusion',
+            Data_Type='Height values in meters',
+            Nodata_Value='NaN'
+        )
+    
+    logger.info(f"🎉 MNT UNIFIÉ CRÉÉ : {output_path}")
+    logger.info(f"   📏 Dimensions : {final_width} × {final_height} pixels")
+    logger.info(f"   📏 Étendue : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+    logger.info(f"   🎯 Zones assemblées : {zones_placed}")
+    
+    # Statistiques sur les données
+    valid_pixels = np.sum(~np.isnan(final_mnt))
+    if valid_pixels > 0:
+        height_min = np.nanmin(final_mnt)
+        height_max = np.nanmax(final_mnt)
+        logger.info(f"   📊 Hauteurs : {height_min:.3f}m à {height_max:.3f}m")
+        logger.info(f"   📊 Pixels valides : {valid_pixels}/{final_width * final_height}")
+    
+    return output_path
 
  
 
