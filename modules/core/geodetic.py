@@ -500,7 +500,7 @@ def add_offset_to_clouds(input_dir, logger, coord_file=None, extra_params="", ma
         logger.warning(f"⚠️ {len(failed_files)} fichiers n'ont pas pu être traités")
     logger.info(f"Ajout d'offset terminé. {total_files_processed} fichiers traités dans {output_dir}.")
 
-def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref_point_name=None, max_workers=None):
+def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref_point_name=None, max_workers=None, global_ref_point=None, force_global_ref=False):
     """Convertit les nuages de points d'ITRF vers ENU"""
     abs_input_dir = os.path.abspath(input_dir)
     logger.info(f"Conversion ITRF vers ENU dans {abs_input_dir} ...")
@@ -559,7 +559,17 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
             else:
                 raise RuntimeError("Aucun point de référence valide trouvé dans le fichier de coordonnées")
         
-        # ÉTAPE 1.5 : Lecture de l'offset et application au point de référence
+        # ÉTAPE 1.5 : Priorisation du point de référence global si forcé
+        if force_global_ref and global_ref_point is not None:
+            logger.info("🎯 UTILISATION DU POINT DE RÉFÉRENCE GLOBAL FORCÉ")
+            logger.info(f"Point global : ({global_ref_point[0]:.6f}, {global_ref_point[1]:.6f}, {global_ref_point[2]:.6f})")
+            ref_point = np.array(global_ref_point)
+            logger.info("Le point global remplace le point local pour unifier le repère ENU")
+        else:
+            logger.info("📍 UTILISATION DU POINT DE RÉFÉRENCE LOCAL")
+            logger.info(f"Point local : ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
+        
+        # ÉTAPE 1.6 : Lecture de l'offset et application au point de référence
         logger.info("Lecture de l'offset depuis le fichier de coordonnées...")
         offset = None
         try:

@@ -111,6 +111,8 @@ if __name__ == "__main__":
         parser.add_argument('--add-offset-extra', default='', help='ParamÃ¨tres supplÃ©mentaires pour l\'ajout d\'offset (optionnel)')
         parser.add_argument('--itrf-to-enu-extra', default='', help='ParamÃ¨tres supplÃ©mentaires pour ITRF vers ENU (optionnel)')
         parser.add_argument('--itrf-to-enu-ref-point', default='', help='Nom du point de rÃ©fÃ©rence pour ITRF vers ENU (optionnel, utilise le premier point si non spÃ©cifiÃ©)')
+        parser.add_argument('--global-ref-point', nargs=3, type=float, metavar=('X', 'Y', 'Z'), help='Point de rÃ©fÃ©rence global X Y Z en mÃ¨tres (ITRF) pour unifier le repÃ¨re ENU')
+        parser.add_argument('--force-global-ref', action='store_true', help='Forcer l\'utilisation du point de rÃ©fÃ©rence global au lieu du point local')
         parser.add_argument('--deform-extra', default='', help='ParamÃ¨tres supplÃ©mentaires pour la dÃ©formation (optionnel)')
         parser.add_argument('--deform-bascule-xml', default='', help='Fichier XML GCPBascule pour la dÃ©formation (optionnel)')
 
@@ -171,6 +173,15 @@ if __name__ == "__main__":
                 add_offset_extra = args.add_offset_extra
                 itrf_to_enu_extra = args.itrf_to_enu_extra
                 itrf_to_enu_ref_point = args.itrf_to_enu_ref_point if args.itrf_to_enu_ref_point else None
+                
+                # Point de référence global
+                global_ref_point = None
+                force_global_ref = False
+                if args.global_ref_point and args.force_global_ref:
+                    global_ref_point = list(args.global_ref_point)  # Convertir tuple en list
+                    force_global_ref = True
+                    print(f"Point de référence global forcé : X={global_ref_point[0]:.3f}, Y={global_ref_point[1]:.3f}, Z={global_ref_point[2]:.3f}")
+                
                 deform_extra = args.deform_extra
                 deform_bascule_xml = args.deform_bascule_xml if args.deform_bascule_xml else None
 
@@ -212,7 +223,7 @@ if __name__ == "__main__":
                     add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
                     add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
                     itrf_to_enu_ref_point, deform_bascule_xml, args.orthoimage_resolution, "z", "rgb", args.unified_orthoimage_resolution, args.max_workers, color_fusion_method,
-                    zone_size
+                    zone_size, global_ref_point, force_global_ref
                 )
                 
                 # ExÃ©cution des transformations

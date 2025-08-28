@@ -10,7 +10,7 @@ class GeodeticTransformThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None, color_fusion_method="average", zone_size_meters=5.0):
+    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None, color_fusion_method="average", zone_size_meters=5.0, global_ref_point=None, force_global_ref=False):
         super().__init__()
         self.input_dir = input_dir
         self.coord_file = coord_file
@@ -51,6 +51,10 @@ class GeodeticTransformThread(QThread):
         
         # Paramètre de taille des zones
         self.zone_size_meters = zone_size_meters
+        
+        # Paramètres du point de référence global
+        self.global_ref_point = global_ref_point  # [x, y, z] ou None
+        self.force_global_ref = force_global_ref  # bool
 
     def run(self):
         logger = logging.getLogger(f"GeodeticTransform_{id(self)}")
@@ -91,7 +95,7 @@ class GeodeticTransformThread(QThread):
             if self.run_itrf_to_enu:
                 # Utiliser le dossier d'entrée personnalisé ou le dossier de l'étape précédente
                 step_input_dir = self.itrf_to_enu_input_dir if self.itrf_to_enu_input_dir else current_input_dir
-                convert_itrf_to_enu(step_input_dir, logger, self.coord_file, self.itrf_to_enu_extra, self.itrf_to_enu_ref_point, self.max_workers)
+                convert_itrf_to_enu(step_input_dir, logger, self.coord_file, self.itrf_to_enu_extra, self.itrf_to_enu_ref_point, self.max_workers, self.global_ref_point, self.force_global_ref)
                 # Utiliser le dossier de sortie personnalisé ou le dossier par défaut
                 if self.itrf_to_enu_output_dir:
                     current_input_dir = self.itrf_to_enu_output_dir

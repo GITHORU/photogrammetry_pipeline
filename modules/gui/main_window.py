@@ -3,7 +3,7 @@ import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog
+    QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog, QRadioButton
 )
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QBrush, QPen, QAction
 from PySide6.QtCore import Qt, QTimer, QPoint
@@ -442,15 +442,64 @@ class PhotogrammetryGUI(QWidget):
         coord_layout.addWidget(self.geodetic_coord_browse_btn)
         geodetic_layout.addLayout(coord_layout)
         
-        # Point de référence
+        # Choix du type de point de référence (exclusif)
+        ref_point_choice_layout = QHBoxLayout()
+        ref_point_choice_layout.addWidget(QLabel("Type de point de référence :"))
+        
+        # Boutons radio pour le choix exclusif
+        self.local_ref_radio = QRadioButton("Point local (depuis le fichier)")
+        self.local_ref_radio.setToolTip("Utilise un point de référence lu depuis le fichier de coordonnées")
+        self.local_ref_radio.setChecked(True)  # Par défaut, point local
+        
+        self.global_ref_radio = QRadioButton("Point global (coordonnées fixes)")
+        self.global_ref_radio.setToolTip("Utilise un point de référence global fixe pour unifier le repère ENU")
+        
+        ref_point_choice_layout.addWidget(self.local_ref_radio)
+        ref_point_choice_layout.addWidget(self.global_ref_radio)
+        ref_point_choice_layout.addStretch(1)
+        geodetic_layout.addLayout(ref_point_choice_layout)
+        
+        # Point de référence local (depuis le fichier de coordonnées)
         ref_point_layout = QHBoxLayout()
-        ref_point_layout.addWidget(QLabel("Point de référence :"))
+        ref_point_layout.addWidget(QLabel("Point de référence local :"))
         self.ref_point_combo = QComboBox()
         self.ref_point_combo.setPlaceholderText("Sélectionner un point de référence")
         self.ref_point_combo.setMinimumWidth(200)
         ref_point_layout.addWidget(self.ref_point_combo)
         ref_point_layout.addStretch(1)
         geodetic_layout.addLayout(ref_point_layout)
+        
+        # Point de référence global (pour unifier le repère ENU)
+        global_ref_point_layout = QHBoxLayout()
+        global_ref_point_layout.addWidget(QLabel("Point de référence global :"))
+        
+        # Coordonnées X, Y, Z
+        self.global_ref_x_spin = QDoubleSpinBox()
+        self.global_ref_x_spin.setRange(-1000000, 1000000)
+        self.global_ref_x_spin.setDecimals(3)
+        self.global_ref_x_spin.setSuffix(" m")
+        self.global_ref_x_spin.setToolTip("Coordonnée X du point de référence global (ITRF)")
+        global_ref_point_layout.addWidget(QLabel("X:"))
+        global_ref_point_layout.addWidget(self.global_ref_x_spin)
+        
+        self.global_ref_y_spin = QDoubleSpinBox()
+        self.global_ref_y_spin.setRange(-1000000, 1000000)
+        self.global_ref_y_spin.setDecimals(3)
+        self.global_ref_y_spin.setSuffix(" m")
+        self.global_ref_y_spin.setToolTip("Coordonnée Y du point de référence global (ITRF)")
+        global_ref_point_layout.addWidget(QLabel("Y:"))
+        global_ref_point_layout.addWidget(self.global_ref_y_spin)
+        
+        self.global_ref_z_spin = QDoubleSpinBox()
+        self.global_ref_z_spin.setRange(-1000000, 1000000)
+        self.global_ref_z_spin.setDecimals(3)
+        self.global_ref_z_spin.setSuffix(" m")
+        self.global_ref_z_spin.setToolTip("Coordonnée Z du point de référence global (ITRF)")
+        global_ref_point_layout.addWidget(QLabel("Z:"))
+        global_ref_point_layout.addWidget(self.global_ref_z_spin)
+        
+        global_ref_point_layout.addStretch(1)
+        geodetic_layout.addLayout(global_ref_point_layout)
         
         # 3. Type de déformation
         deformation_layout = QHBoxLayout()
@@ -816,6 +865,16 @@ class PhotogrammetryGUI(QWidget):
         self.geodetic_coord_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.geodetic_coord_edit.textChanged.connect(lambda: self.update_ref_point_combo(self.geodetic_coord_edit.text()))
         self.ref_point_combo.currentTextChanged.connect(self.update_geodetic_cmd_line)
+        
+        # Connexions pour le point de référence global
+        self.global_ref_x_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+        self.global_ref_y_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+        self.global_ref_z_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+        
+        # Connexions pour les boutons radio
+        self.local_ref_radio.toggled.connect(self.on_ref_point_type_changed)
+        self.global_ref_radio.toggled.connect(self.on_ref_point_type_changed)
+        
         self.deformation_combo.currentTextChanged.connect(self.update_geodetic_cmd_line)
         self.deformation_params_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.bascule_xml_edit.textChanged.connect(self.update_geodetic_cmd_line)
@@ -856,6 +915,9 @@ class PhotogrammetryGUI(QWidget):
         
         # Initialisation de la ligne de commande pour le nouvel onglet
         self.update_new_cmd_line()
+        
+        # Initialisation de l'état des contrôles de point de référence
+        self.on_ref_point_type_changed()
 
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'images")
@@ -967,6 +1029,22 @@ class PhotogrammetryGUI(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'orthoimage unifiée")
         if folder:
             self.unified_orthoimage_output_edit.setText(folder)
+
+    def on_ref_point_type_changed(self):
+        """Gère l'activation/désactivation des contrôles selon le type de point de référence choisi"""
+        is_local = self.local_ref_radio.isChecked()
+        is_global = self.global_ref_radio.isChecked()
+        
+        # Activation/désactivation des contrôles du point local
+        self.ref_point_combo.setEnabled(is_local)
+        
+        # Activation/désactivation des contrôles du point global
+        self.global_ref_x_spin.setEnabled(is_global)
+        self.global_ref_y_spin.setEnabled(is_global)
+        self.global_ref_z_spin.setEnabled(is_global)
+        
+        # Mise à jour de la ligne de commande
+        self.update_geodetic_cmd_line()
 
 
 
@@ -1103,10 +1181,19 @@ class PhotogrammetryGUI(QWidget):
         if bascule_xml:
             base_cmd.append(f"--deform-bascule-xml \"{bascule_xml}\"")
         
-        # Ajout du point de référence sélectionné
-        selected_ref_point = self.get_selected_ref_point()
-        if selected_ref_point:
-            base_cmd.append(f"--itrf-to-enu-ref-point \"{selected_ref_point}\"")
+        # Ajout du point de référence selon le type choisi
+        if self.local_ref_radio.isChecked():
+            # Point de référence local
+            selected_ref_point = self.get_selected_ref_point()
+            if selected_ref_point:
+                base_cmd.append(f"--itrf-to-enu-ref-point \"{selected_ref_point}\"")
+        elif self.global_ref_radio.isChecked():
+            # Point de référence global
+            global_x = self.global_ref_x_spin.value()
+            global_y = self.global_ref_y_spin.value()
+            global_z = self.global_ref_z_spin.value()
+            base_cmd.append(f"--global-ref-point {global_x:.3f} {global_y:.3f} {global_z:.3f}")
+            base_cmd.append("--force-global-ref")
         
         # Ajout des dossiers d'entrée personnalisés
         if add_offset_input_dir:
@@ -1310,6 +1397,17 @@ class PhotogrammetryGUI(QWidget):
         # Méthode de fusion des couleurs
         color_fusion_method = self.color_fusion_combo.currentText()
         
+        # Préparation des paramètres du point de référence selon le type choisi
+        global_ref_point = None
+        force_global_ref = False
+        if self.global_ref_radio.isChecked():
+            global_ref_point = [
+                self.global_ref_x_spin.value(),
+                self.global_ref_y_spin.value(),
+                self.global_ref_z_spin.value()
+            ]
+            force_global_ref = True
+        
         self.geodetic_thread = GeodeticTransformThread(
             input_dir, coord_file, deformation_type, deformation_params,
             add_offset_extra, itrf_to_enu_extra, deform_extra,
@@ -1317,7 +1415,7 @@ class PhotogrammetryGUI(QWidget):
             add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
             add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
             self.get_selected_ref_point(), bascule_xml, orthoimage_resolution, "z", "rgb", unified_orthoimage_resolution, max_workers, color_fusion_method,
-            zone_size
+            zone_size, global_ref_point, force_global_ref
         )
         self.geodetic_thread.log_signal.connect(self.append_log)
         self.geodetic_thread.finished_signal.connect(self.geodetic_pipeline_finished)
