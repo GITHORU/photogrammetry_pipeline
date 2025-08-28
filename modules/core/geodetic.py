@@ -107,7 +107,14 @@ def process_single_cloud_add_offset(args):
 
 def process_single_cloud_itrf_to_enu(args):
     """Fonction de traitement d'un seul nuage pour la conversion ITRF→ENU (pour multiprocessing)"""
-    ply_file, output_dir, coord_file, extra_params, ref_point_name = args
+    if len(args) == 5:
+        # Ancien format : compatibilité
+        ply_file, output_dir, coord_file, extra_params, ref_point_name = args
+        global_ref_point = None
+        force_global_ref = False
+    else:
+        # Nouveau format avec point global
+        ply_file, output_dir, coord_file, extra_params, ref_point_name, global_ref_point, force_global_ref = args
     
     # Création d'un logger pour ce processus
     logger = logging.getLogger(f"ITRFtoENU_{os.getpid()}")
@@ -125,48 +132,57 @@ def process_single_cloud_itrf_to_enu(args):
         points = np.asarray(cloud.points)
         logger.info(f"  {len(points)} points chargés")
         
-        # Lecture du point de référence depuis le fichier de coordonnées
-        ref_point = None
-        offset = None
-        
-        if coord_file and os.path.exists(coord_file):
-            with open(coord_file, 'r') as f:
-                lines = f.readlines()
+        # ÉTAPE 1 : Priorisation du point de référence global si forcé
+        if force_global_ref and global_ref_point is not None:
+            logger.info("🎯 UTILISATION DU POINT DE RÉFÉRENCE GLOBAL FORCÉ (ITRF→ENU)")
+            logger.info(f"Point global : ({global_ref_point[0]:.6f}, {global_ref_point[1]:.6f}, {global_ref_point[2]:.6f})")
+            tr_center = global_ref_point
+            logger.info("Le point global remplace le point local pour la transformation ITRF→ENU")
+            logger.info("⚠️  L'offset ne s'applique PAS au point global (coordonnées absolues préservées)")
+        else:
+            logger.info("📍 UTILISATION DU POINT DE RÉFÉRENCE LOCAL (ITRF→ENU)")
             
-            # Recherche du point de référence
-            for line in lines:
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    parts = line.split()
-                    if len(parts) >= 4:  # Format: NOM X Y Z
-                        try:
-                            point_name = parts[0]
-                            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
-                            if ref_point_name is None or point_name == ref_point_name:
-                                ref_point = [x, y, z]
-                                break
-                        except ValueError:
-                            continue
+            # Lecture du point de référence depuis le fichier de coordonnées
+            ref_point = None
+            offset = None
             
-            # Lecture de l'offset
-            for line in lines:
-                line = line.strip()
-                if line.startswith('#Offset to add :'):
-                    offset_text = line.replace('#Offset to add :', '').strip()
-                    offset = [float(x) for x in offset_text.split()]
-                    break
-        
-        if ref_point is None:
-            return False, f"Point de référence non trouvé dans {coord_file}"
-        
-        if offset is None:
-            return False, f"Offset non trouvé dans {coord_file}"
-        
-        # Application de l'offset au point de référence
-        ref_point_with_offset = [ref_point[0] + offset[0], ref_point[1] + offset[1], ref_point[2] + offset[2]]
-        
-        # Configuration de la transformation topocentrique
-        tr_center = ref_point_with_offset
+            if coord_file and os.path.exists(coord_file):
+                with open(coord_file, 'r') as f:
+                    lines = f.readlines()
+                
+                # Recherche du point de référence
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        parts = line.split()
+                        if len(parts) >= 4:  # Format: NOM X Y Z
+                            try:
+                                point_name = parts[0]
+                                x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                                if ref_point_name is None or point_name == ref_point_name:
+                                    ref_point = [x, y, z]
+                                    break
+                            except ValueError:
+                                continue
+                
+                # Lecture de l'offset
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('#Offset to add :'):
+                        offset_text = line.replace('#Offset to add :', '').strip()
+                        offset = [float(x) for x in offset_text.split()]
+                        break
+            
+            if ref_point is None:
+                return False, f"Point de référence non trouvé dans {coord_file}"
+            
+            if offset is None:
+                return False, f"Offset non trouvé dans {coord_file}"
+            
+            # Application de l'offset au point local UNIQUEMENT
+            ref_point_with_offset = [ref_point[0] + offset[0], ref_point[1] + offset[1], ref_point[2] + offset[2]]
+            tr_center = ref_point_with_offset
+            logger.info(f"Point local avec offset appliqué : ({tr_center[0]:.6f}, {tr_center[1]:.6f}, {tr_center[2]:.6f})")
         tr_ellps = "GRS80"
         
         pipeline = "+proj=topocentric +X_0={0} +Y_0={1} +Z_0={2} +ellps={3}".format(
@@ -703,9 +719,29 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
         logger.info(f"   Centre de transformation: ({tr_center[0]:.6f}, {tr_center[1]:.6f}, {tr_center[2]:.6f})")
         logger.info(f"   Premier fichier: {os.path.basename(ply_files[0]) if ply_files else 'Aucun'}")
         
-        with Pool(processes=max_workers) as pool:
-            # Lancement du traitement parallèle
-            results = pool.map(process_single_cloud_itrf_to_enu, process_args)
+        # TEMPORAIRE : Forcer le traitement séquentiel pour voir les logs de debug
+        logger.info("🔧 DEBUG - FORÇAGE DU TRAITEMENT SÉQUENTIEL POUR DIAGNOSTIC")
+        logger.info("🔧 Les logs de debug des coordonnées n'apparaissent qu'en séquentiel")
+        
+        # Traitement séquentiel forcé pour debug
+        results = []
+        for i, args in enumerate(process_args):
+            logger.info(f"🔍 DEBUG - Traitement séquentiel du fichier {i+1}/{len(process_args)}")
+            # Ajout des paramètres du point global aux arguments
+            extended_args = args + (global_ref_point, force_global_ref)
+            result = process_single_cloud_itrf_to_enu(extended_args)
+            results.append(result)
+            if result[0]:
+                logger.info(f"✅ {result[1]}")
+            else:
+                logger.error(f"❌ {result[1]}")
+        
+        # Code parallèle commenté temporairement
+        # with Pool(processes=max_workers) as pool:
+        #     # Lancement du traitement parallèle
+        #     # Ajout des paramètres du point global aux arguments
+        #     extended_process_args = [args + (global_ref_point, force_global_ref) for args in process_args]
+        #     results = pool.map(process_single_cloud_itrf_to_enu, extended_process_args)
             
             # Analyse des résultats
             for i, (success, message) in enumerate(results):
