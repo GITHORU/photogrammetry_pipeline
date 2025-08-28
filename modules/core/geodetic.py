@@ -696,6 +696,13 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
     failed_files = []
     
     try:
+        # DEBUG : Vérification avant l'appel parallèle
+        logger.info(f"🔍 DEBUG - Préparation de l'appel à process_single_cloud_itrf_to_enu:")
+        logger.info(f"   Nombre de fichiers PLY: {len(ply_files)}")
+        logger.info(f"   Max workers: {max_workers}")
+        logger.info(f"   Centre de transformation: ({tr_center[0]:.6f}, {tr_center[1]:.6f}, {tr_center[2]:.6f})")
+        logger.info(f"   Premier fichier: {os.path.basename(ply_files[0]) if ply_files else 'Aucun'}")
+        
         with Pool(processes=max_workers) as pool:
             # Lancement du traitement parallèle
             results = pool.map(process_single_cloud_itrf_to_enu, process_args)
