@@ -1011,16 +1011,25 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
                     name = parts[0]
                     x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
                     
-                    # Application de l'offset
-                    if offset:
-                        x += offset[0]
-                        y += offset[1]
-                        z += offset[2]
+                    # IMPORTANT : Utiliser le MÊME point de référence que pour les résidus
+                    if force_global_ref and global_ref_point is not None:
+                        # Point global : pas d'offset
+                        point_itrf = np.array([x, y, z])
+                        logger.info(f"GCP {name} : utilisation du point global (pas d'offset)")
+                    else:
+                        # Point local : appliquer l'offset
+                        if offset is not None:
+                            x += offset[0]
+                            y += offset[1]
+                            z += offset[2]
+                            logger.info(f"GCP {name} : offset appliqué ({offset[0]:.6f}, {offset[1]:.6f}, {offset[2]:.6f})")
+                        point_itrf = np.array([x, y, z])
                     
-                    # Conversion en ENU
-                    point_with_offset = np.array([x, y, z])
-                    enu_pos = transformer.transform(point_with_offset[0], point_with_offset[1], point_with_offset[2])
+                    # Conversion en ENU avec le MÊME transformer
+                    enu_pos = transformer.transform(point_itrf[0], point_itrf[1], point_itrf[2])
                     gcp_positions[name] = np.array([enu_pos[0], enu_pos[1], enu_pos[2]])
+                    
+                    logger.info(f"GCP {name}: ITRF({point_itrf[0]:.6f}, {point_itrf[1]:.6f}, {point_itrf[2]:.6f}) → ENU({enu_pos[0]:.6f}, {enu_pos[1]:.6f}, {enu_pos[2]:.6f})")
                     
                 except ValueError:
                     continue
