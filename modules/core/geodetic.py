@@ -1396,7 +1396,7 @@ def create_unified_orthoimage_and_dtm(input_dir, logger, output_dir=None, resolu
     
     # Création du dossier de sortie pour cette étape
     if output_dir is None:
-        output_dir = os.path.join(os.path.dirname(abs_input_dir), "unified_orthoimage_dtm")
+        output_dir = os.path.join(os.path.dirname(abs_input_dir), "ortho_mnt_unified")
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"Dossier de sortie créé : {output_dir}")
     
@@ -1694,7 +1694,7 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
     
     # Création du dossier de sortie pour cette étape
     if output_dir is None:
-        output_dir = os.path.join(os.path.dirname(abs_input_dir), "unified_orthoimage_dtm")
+        output_dir = os.path.join(os.path.dirname(abs_input_dir), "ortho_mnt_unified")
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"Dossier de sortie créé : {output_dir}")
     
@@ -2600,10 +2600,10 @@ def process_zone_with_orthos(zone_data):
         'message': f"Zone {zone_id}: {len(ortho_color_files)} orthos couleur + {len(ortho_height_files)} MNT hauteur"
     }
 
-def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolution=0.003, grid_size_meters=None, zone_size_meters=5.0, max_workers=None):
+def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.003, grid_size_meters=None, zone_size_meters=5.0, max_workers=None):
     """
-    TEST ÉTAPE 1 : Création de zones avec orthos réelles et fusion parallèle
-    Objectif : Valider la logique de fusion des zones avec process_zone_with_orthos
+    🎯 FUSION FINALE : Assemblage des orthoimages et MNT unifiés
+    Objectif : Fusionner les orthoimages unitaires en une orthoimage finale unifiée
     
     Args:
         input_dir: Répertoire d'entrée contenant les orthoimages unitaires
@@ -2621,7 +2621,7 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
     from rasterio.transform import from_origin
     from multiprocessing import Pool
     
-    logger.info("🧪 TEST ÉTAPE 1 : Création de zones avec orthos réelles et fusion parallèle")
+    logger.info("🎯 FUSION FINALE : Assemblage des orthoimages et MNT unifiés")
     
     # Créer le dossier de sortie
     os.makedirs(output_dir, exist_ok=True)
@@ -3076,7 +3076,7 @@ def test_zone_fusion_with_borders(input_dir, logger, output_dir, final_resolutio
         
         logger.info(f"🔄 Traitement séquentiel terminé : {len(results)} zones traitées")
     
-    logger.info(f"✅ TEST ÉTAPE 1 TERMINÉ : Fusion parallèle des zones terminée")
+    logger.info(f"✅ FUSION FINALE TERMINÉE : Assemblage des orthoimages et MNT unifiés terminé")
     logger.info(f"Résultat attendu : {len(results)} zones traitées avec orthos fusionnées")
     
     # 🆕 ÉTAPE 2 : ÉGALISATION DÉSACTIVÉE POUR LE MOMENT

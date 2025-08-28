@@ -268,6 +268,6 @@ if __name__ == "__main__":
                 app.setWindowIcon(QIcon(logo_path))
             gui = PhotogrammetryGUI()
             gui.show()
-            sys.exit(app.exec())
+            sys.exit(app.exec()) 
 
 # Cache invalidation - 2025-08-27 15:00:00

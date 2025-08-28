@@ -703,7 +703,7 @@ class PhotogrammetryGUI(QWidget):
         unified_orthoimage_line.addWidget(self.unified_orthoimage_input_browse_btn)
         unified_orthoimage_line.addWidget(QLabel("Sortie :"))
         self.unified_orthoimage_output_edit = QLineEdit()
-        self.unified_orthoimage_output_edit.setPlaceholderText("Dossier de sortie (vide = unified_orthoimage_dtm)")
+        self.unified_orthoimage_output_edit.setPlaceholderText("Dossier de sortie (vide = ortho_mnt_unified)")
         unified_orthoimage_line.addWidget(self.unified_orthoimage_output_edit)
         self.unified_orthoimage_output_browse_btn = QPushButton()
         self.unified_orthoimage_output_browse_btn.setIcon(self.create_folder_icon())
