@@ -2723,7 +2723,7 @@ def process_zone_with_orthos(zone_data):
         'message': f"Zone {zone_id}: {len(ortho_color_files)} orthos couleur + {len(ortho_height_files)} MNT hauteur"
     }
 
-def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.003, zone_size_meters=5.0, max_workers=None):
+def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=None, zone_size_meters=5.0, max_workers=None):
     """
     🎯 FUSION FINALE : Assemblage des orthoimages et MNT unifiés
     Objectif : Fusionner les orthoimages unitaires en une orthoimage finale unifiée
@@ -2782,8 +2782,8 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.0
                 logger.info(f"  Bounds : {bounds}")
                 
                 # Calculer la résolution réelle
-                pixel_size_x = abs(transform[0])
-                pixel_size_y = abs(transform[3])
+                pixel_size_x = abs(transform.a)
+                pixel_size_y = abs(transform.e)
                 logger.info(f"  Résolution pixel : {pixel_size_x:.6f}m × {pixel_size_y:.6f}m")
                 
                 # Si la résolution finale n'est pas spécifiée, utiliser celle de l'ortho
@@ -3190,7 +3190,7 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.0
     
     try:
         # Récupérer la résolution finale depuis les paramètres
-        final_resolution = 0.003  # Résolution par défaut
+        final_resolution = None  # Détection automatique
         
         # Lancer l'assemblage automatique des orthos ET des MNT
         logger.info("🚀 LANCEMENT DE L'ASSEMBLAGE AUTOMATIQUE : Orthos + MNT...")
@@ -3227,14 +3227,14 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.0
     
     return output_dir
 
-def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
+def simple_ortho_assembly(zones_output_dir, logger, final_resolution=None):
     """
     Simple assemblage des orthos de zones (pas de fusion)
     
     Args:
         zones_output_dir: Répertoire contenant les orthos fusionnées par zones
         logger: Logger pour les messages
-        final_resolution: Résolution finale en mètres (défaut: 0.003m)
+        final_resolution: Résolution finale en mètres (si None, utilise la résolution des orthos unitaires)
     
     Returns:
         str: Chemin vers l'ortho unifiée créée
@@ -3247,7 +3247,33 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     
     logger.info("🔧 ASSEMBLAGE SIMPLE DES ORTHOS DE ZONES (pas de fusion)")
     logger.info(f"📁 Répertoire des zones : {zones_output_dir}")
-    logger.info(f"📏 Résolution finale : {final_resolution}m")
+    
+    # 🔧 CORRECTION : Détecter automatiquement la résolution des orthos unitaires
+    if final_resolution is None:
+        logger.info("🔍 Détection automatique de la résolution des orthos unitaires...")
+        # Lire la première ortho pour obtenir sa résolution
+        first_ortho = None
+        for file in os.listdir(zones_output_dir):
+            if file.endswith('_fused_color_median_harmonized.tif'):
+                first_ortho = os.path.join(zones_output_dir, file)
+                break
+        
+        if first_ortho:
+            with rasterio.open(first_ortho) as src:
+                # Calculer la résolution à partir de la transformation affine
+                transform = src.transform
+                # La résolution est la valeur absolue de a (largeur) et e (hauteur) de la transformation
+                pixel_width = abs(transform.a)
+                pixel_height = abs(transform.e)
+                # Prendre la moyenne des deux résolutions
+                final_resolution = (pixel_width + pixel_height) / 2
+                logger.info(f"  ✅ Résolution détectée : {final_resolution:.6f}m/pixel")
+                logger.info(f"  📏 Largeur pixel : {pixel_width:.6f}m, Hauteur pixel : {pixel_height:.6f}m")
+        else:
+            logger.warning("⚠️ Aucune ortho trouvée, utilisation de la résolution par défaut 0.1m")
+            final_resolution = 0.1
+    
+    logger.info(f"📏 Résolution finale utilisée : {final_resolution}m")
     
     # ÉTAPE 1 : Lire toutes les orthos de zones
     logger.info("📖 Lecture des orthos de zones...")
@@ -3724,102 +3750,6 @@ def individual_zone_equalization(zone_ortho_path, logger):
     # Elle sera remplacée par l'appel direct dans le pipeline principal
     logger.warning("⚠️ Cette fonction est obsolète. Utilisez l'égalisation globale directement.")
     return zone_ortho_path
-
-
-
-def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
-    """
-    Simple assemblage des orthos de zones (pas de fusion)
-    
-    Args:
-        zones_output_dir: Répertoire contenant les orthos fusionnées par zones
-        logger: Logger pour les messages
-        final_resolution: Résolution finale en mètres (défaut: 0.003m)
-    
-    Returns:
-        str: Chemin vers l'ortho unifiée créée
-    """
-    import os
-    import numpy as np
-    import rasterio
-    from rasterio.coords import BoundingBox
-    from rasterio.transform import from_origin
-    
-    logger.info("🔧 ASSEMBLAGE SIMPLE DES ORTHOS DE ZONES (pas de fusion)")
-    logger.info(f"📁 Répertoire des zones : {zones_output_dir}")
-    logger.info(f"📏 Résolution finale : {final_resolution}m")
-    
-    # ÉTAPE 1 : Lire toutes les orthos de zones
-    logger.info("📖 Lecture des orthos de zones...")
-    
-    zone_ortho_files = []
-    zone_bounds_list = []
-    
-    # Utiliser directement les zones originales (sans égalisation)
-    logger.info("  🔄 Lecture des zones originales (sans égalisation)...")
-    for file in os.listdir(zones_output_dir):
-        if file.endswith('_fused_color_median_harmonized.tif'):
-            file_path = os.path.join(zones_output_dir, file)
-            
-            try:
-                with rasterio.open(file_path) as src:
-                    bounds = src.bounds
-                    transform = src.transform
-                    width = src.width
-                    height = src.height
-                    crs = src.crs
-                    
-                    # Extraire l'ID de zone du nom de fichier
-                    zone_id = int(file.split('_')[1])
-                    
-                    zone_ortho_files.append({
-                        'file_path': file_path,
-                        'zone_id': zone_id,
-                        'bounds': bounds,
-                        'transform': transform,
-                        'width': width,
-                        'height': height,
-                        'crs': crs
-                    })
-                    
-                    zone_bounds_list.append(bounds)
-                    
-                    logger.info(f"  ✅ Zone {zone_id}: {width}×{height} pixels, bounds: {bounds}")
-                    
-            except Exception as e:
-                logger.warning(f"  ⚠️ Impossible de lire {file}: {e}")
-                continue
-    
-    if not zone_ortho_files:
-        logger.error("❌ Aucune ortho de zone trouvée !")
-        return None
-    
-    logger.info(f"📊 Total : {len(zone_ortho_files)} orthos de zones trouvées")
-    
-    # ÉTAPE 2 : Calculer la grille finale unifiée
-    logger.info("🧮 Calcul de la grille finale unifiée...")
-    
-    # Calculer l'étendue globale
-    global_left = min(bounds.left for bounds in zone_bounds_list)
-    global_bottom = min(bounds.bottom for bounds in zone_bounds_list)
-    global_right = max(bounds.right for bounds in zone_bounds_list)
-    global_top = max(bounds.top for bounds in zone_bounds_list)
-    
-    global_bounds = BoundingBox(
-        left=global_left,
-        bottom=global_bottom,
-        right=global_right,
-        top=global_top
-    )
-    
-    logger.info(f"🌍 Étendue globale : {global_bounds}")
-    logger.info(f"  📏 Largeur : {global_bounds.right - global_bounds.left:.3f}m")
-    logger.info(f"  📏 Hauteur : {global_bounds.top - global_bounds.bottom:.3f}m")
-    
-    # Calculer les dimensions de la grille finale
-    # CORRECTION : Utiliser round() au lieu de int() pour éviter les lignes noires
-    width_pixels = (global_bounds.right - global_bounds.left) / final_resolution
-    height_pixels = (global_bounds.top - global_bounds.bottom) / final_resolution
     
     final_width = round(width_pixels)
     final_height = round(height_pixels)
@@ -3951,102 +3881,6 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
     logger.info(f"   🎯 Zones assemblées : {zones_placed}")
     
     return output_path
-
-def simple_ortho_assembly(zones_output_dir, logger, final_resolution=0.003):
-    """
-    Simple assemblage des orthos de zones (pas de fusion)
-    
-    Args:
-        zones_output_dir: Répertoire contenant les orthos fusionnées par zones
-        logger: Logger pour les messages
-        final_resolution: Résolution finale en mètres (défaut: 0.003m)
-    
-    Returns:
-        str: Chemin vers l'ortho unifiée créée
-    """
-    import os
-    import numpy as np
-    import rasterio
-    from rasterio.coords import BoundingBox
-    from rasterio.transform import from_origin
-    
-    logger.info("🔧 ASSEMBLAGE SIMPLE DES ORTHOS DE ZONES (pas de fusion)")
-    logger.info(f"📁 Répertoire des zones : {zones_output_dir}")
-    logger.info(f"📏 Résolution finale : {final_resolution}m")
-    
-    # ÉTAPE 1 : Lire toutes les orthos de zones
-    logger.info("📖 Lecture des orthos de zones...")
-    
-    zone_ortho_files = []
-    zone_bounds_list = []
-    
-    # Utiliser directement les zones originales (sans égalisation)
-    logger.info("  🔄 Lecture des zones originales (sans égalisation)...")
-    for file in os.listdir(zones_output_dir):
-        if file.endswith('_fused_color_median_harmonized.tif'):
-            file_path = os.path.join(zones_output_dir, file)
-            
-            try:
-                with rasterio.open(file_path) as src:
-                    bounds = src.bounds
-                    transform = src.transform
-                    width = src.width
-                    height = src.height
-                    crs = src.crs
-                    
-                    # Extraire l'ID de zone du nom de fichier
-                    zone_id = int(file.split('_')[1])
-                    
-                    zone_ortho_files.append({
-                        'file_path': file_path,
-                        'zone_id': zone_id,
-                        'bounds': bounds,
-                        'transform': transform,
-                        'width': width,
-                        'height': height,
-                        'crs': crs
-                    })
-                    
-                    zone_bounds_list.append(bounds)
-                    
-                    logger.info(f"  ✅ Zone {zone_id}: {width}×{height} pixels, bounds: {bounds}")
-                    
-            except Exception as e:
-                logger.warning(f"  ⚠️ Impossible de lire {file}: {e}")
-                continue
-    
-    if not zone_ortho_files:
-        logger.error("❌ Aucune ortho de zone trouvée !")
-        return None
-    
-    logger.info(f"📊 Total : {len(zone_ortho_files)} orthos de zones trouvées")
-    
-    # ÉTAPE 2 : Calculer la grille finale unifiée
-    logger.info("🧮 Calcul de la grille finale unifiée...")
-    
-    # Calculer l'étendue globale
-    global_left = min(bounds.left for bounds in zone_bounds_list)
-    global_bottom = min(bounds.bottom for bounds in zone_bounds_list)
-    global_right = max(bounds.right for bounds in zone_bounds_list)
-    global_top = max(bounds.top for bounds in zone_bounds_list)
-    
-    global_bounds = BoundingBox(
-        left=global_left,
-        bottom=global_bottom,
-        right=global_right,
-        top=global_top
-    )
-    
-    logger.info(f"🌍 Étendue globale : {global_bounds}")
-    logger.info(f"  📏 Largeur : {global_bounds.right - global_bounds.left:.3f}m")
-    logger.info(f"  📏 Hauteur : {global_bounds.top - global_bounds.bottom:.3f}m")
-    
-    # Calculer les dimensions de la grille finale
-    # CORRECTION : Utiliser round() au lieu de int() pour éviter les lignes noires
-    width_pixels = (global_bounds.right - global_bounds.left) / final_resolution
-    height_pixels = (global_bounds.top - global_bounds.bottom) / final_resolution
-    
-    final_width = round(width_pixels)
     final_height = round(height_pixels)
     
     logger.info(f"🔍 DEBUG Dimensions calculées:")
@@ -4457,7 +4291,7 @@ def simple_mnt_assembly(zones_output_dir, final_resolution, logger):
     
     Args:
         zones_output_dir: Répertoire contenant les zones avec leurs MNT
-        final_resolution: Résolution finale en mètres par pixel
+        final_resolution: Résolution finale en mètres par pixel (si None, détection automatique)
         logger: Logger pour les messages
     
     Returns:
@@ -4472,7 +4306,33 @@ def simple_mnt_assembly(zones_output_dir, final_resolution, logger):
     
     logger.info("🔧 ASSEMBLAGE SIMPLE DES MNT DE ZONES (pas de fusion)")
     logger.info(f"📁 Répertoire des zones : {zones_output_dir}")
-    logger.info(f"📏 Résolution finale : {final_resolution}m")
+    
+    # 🔧 CORRECTION : Détecter automatiquement la résolution des MNT unitaires
+    if final_resolution is None:
+        logger.info("🔍 Détection automatique de la résolution des MNT unitaires...")
+        # Lire le premier MNT pour obtenir sa résolution
+        first_mnt = None
+        for file in os.listdir(zones_output_dir):
+            if file.endswith('_fused_height.tif'):
+                first_mnt = os.path.join(zones_output_dir, file)
+                break
+        
+        if first_mnt:
+            with rasterio.open(first_mnt) as src:
+                # Calculer la résolution à partir de la transformation affine
+                transform = src.transform
+                # La résolution est la valeur absolue de a (largeur) et e (hauteur) de la transformation
+                pixel_width = abs(transform.a)
+                pixel_height = abs(transform.e)
+                # Prendre la moyenne des deux résolutions
+                final_resolution = (pixel_width + pixel_height) / 2
+                logger.info(f"  ✅ Résolution détectée : {final_resolution:.6f}m/pixel")
+                logger.info(f"  📏 Largeur pixel : {pixel_width:.6f}m, Hauteur pixel : {pixel_height:.6f}m")
+        else:
+            logger.warning("⚠️ Aucun MNT trouvé, utilisation de la résolution par défaut 0.1m")
+            final_resolution = 0.1
+    
+    logger.info(f"📏 Résolution finale utilisée : {final_resolution}m")
     
     # ÉTAPE 1 : Lire les MNT de zones
     logger.info("📖 Lecture des MNT de zones...")
