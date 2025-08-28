@@ -1000,6 +1000,19 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
         with open(coord_file, 'r') as f:
             lines = f.readlines()
         
+        # IMPORTANT : Relecture de l'offset du fichier de coordonnées pour les GCPs
+        coord_offset = None
+        try:
+            for line in lines:
+                if line.startswith('#Offset to add :'):
+                    offset_text = line.replace('#Offset to add :', '').strip()
+                    coord_offset = [float(x) for x in offset_text.split()]
+                    logger.info(f"Offset du fichier de coordonnées pour GCPs : {coord_offset}")
+                    break
+        except Exception as e:
+            logger.warning(f"Erreur lors de la lecture de l'offset pour GCPs : {e}")
+            coord_offset = [0.0, 0.0, 0.0]
+        
         for line in lines:
             line = line.strip()
             if line.startswith('#F=') or line.startswith('#'):
@@ -1013,11 +1026,11 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
                     
                     # IMPORTANT : L'offset doit TOUJOURS être appliqué pour obtenir les vraies coordonnées ITRF
                     # Le point global sert seulement de centre de transformation ENU
-                    if offset is not None:
-                        x += offset[0]
-                        y += offset[1]
-                        z += offset[2]
-                        logger.info(f"GCP {name} : offset appliqué ({offset[0]:.6f}, {offset[1]:.6f}, {offset[2]:.6f})")
+                    if coord_offset is not None:
+                        x += coord_offset[0]
+                        y += coord_offset[1]
+                        z += coord_offset[2]
+                        logger.info(f"GCP {name} : offset appliqué ({coord_offset[0]:.6f}, {coord_offset[1]:.6f}, {coord_offset[2]:.6f})")
                     else:
                         logger.warning(f"GCP {name} : pas d'offset disponible, coordonnées relatives utilisées")
                     
