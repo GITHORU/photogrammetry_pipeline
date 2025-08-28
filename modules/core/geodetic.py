@@ -565,34 +565,35 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
             logger.info(f"Point global : ({global_ref_point[0]:.6f}, {global_ref_point[1]:.6f}, {global_ref_point[2]:.6f})")
             ref_point = np.array(global_ref_point)
             logger.info("Le point global remplace le point local pour unifier le repère ENU")
+            logger.info("⚠️  L'offset ne s'applique PAS au point global (coordonnées absolues préservées)")
         else:
             logger.info("📍 UTILISATION DU POINT DE RÉFÉRENCE LOCAL")
             logger.info(f"Point local : ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
-        
-        # ÉTAPE 1.6 : Lecture de l'offset et application au point de référence
-        logger.info("Lecture de l'offset depuis le fichier de coordonnées...")
-        offset = None
-        try:
-            with open(coord_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith('#Offset to add :'):
-                        # Format: #Offset to add : X Y Z
-                        parts = line.split(':')[1].strip().split()
-                        if len(parts) == 3:
-                            offset = [float(parts[0]), float(parts[1]), float(parts[2])]
-                            break
             
-            if offset is None:
-                logger.warning("Offset non trouvé dans le fichier de coordonnées. Utilisation du point de référence sans offset.")
-            else:
-                logger.info(f"Offset trouvé : {offset}")
-                # Application de l'offset au point de référence
-                ref_point = ref_point + np.array(offset)
-                logger.info(f"Point de référence avec offset : ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
+            # ÉTAPE 1.6 : Lecture de l'offset et application au point local UNIQUEMENT
+            logger.info("Lecture de l'offset depuis le fichier de coordonnées...")
+            offset = None
+            try:
+                with open(coord_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('#Offset to add :'):
+                            # Format: #Offset to add : X Y Z
+                            parts = line.split(':')[1].strip().split()
+                            if len(parts) == 3:
+                                offset = [float(parts[0]), float(parts[1]), float(parts[2])]
+                                break
                 
-        except Exception as e:
-            logger.warning(f"Erreur lors de la lecture de l'offset : {e}. Utilisation du point de référence sans offset.")
+                if offset is None:
+                    logger.warning("Offset non trouvé dans le fichier de coordonnées. Utilisation du point de référence sans offset.")
+                else:
+                    logger.info(f"Offset trouvé : {offset}")
+                    # Application de l'offset au point local UNIQUEMENT
+                    ref_point = ref_point + np.array(offset)
+                    logger.info(f"Point local avec offset appliqué : ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
+                    
+            except Exception as e:
+                logger.warning(f"Erreur lors de la lecture de l'offset : {e}. Utilisation du point de référence sans offset.")
             
     except Exception as e:
         logger.error(f"Erreur lors de la lecture du fichier de coordonnées : {e}")
