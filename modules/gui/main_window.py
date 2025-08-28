@@ -475,7 +475,7 @@ class PhotogrammetryGUI(QWidget):
         
         # Coordonnées X, Y, Z
         self.global_ref_x_spin = QDoubleSpinBox()
-        self.global_ref_x_spin.setRange(-1000000, 1000000)
+        self.global_ref_x_spin.setRange(-999999999, 999999999)  # Aucune limite pratique
         self.global_ref_x_spin.setDecimals(3)
         self.global_ref_x_spin.setSuffix(" m")
         self.global_ref_x_spin.setToolTip("Coordonnée X du point de référence global (ITRF)")
@@ -483,7 +483,7 @@ class PhotogrammetryGUI(QWidget):
         global_ref_point_layout.addWidget(self.global_ref_x_spin)
         
         self.global_ref_y_spin = QDoubleSpinBox()
-        self.global_ref_y_spin.setRange(-1000000, 1000000)
+        self.global_ref_y_spin.setRange(-999999999, 999999999)  # Aucune limite pratique
         self.global_ref_y_spin.setDecimals(3)
         self.global_ref_y_spin.setSuffix(" m")
         self.global_ref_y_spin.setToolTip("Coordonnée Y du point de référence global (ITRF)")
@@ -491,7 +491,7 @@ class PhotogrammetryGUI(QWidget):
         global_ref_point_layout.addWidget(self.global_ref_y_spin)
         
         self.global_ref_z_spin = QDoubleSpinBox()
-        self.global_ref_z_spin.setRange(-1000000, 1000000)
+        self.global_ref_z_spin.setRange(-999999999, 999999999)  # Aucune limite pratique
         self.global_ref_z_spin.setDecimals(3)
         self.global_ref_z_spin.setSuffix(" m")
         self.global_ref_z_spin.setToolTip("Coordonnée Z du point de référence global (ITRF)")
