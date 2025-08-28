@@ -1011,19 +1011,22 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
                     name = parts[0]
                     x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
                     
-                    # IMPORTANT : Utiliser le MÊME point de référence que pour les résidus
-                    if force_global_ref and global_ref_point is not None:
-                        # Point global : pas d'offset
-                        point_itrf = np.array([x, y, z])
-                        logger.info(f"GCP {name} : utilisation du point global (pas d'offset)")
+                    # IMPORTANT : L'offset doit TOUJOURS être appliqué pour obtenir les vraies coordonnées ITRF
+                    # Le point global sert seulement de centre de transformation ENU
+                    if offset is not None:
+                        x += offset[0]
+                        y += offset[1]
+                        z += offset[2]
+                        logger.info(f"GCP {name} : offset appliqué ({offset[0]:.6f}, {offset[1]:.6f}, {offset[2]:.6f})")
                     else:
-                        # Point local : appliquer l'offset
-                        if offset is not None:
-                            x += offset[0]
-                            y += offset[1]
-                            z += offset[2]
-                            logger.info(f"GCP {name} : offset appliqué ({offset[0]:.6f}, {offset[1]:.6f}, {offset[2]:.6f})")
-                        point_itrf = np.array([x, y, z])
+                        logger.warning(f"GCP {name} : pas d'offset disponible, coordonnées relatives utilisées")
+                    
+                    point_itrf = np.array([x, y, z])
+                    
+                    if force_global_ref and global_ref_point is not None:
+                        logger.info(f"GCP {name} : transformation ENU avec le point global comme centre")
+                    else:
+                        logger.info(f"GCP {name} : transformation ENU avec le point local comme centre")
                     
                     # Conversion en ENU avec le MÊME transformer
                     enu_pos = transformer.transform(point_itrf[0], point_itrf[1], point_itrf[2])
