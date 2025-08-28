@@ -95,6 +95,13 @@ class GeodeticTransformThread(QThread):
             if self.run_itrf_to_enu:
                 # Utiliser le dossier d'entrée personnalisé ou le dossier de l'étape précédente
                 step_input_dir = self.itrf_to_enu_input_dir if self.itrf_to_enu_input_dir else current_input_dir
+                
+                # DEBUG : Vérification des paramètres du point de référence global
+                logger.info(f"🔍 DEBUG - Paramètres transmis à convert_itrf_to_enu:")
+                logger.info(f"   global_ref_point: {self.global_ref_point}")
+                logger.info(f"   force_global_ref: {self.force_global_ref}")
+                logger.info(f"   itrf_to_enu_ref_point: {self.itrf_to_enu_ref_point}")
+                
                 convert_itrf_to_enu(step_input_dir, logger, self.coord_file, self.itrf_to_enu_extra, self.itrf_to_enu_ref_point, self.max_workers, self.global_ref_point, self.force_global_ref)
                 # Utiliser le dossier de sortie personnalisé ou le dossier par défaut
                 if self.itrf_to_enu_output_dir:
@@ -107,7 +114,13 @@ class GeodeticTransformThread(QThread):
             if self.run_deform:
                 # Utiliser le dossier d'entrée personnalisé ou le dossier de l'étape précédente
                 step_input_dir = self.deform_input_dir if self.deform_input_dir else current_input_dir
-                deform_clouds(step_input_dir, logger, self.deformation_type, self.deformation_params, self.deform_extra, self.deform_bascule_xml, self.coord_file, self.max_workers)
+                
+                # DEBUG : Vérification des paramètres du point de référence global pour la déformation
+                logger.info(f"🔍 DEBUG - Paramètres transmis à deform_clouds:")
+                logger.info(f"   global_ref_point: {self.global_ref_point}")
+                logger.info(f"   force_global_ref: {self.force_global_ref}")
+                
+                deform_clouds(step_input_dir, logger, self.deformation_type, self.deformation_params, self.deform_extra, self.deform_bascule_xml, self.coord_file, self.max_workers, self.global_ref_point, self.force_global_ref)
                 # Utiliser le dossier de sortie personnalisé ou le dossier par défaut
                 if self.deform_output_dir:
                     current_input_dir = self.deform_output_dir

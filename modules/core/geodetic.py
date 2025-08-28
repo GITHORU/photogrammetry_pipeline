@@ -501,6 +501,11 @@ def add_offset_to_clouds(input_dir, logger, coord_file=None, extra_params="", ma
     logger.info(f"Ajout d'offset terminé. {total_files_processed} fichiers traités dans {output_dir}.")
 
 def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref_point_name=None, max_workers=None, global_ref_point=None, force_global_ref=False):
+    # DEBUG : Vérification des paramètres reçus
+    logger.info(f"🔍 DEBUG - Paramètres reçus dans convert_itrf_to_enu:")
+    logger.info(f"   global_ref_point: {global_ref_point}")
+    logger.info(f"   force_global_ref: {force_global_ref}")
+    logger.info(f"   ref_point_name: {ref_point_name}")
     """Convertit les nuages de points d'ITRF vers ENU"""
     abs_input_dir = os.path.abspath(input_dir)
     logger.info(f"Conversion ITRF vers ENU dans {abs_input_dir} ...")
@@ -704,7 +709,7 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
         logger.warning(f"⚠️ {len(failed_files)} fichiers n'ont pas pu être traités")
     logger.info(f"Conversion ITRF vers ENU terminée. {total_files_processed} fichiers traités dans {output_dir}.")
 
-def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_params="", extra_params="", bascule_xml_file=None, coord_file=None, max_workers=None):
+def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_params="", extra_params="", bascule_xml_file=None, coord_file=None, max_workers=None, global_ref_point=None, force_global_ref=False):
     """Applique une déformation aux nuages de points basée sur les résidus GCPBascule"""
     abs_input_dir = os.path.abspath(input_dir)
     logger.info(f"Déformation des nuages dans {abs_input_dir} avec le type {deformation_type} ...")
@@ -793,46 +798,56 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
         with open(coord_file, 'r') as f:
             lines = f.readlines()
         
-        # Recherche du point de référence (premier point par défaut)
-        ref_point = None
-        offset = None
-        
-        for line in lines:
-            line = line.strip()
-            if line.startswith('#F=') or line.startswith('#'):
-                continue
+        # ÉTAPE 1.5 : Priorisation du point de référence global si forcé
+        if force_global_ref and global_ref_point is not None:
+            logger.info("🎯 UTILISATION DU POINT DE RÉFÉRENCE GLOBAL FORCÉ (déformation)")
+            logger.info(f"Point global : ({global_ref_point[0]:.6f}, {global_ref_point[1]:.6f}, {global_ref_point[2]:.6f})")
+            ref_point = np.array(global_ref_point)
+            logger.info("Le point global remplace le point local pour la déformation")
+            logger.info("⚠️  L'offset ne s'applique PAS au point global (coordonnées absolues préservées)")
+        else:
+            logger.info("📍 UTILISATION DU POINT DE RÉFÉRENCE LOCAL (déformation)")
             
-            # Format attendu : NOM X Y Z
-            parts = line.split()
-            if len(parts) >= 4:
-                try:
-                    x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
-                    ref_point = np.array([x, y, z])
-                    logger.info(f"Point de référence trouvé : {parts[0]} ({x:.6f}, {y:.6f}, {z:.6f})")
-                    break
-                except ValueError:
-                    continue
-        
-        if ref_point is None:
-            logger.error("Aucun point de référence valide trouvé dans le fichier de coordonnées")
-            raise RuntimeError("Aucun point de référence valide trouvé dans le fichier de coordonnées")
-        
-        # Lecture de l'offset
-        try:
+            # Recherche du point de référence (premier point par défaut)
+            ref_point = None
+            offset = None
+            
             for line in lines:
-                if line.startswith('#Offset to add :'):
-                    offset_text = line.replace('#Offset to add :', '').strip()
-                    offset = [float(x) for x in offset_text.split()]
-                    logger.info(f"Offset trouvé : {offset}")
-                    break
-        except Exception as e:
-            logger.warning(f"Erreur lors de la lecture de l'offset : {e}. Utilisation du point de référence sans offset.")
-            offset = [0.0, 0.0, 0.0]
-        
-        # Application de l'offset au point de référence
-        if offset:
-            ref_point = ref_point + np.array(offset)
-            logger.info(f"Point de référence avec offset : ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
+                line = line.strip()
+                if line.startswith('#F=') or line.startswith('#'):
+                    continue
+                
+                # Format attendu : NOM X Y Z
+                parts = line.split()
+                if len(parts) >= 4:
+                    try:
+                        x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                        ref_point = np.array([x, y, z])
+                        logger.info(f"Point local trouvé : {parts[0]} ({x:.6f}, {y:.6f}, {z:.6f})")
+                        break
+                    except ValueError:
+                        continue
+            
+            if ref_point is None:
+                logger.error("Aucun point de référence valide trouvé dans le fichier de coordonnées")
+                raise RuntimeError("Aucun point de référence valide trouvé dans le fichier de coordonnées")
+            
+            # Lecture de l'offset et application au point local UNIQUEMENT
+            try:
+                for line in lines:
+                    if line.startswith('#Offset to add :'):
+                        offset_text = line.replace('#Offset to add :', '').strip()
+                        offset = [float(x) for x in offset_text.split()]
+                        logger.info(f"Offset trouvé : {offset}")
+                        break
+            except Exception as e:
+                logger.warning(f"Erreur lors de la lecture de l'offset : {e}. Utilisation du point de référence sans offset.")
+                offset = [0.0, 0.0, 0.0]
+            
+            # Application de l'offset au point local UNIQUEMENT
+            if offset:
+                ref_point = ref_point + np.array(offset)
+                logger.info(f"Point local avec offset appliqué : ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
         
     except Exception as e:
         logger.error(f"Erreur lors de la lecture du fichier de coordonnées : {e}")
