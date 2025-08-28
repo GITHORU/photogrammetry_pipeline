@@ -724,14 +724,7 @@ class PhotogrammetryGUI(QWidget):
         self.unified_orthoimage_resolution_spin.setDecimals(1)
         unified_orthoimage_params_line.addWidget(self.unified_orthoimage_resolution_spin)
         
-        # Taille de grille (0 = automatique depuis les orthos)
-        unified_orthoimage_params_line.addWidget(QLabel("Taille grille :"))
-        self.grid_size_spin = QDoubleSpinBox()
-        self.grid_size_spin.setRange(0.0, 1000.0)  # 0 = automatique
-        self.grid_size_spin.setValue(0.0)  # 0 = automatique par défaut
-        self.grid_size_spin.setSuffix(" m (0=auto)")
-        self.grid_size_spin.setDecimals(1)
-        unified_orthoimage_params_line.addWidget(self.grid_size_spin)
+
         
         # Taille des zones
         unified_orthoimage_params_line.addWidget(QLabel("Taille zones :"))
@@ -858,7 +851,7 @@ class PhotogrammetryGUI(QWidget):
         
         # Connexion pour les paramètres d'orthoimage unifiée
         self.unified_orthoimage_resolution_spin.valueChanged.connect(self.update_geodetic_cmd_line)
-        self.grid_size_spin.valueChanged.connect(self.update_geodetic_cmd_line)
+
         self.zone_size_spin.valueChanged.connect(self.update_geodetic_cmd_line) 
         
         # Initialisation de la ligne de commande pour le nouvel onglet
@@ -1162,12 +1155,8 @@ class PhotogrammetryGUI(QWidget):
         base_cmd.append(f"--unified-orthoimage-resolution {unified_orthoimage_resolution}")
         
         # Ajout des paramètres de taille de grille et de zones
-        grid_size = self.grid_size_spin.value()
         zone_size = self.zone_size_spin.value()
-        if grid_size > 0:
-            base_cmd.append(f"--grid-size {grid_size}")
-        else:
-            base_cmd.append("--grid-size auto")
+
         base_cmd.append(f"--zone-size {zone_size}")
         
         # Ajout de la méthode de fusion des couleurs
@@ -1315,8 +1304,7 @@ class PhotogrammetryGUI(QWidget):
         # Paramètres d'orthoimage unifiée
         unified_orthoimage_resolution = self.unified_orthoimage_resolution_spin.value() / 1000.0  # Conversion mm vers m
         
-        # Paramètres de taille de grille et de zones
-        grid_size = self.grid_size_spin.value()
+        # Paramètre de taille des zones
         zone_size = self.zone_size_spin.value()
         
         # Méthode de fusion des couleurs
@@ -1329,7 +1317,7 @@ class PhotogrammetryGUI(QWidget):
             add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
             add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
             self.get_selected_ref_point(), bascule_xml, orthoimage_resolution, "z", "rgb", unified_orthoimage_resolution, max_workers, color_fusion_method,
-            grid_size, zone_size
+            zone_size
         )
         self.geodetic_thread.log_signal.connect(self.append_log)
         self.geodetic_thread.finished_signal.connect(self.geodetic_pipeline_finished)

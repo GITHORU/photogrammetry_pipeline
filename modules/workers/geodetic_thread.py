@@ -10,7 +10,7 @@ class GeodeticTransformThread(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(bool, str)
 
-    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None, color_fusion_method="average", grid_size_meters=20.0, zone_size_meters=5.0):
+    def __init__(self, input_dir, coord_file, deformation_type, deformation_params, add_offset_extra, itrf_to_enu_extra, deform_extra, run_add_offset=True, run_itrf_to_enu=True, run_deform=True, run_orthoimage=True, run_unified_orthoimage=True, add_offset_input_dir=None, itrf_to_enu_input_dir=None, deform_input_dir=None, orthoimage_input_dir=None, unified_orthoimage_input_dir=None, add_offset_output_dir=None, itrf_to_enu_output_dir=None, deform_output_dir=None, orthoimage_output_dir=None, unified_orthoimage_output_dir=None, itrf_to_enu_ref_point=None, deform_bascule_xml=None, orthoimage_resolution=0.1, orthoimage_height_field="z", orthoimage_color_field="rgb", unified_orthoimage_resolution=0.1, max_workers=None, color_fusion_method="average", zone_size_meters=5.0):
         super().__init__()
         self.input_dir = input_dir
         self.coord_file = coord_file
@@ -49,8 +49,7 @@ class GeodeticTransformThread(QThread):
         self.max_workers = max_workers
         self.color_fusion_method = color_fusion_method
         
-        # Paramètres de taille de grille et de zones
-        self.grid_size_meters = grid_size_meters
+        # Paramètre de taille des zones
         self.zone_size_meters = zone_size_meters
 
     def run(self):
@@ -145,13 +144,12 @@ class GeodeticTransformThread(QThread):
                 
                 # Appeler la fonction de fusion finale
                 from ..core.geodetic import unified_ortho_mnt_fusion
-                # Fusion avec grille paramétrable depuis l'interface (ou automatique si None)
+                # Fusion avec grille automatique et zones paramétrables
                 unified_ortho_mnt_fusion(
                     step_input_dir, 
                     logger, 
                     fusion_output_dir, 
                     self.unified_orthoimage_resolution,
-                    grid_size_meters=self.grid_size_meters if self.grid_size_meters > 0 else None,  # Automatique si 0
                     zone_size_meters=self.zone_size_meters,   # Depuis l'interface
                     max_workers=self.max_workers              # Nombre de workers parallèles
                 )

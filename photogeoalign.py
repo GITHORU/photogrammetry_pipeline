@@ -142,7 +142,7 @@ if __name__ == "__main__":
         parser.add_argument('--unified-orthoimage-resolution', type=float, default=0.1, help='RÃ©solution de l\'orthoimage unifiÃ©e en mÃ¨tres (dÃ©faut: 0.1)')
         
         # Arguments pour les paramÃ¨tres de taille de grille et de zones
-        parser.add_argument('--grid-size', type=str, default='auto', help='Taille de la grille en mÃ¨tres ou "auto" pour calcul automatique (dÃ©faut: auto)')
+
         parser.add_argument('--zone-size', type=float, default=5.0, help='Taille de chaque zone en mÃ¨tres (dÃ©faut: 5.0)')
         
         # Arguments pour la mÃ©thode de fusion des couleurs
@@ -201,15 +201,7 @@ if __name__ == "__main__":
                 # MÃ©thode de fusion des couleurs
                 color_fusion_method = "median" if args.color_fusion_median else "average"
                 
-                # ParamÃ¨tres de taille de grille et de zones
-                if args.grid_size == 'auto':
-                    grid_size = 0.0  # 0 = automatique (comme dans la GUI)
-                else:
-                    try:
-                        grid_size = float(args.grid_size)
-                    except ValueError:
-                        print(f"Erreur : taille de grille invalide : {args.grid_size}")
-                        sys.exit(1)
+                # Paramètre de taille des zones
                 zone_size = args.zone_size
                 
                 # CrÃ©ation d'une instance du thread pour gÃ©rer les dossiers d'entrÃ©e/sortie
@@ -220,7 +212,7 @@ if __name__ == "__main__":
                     add_offset_input_dir, itrf_to_enu_input_dir, deform_input_dir, orthoimage_input_dir, unified_orthoimage_input_dir,
                     add_offset_output_dir, itrf_to_enu_output_dir, deform_output_dir, orthoimage_output_dir, unified_orthoimage_output_dir,
                     itrf_to_enu_ref_point, deform_bascule_xml, args.orthoimage_resolution, "z", "rgb", args.unified_orthoimage_resolution, args.max_workers, color_fusion_method,
-                    grid_size, zone_size
+                    zone_size
                 )
                 
                 # ExÃ©cution des transformations

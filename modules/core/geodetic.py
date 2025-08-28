@@ -2600,7 +2600,7 @@ def process_zone_with_orthos(zone_data):
         'message': f"Zone {zone_id}: {len(ortho_color_files)} orthos couleur + {len(ortho_height_files)} MNT hauteur"
     }
 
-def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.003, grid_size_meters=None, zone_size_meters=5.0, max_workers=None):
+def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.003, zone_size_meters=5.0, max_workers=None):
     """
     🎯 FUSION FINALE : Assemblage des orthoimages et MNT unifiés
     Objectif : Fusionner les orthoimages unitaires en une orthoimage finale unifiée
@@ -2610,7 +2610,6 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.0
         logger: Logger pour les messages
         output_dir: Répertoire de sortie
         final_resolution: Résolution finale en mètres (défaut: 0.003m = 3mm)
-        grid_size_meters: Taille de la grille en mètres (si None, calculée automatiquement)
         zone_size_meters: Taille de chaque zone en mètres (défaut: 5.0m)
         max_workers: Nombre maximum de processus parallèles
     """
@@ -2637,12 +2636,8 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.0
             ortho_files.append(os.path.join(input_dir, file))
     
     if not ortho_files:
-        logger.warning("⚠️ Aucune orthoimage .tif trouvée, utilisation des paramètres par défaut")
-        if grid_size_meters is None:
-            grid_size_meters = 20.0
-        global_bounds = BoundingBox(
-            left=0.0, bottom=0.0, right=float(grid_size_meters), top=float(grid_size_meters)
-        )
+        logger.warning("⚠️ Aucune orthoimage .tif trouvée, impossible de continuer sans données")
+        raise ValueError("Aucune orthoimage .tif trouvée dans le dossier d'entrée")
     else:
         logger.info(f"Trouvé {len(ortho_files)} orthoimage(s) unitaire(s)")
         
@@ -2701,29 +2696,11 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.0
                 logger.info(f"  Étendue des orthos : {global_left:.2f}m à {global_right:.2f}m (X), {global_bottom:.2f}m à {global_top:.2f}m (Y)")
                 
                 # Si la taille de grille n'est pas spécifiée, l'utiliser pour contraindre
-                if grid_size_meters is not None:
-                    grid_size = grid_size_meters
-                    adjusted_left = global_left #round(global_left / grid_size) * grid_size
-                    adjusted_bottom = global_bottom #round(global_bottom / grid_size) * grid_size
-                    adjusted_right = global_right #round(global_right / grid_size) * grid_size
-                    adjusted_top = global_top #round(global_top / grid_size) * grid_size
-                    
-                    # S'assurer que l'étendue couvre au moins la zone des orthos
-                    if adjusted_right < global_right:
-                        adjusted_right += grid_size
-                    if adjusted_top < global_top:
-                        adjusted_top += grid_size
-                    
-                    global_bounds = BoundingBox(
-                        left=adjusted_left, bottom=adjusted_bottom,
-                        right=adjusted_right, top=adjusted_top
-                    )
-                else:
-                    # Utiliser l'étendue réelle des orthos (SANS ARRONDI)
-                    global_bounds = BoundingBox(
-                        left=global_left, bottom=global_bottom,
-                        right=global_right, top=global_top
-                    )
+                # 🎯 GRID AUTOMATIQUE : Utiliser l'étendue réelle des orthos
+                global_bounds = BoundingBox(
+                    left=global_left, bottom=global_bottom,
+                    right=global_right, top=global_top
+                )
                 
                 logger.info(f"Étendue globale calculée : {global_bounds}")
                 logger.info(f"  Largeur : {global_bounds.right - global_bounds.left:.2f}m")
@@ -2731,12 +2708,7 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=0.0
                 
         except Exception as e:
             logger.error(f"❌ Erreur lors de l'analyse de l'orthoimage : {e}")
-            logger.warning("⚠️ Utilisation des paramètres par défaut")
-            if grid_size_meters is None:
-                grid_size_meters = 20.0
-            global_bounds = BoundingBox(
-                left=0.0, bottom=0.0, right=float(grid_size_meters), top=float(grid_size_meters)
-            )
+            raise RuntimeError(f"Impossible d'analyser les orthoimages : {e}")
     
     # S'assurer que la résolution finale est valide
     if final_resolution is None or final_resolution <= 0:
