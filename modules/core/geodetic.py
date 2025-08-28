@@ -193,6 +193,27 @@ def process_single_cloud_itrf_to_enu(args):
             # Transformation du chunk
             chunk_enu = np.array(transformer.transform(arr_x, arr_y, arr_z)).T
             arr_pts_ENU[i:end_idx] = chunk_enu
+            
+            # DEBUG : Vérification des coordonnées de transformation (premier chunk seulement)
+            if i == 0:
+                logger.info(f"🔍 DEBUG - Transformation ITRF→ENU (premier chunk):")
+                logger.info(f"   Premier point ITRF: ({arr_x[0]:.6f}, {arr_y[0]:.6f}, {arr_z[0]:.6f})")
+                logger.info(f"   Premier point ENU: ({chunk_enu[0, 0]:.6f}, {chunk_enu[0, 1]:.6f}, {chunk_enu[0, 2]:.6f})")
+                logger.info(f"   Dernier point ITRF: ({arr_x[-1]:.6f}, {arr_y[-1]:.6f}, {arr_z[-1]:.6f})")
+                logger.info(f"   Dernier point ENU: ({chunk_enu[-1, 0]:.6f}, {chunk_enu[-1, 1]:.6f}, {chunk_enu[-1, 2]:.6f})")
+                
+                # DEBUG : Vérification du centre de transformation
+                logger.info(f"🔍 DEBUG - Centre de transformation utilisé:")
+                logger.info(f"   Centre ITRF: ({tr_center[0]:.6f}, {tr_center[1]:.6f}, {tr_center[2]:.6f})")
+                logger.info(f"   Centre ENU: (0.000000, 0.000000, 0.000000)")
+                
+                # DEBUG : Calcul manuel pour vérifier
+                test_point_itrf = np.array([arr_x[0], arr_y[0], arr_z[0]])
+                test_point_enu = transformer.transform(test_point_itrf[0], test_point_itrf[1], test_point_itrf[2])
+                logger.info(f"🔍 DEBUG - Vérification manuelle:")
+                logger.info(f"   Point test ITRF: ({test_point_itrf[0]:.6f}, {test_point_itrf[1]:.6f}, {test_point_itrf[2]:.6f})")
+                logger.info(f"   Point test ENU: ({test_point_enu[0]:.6f}, {test_point_enu[1]:.6f}, {test_point_enu[2]:.6f})")
+                logger.info(f"   Différence ITRF - Centre: ({test_point_itrf[0] - tr_center[0]:.6f}, {test_point_itrf[1] - tr_center[1]:.6f}, {test_point_itrf[2] - tr_center[2]:.6f})")
         
         # Création du nouveau nuage
         new_cloud = o3d.geometry.PointCloud()
@@ -905,6 +926,14 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
         enu_offset = np.array([enu_point[0] - enu_ref[0], 
                               enu_point[1] - enu_ref[1], 
                               enu_point[2] - enu_ref[2]])
+        
+        # DEBUG : Vérification des coordonnées de transformation
+        logger.info(f"🔍 DEBUG - Transformation résidu {name}:")
+        logger.info(f"   Point de référence ITRF: ({ref_point[0]:.6f}, {ref_point[1]:.6f}, {ref_point[2]:.6f})")
+        logger.info(f"   Point avec offset ITRF: ({point_with_offset[0]:.6f}, {point_with_offset[1]:.6f}, {point_with_offset[2]:.6f})")
+        logger.info(f"   Point de référence ENU: ({enu_ref[0]:.6f}, {enu_ref[1]:.6f}, {enu_ref[2]:.6f})")
+        logger.info(f"   Point avec offset ENU: ({enu_point[0]:.6f}, {enu_point[1]:.6f}, {enu_point[2]:.6f})")
+        logger.info(f"   Vecteur déplacement ENU: ({enu_offset[0]:.6f}, {enu_offset[1]:.6f}, {enu_offset[2]:.6f})")
         
         residues_enu[name] = {
             'offset': enu_offset,
