@@ -6,7 +6,7 @@ Test de la fusion parallélisée des orthoimages avec zones de 5m × 5m
 import os
 import sys
 import logging
-from modules.core.geodetic import merge_orthoimages_and_dtm_parallel_5m_zones
+from modules.core.geodetic_orthoimage_fusion import unified_ortho_mnt_fusion
 
 def setup_logger():
     """Configure le logger pour les tests"""
@@ -38,20 +38,22 @@ def test_parallel_5m_zones():
     try:
         # Test avec différents paramètres
         logger.info("=== TEST 1 : Résolution par défaut ===")
-        merge_orthoimages_and_dtm_parallel_5m_zones(
+        unified_ortho_mnt_fusion(
             input_dir=input_dir,
             logger=logger,
+            output_dir="test_output_1",
             max_workers=4,  # Limiter à 4 processus pour le test
-            color_fusion_method="average"
+            zone_size_meters=5.0
         )
         
         logger.info("=== TEST 2 : Résolution personnalisée ===")
-        merge_orthoimages_and_dtm_parallel_5m_zones(
+        unified_ortho_mnt_fusion(
             input_dir=input_dir,
             logger=logger,
-            target_resolution=0.1,  # 10cm par pixel
+            output_dir="test_output_2",
+            final_resolution=0.1,  # 10cm par pixel
             max_workers=4,
-            color_fusion_method="median"
+            zone_size_meters=5.0
         )
         
         logger.info("✅ Tous les tests ont réussi !")

@@ -1,8 +1,15 @@
 import logging
 import os
 from PySide6.QtCore import QThread, Signal
-from ..core.geodetic import (
-    add_offset_to_clouds, convert_itrf_to_enu, deform_clouds, create_orthoimage_from_pointcloud, merge_orthoimages_and_dtm, unified_ortho_mnt_fusion
+# Import des fonctions depuis les nouveaux modules refactorisés
+from ..core.geodetic_processing import (
+    add_offset_to_clouds, convert_itrf_to_enu, deform_clouds
+)
+from ..core.geodetic_orthoimage_basic import (
+    create_orthoimage_from_pointcloud, merge_orthoimages_and_dtm
+)
+from ..core.geodetic_orthoimage_fusion import (
+    unified_ortho_mnt_fusion
 )
 from .utils import QtLogHandler
 
@@ -160,7 +167,7 @@ class GeodeticTransformThread(QThread):
                     fusion_output_dir = os.path.join(os.path.dirname(step_input_dir), "ortho_mnt_unified")
                 
                 # Appeler la fonction de fusion finale
-                from ..core.geodetic import unified_ortho_mnt_fusion
+                from ..core.geodetic_orthoimage_fusion import unified_ortho_mnt_fusion
                 # Fusion avec grille automatique et zones paramétrables
                 unified_ortho_mnt_fusion(
                     step_input_dir, 

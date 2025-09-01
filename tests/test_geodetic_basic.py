@@ -9,7 +9,7 @@ from pathlib import Path
 # Ajout du répertoire parent au path pour les imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from modules.core.geodetic import (
+from modules.core.geodetic_core import (
     process_single_cloud_add_offset,
     process_single_cloud_itrf_to_enu
 )
