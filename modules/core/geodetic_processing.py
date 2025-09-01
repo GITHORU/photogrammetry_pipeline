@@ -1,3 +1,27 @@
+"""
+Module de traitement géodésique avancé.
+Contient les fonctions de traitement global des nuages de points.
+"""
+
+import os
+import numpy as np
+import logging
+from multiprocessing import Pool, cpu_count
+from xml.etree import ElementTree as ET
+
+# Import d'open3d pour gérer les fichiers PLY
+try:
+    import open3d as o3d
+except ImportError:
+    o3d = None
+
+# Import des fonctions de traitement individuel depuis le module core
+from .geodetic_core import (
+    process_single_cloud_add_offset,
+    process_single_cloud_itrf_to_enu,
+    process_single_cloud_deform
+)
+
 def add_offset_to_clouds(input_dir, logger, coord_file=None, extra_params="", max_workers=None):
     """Ajoute l'offset aux nuages de points .ply dans le dossier fourni (et ses sous-dossiers éventuels)"""
     abs_input_dir = os.path.abspath(input_dir)
@@ -44,13 +68,12 @@ def add_offset_to_clouds(input_dir, logger, coord_file=None, extra_params="", ma
         logger.error(f"Erreur lors de la lecture du fichier de coordonnées : {e}")
         raise RuntimeError(f"Erreur lors de la lecture du fichier de coordonnées : {e}")
     
-    # Import d'open3d pour gérer les fichiers PLY
-    try:
-        import open3d as o3d
-        logger.info("Open3D importé avec succès")
-    except ImportError:
+    # Vérification d'open3d
+    if o3d is None:
         logger.error("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
         raise RuntimeError("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
+    
+    logger.info("Open3D disponible pour le traitement")
     
     total_files_processed = 0
     
@@ -255,13 +278,12 @@ def convert_itrf_to_enu(input_dir, logger, coord_file=None, extra_params="", ref
     
     logger.info("Transformation topocentrique configurée avec succès")
     
-    # Import d'open3d pour gérer les fichiers PLY
-    try:
-        import open3d as o3d
-        logger.info("Open3D importé avec succès")
-    except ImportError:
+    # Vérification d'open3d
+    if o3d is None:
         logger.error("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
         raise RuntimeError("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
+    
+    logger.info("Open3D disponible pour le traitement")
     
     # ÉTAPE 4 : Traitement des nuages de points
     ply_files = []
@@ -353,13 +375,12 @@ def deform_clouds(input_dir, logger, deformation_type="lineaire", deformation_pa
         logger.error(f"Le chemin spécifié n'est pas un dossier : {abs_input_dir}")
         raise RuntimeError(f"Le chemin spécifié n'est pas un dossier : {abs_input_dir}")
     
-    # Import d'open3d pour gérer les fichiers PLY
-    try:
-        import open3d as o3d
-        logger.info("Open3D importé avec succès")
-    except ImportError:
+    # Vérification d'open3d
+    if o3d is None:
         logger.error("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
         raise RuntimeError("Open3D n'est pas installé. Veuillez l'installer avec: pip install open3d")
+    
+    logger.info("Open3D disponible pour le traitement")
     
     # Création du dossier de sortie pour cette étape
     output_dir = os.path.join(os.path.dirname(abs_input_dir), f"deform_{deformation_type}_step")
@@ -770,8 +791,11 @@ def process_single_cloud_for_unified(args):
     logger = logging.getLogger(f"Unified_{os.getpid()}")
     logger.setLevel(logging.INFO)
     
+    # Vérification d'open3d
+    if o3d is None:
+        return False, "Open3D n'est pas installé"
+    
     try:
-        import open3d as o3d
         import numpy as np
         
         # Lecture du nuage

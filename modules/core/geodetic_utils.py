@@ -1,3 +1,13 @@
+"""
+Module d'utilitaires géodésiques.
+Contient les fonctions d'aide pour le traitement des orthoimages.
+"""
+
+import os
+import numpy as np
+import logging
+import rasterio
+
 def calculate_global_histogram_and_quantiles(zones_output_dir, logger):
     """
     CALCUL GLOBAL : Histogramme et quantiles de référence sur TOUTES les zones

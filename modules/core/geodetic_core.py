@@ -1,3 +1,13 @@
+"""
+Module de base pour les opérations géodésiques.
+Contient les fonctions de traitement de base des nuages de points.
+"""
+
+import os
+import numpy as np
+import logging
+from multiprocessing import Pool, cpu_count
+
 def patch_rasterio_essentials():
     """Patch ciblé pour les modules rasterio essentiels"""
     import types

@@ -1,12 +1,26 @@
+"""
+Module de fusion et assemblage d'orthoimages.
+Contient les fonctions avancées pour la fusion d'orthoimages existantes.
+"""
+
+import os
+import numpy as np
+import logging
+import rasterio
+from rasterio import warp, transform, enums
+from multiprocessing import Pool, cpu_count
+
+# Import des fonctions d'assemblage depuis le module utils
+from .geodetic_utils import (
+    simple_ortho_assembly,
+    simple_mnt_assembly
+)
+
 def process_zone_with_orthos(zone_data):
     """
     Fonction globale exécutée par chaque processus pour traiter une zone
     UNIQUEMENT avec l'égalisation par médiane superposée
     """
-    import os
-    import numpy as np
-    import rasterio
-    from rasterio import warp, transform, enums
     
     zone_id = zone_data['zone_id']
     assigned_files = zone_data['assigned_orthos']
@@ -346,9 +360,6 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=Non
         zone_size_meters: Taille de chaque zone en mètres (défaut: 5.0m)
         max_workers: Nombre maximum de processus parallèles
     """
-    import os
-    import numpy as np
-    import rasterio
     from rasterio.coords import BoundingBox
     from rasterio.transform import from_origin
     from multiprocessing import Pool

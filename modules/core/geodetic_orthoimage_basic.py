@@ -1,3 +1,21 @@
+"""
+Module de création d'orthoimages depuis des nuages de points.
+Contient les fonctions de base pour la génération d'orthoimages.
+"""
+
+import os
+import numpy as np
+import logging
+from multiprocessing import Pool, cpu_count
+
+# Import des fonctions de traitement individuel depuis le module core
+from .geodetic_core import (
+    process_single_cloud_orthoimage
+)
+from .geodetic_processing import (
+    process_single_cloud_for_unified
+)
+
 def create_orthoimage_from_pointcloud(input_dir, logger, output_dir=None, resolution=0.1, height_field="z", color_field="rgb", max_workers=None):
     """Crée une orthoimage à partir des nuages de points .ply dans le dossier fourni"""
     abs_input_dir = os.path.abspath(input_dir)

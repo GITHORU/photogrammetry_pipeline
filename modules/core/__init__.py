@@ -1,66 +1,77 @@
-# Package core pour PhotoGeoAlign
+"""
+Module core pour les opérations géodésiques.
+Contient tous les modules de base pour la photogrammétrie.
+"""
 
-# Module 1: Transformations géodésiques de base
+# Import des modules principaux
+from . import geodetic_core
+from . import geodetic_processing
+from . import geodetic_orthoimage_basic
+from . import geodetic_orthoimage_fusion
+from . import geodetic_utils
+
+# Import des fonctions principales pour faciliter l'utilisation
 from .geodetic_core import (
-    add_offset_to_clouds,
-    convert_itrf_to_enu,
-    deform_clouds
-)
-
-# Module 2: Traitement des nuages de points
-from .geodetic_processing import (
+    patch_rasterio_essentials,
     process_single_cloud_add_offset,
     process_single_cloud_itrf_to_enu,
     process_single_cloud_deform,
-    process_single_cloud_for_unified
+    process_single_cloud_orthoimage
 )
 
-# Module 3: Création et fusion d'orthoimages
-from .geodetic_orthoimage import (
+from .geodetic_processing import (
+    add_offset_to_clouds,
+    convert_itrf_to_enu,
+    deform_clouds,
+    process_single_cloud_for_unified,
+    individual_zone_equalization
+)
+
+from .geodetic_orthoimage_basic import (
     create_orthoimage_from_pointcloud,
-    process_single_cloud_orthoimage,
     create_unified_orthoimage_and_dtm,
-    merge_orthoimages_and_dtm,
+    merge_orthoimages_and_dtm
+)
+
+from .geodetic_orthoimage_fusion import (
     process_zone_with_orthos,
     unified_ortho_mnt_fusion
 )
 
-# Module 4: Utilitaires et patches
 from .geodetic_utils import (
-    patch_rasterio_essentials,
     calculate_global_histogram_and_quantiles,
     equalize_zone_to_global_quantiles,
-    individual_zone_equalization,
-    simple_ortho_assembly,
-    simple_mnt_assembly
+    simple_mnt_assembly,
+    simple_ortho_assembly
 )
 
-# Liste de toutes les fonctions exportées
 __all__ = [
-    # Module 1: Transformations géodésiques de base
-    'add_offset_to_clouds',
-    'convert_itrf_to_enu',
-    'deform_clouds',
-    
-    # Module 2: Traitement des nuages de points
+    # Core functions
+    'patch_rasterio_essentials',
     'process_single_cloud_add_offset',
     'process_single_cloud_itrf_to_enu',
     'process_single_cloud_deform',
-    'process_single_cloud_for_unified',
-    
-    # Module 3: Création et fusion d'orthoimages
-    'create_orthoimage_from_pointcloud',
     'process_single_cloud_orthoimage',
+    
+    # Processing functions
+    'add_offset_to_clouds',
+    'convert_itrf_to_enu',
+    'deform_clouds',
+    'process_single_cloud_for_unified',
+    'individual_zone_equalization',
+    
+    # Basic orthoimage functions
+    'create_orthoimage_from_pointcloud',
     'create_unified_orthoimage_and_dtm',
     'merge_orthoimages_and_dtm',
+    
+    # Fusion orthoimage functions
     'process_zone_with_orthos',
     'unified_ortho_mnt_fusion',
     
-    # Module 4: Utilitaires et patches
-    'patch_rasterio_essentials',
+    # Utils functions
     'calculate_global_histogram_and_quantiles',
     'equalize_zone_to_global_quantiles',
-    'individual_zone_equalization',
-    'simple_ortho_assembly',
-    'simple_mnt_assembly'
+    'simple_mnt_assembly',
+    'simple_ortho_assembly'
 ] 
