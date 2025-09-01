@@ -9,7 +9,11 @@ a = Analysis(
     hiddenimports=[
         'modules.core.utils',
         'modules.core.micmac', 
-        'modules.core.geodetic',
+        'modules.core.geodetic_core',
+        'modules.core.geodetic_processing',
+        'modules.core.geodetic_orthoimage_basic',
+        'modules.core.geodetic_orthoimage_fusion',
+        'modules.core.geodetic_utils',
         'modules.gui.main_window',
         'modules.gui.dialogs',
         'modules.workers.pipeline_thread',
