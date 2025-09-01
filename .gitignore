@@ -1,6 +1,14 @@
 # Ignorer tout par défaut
 *
 
+# Ignorer les fichiers de cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
 # Sauf les scripts Python, requirements.txt, README.md, .gitignore et logo.png
 !*.py
 !requirements.txt
