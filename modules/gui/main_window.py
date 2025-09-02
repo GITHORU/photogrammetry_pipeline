@@ -3,12 +3,12 @@ import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog, QRadioButton
+    QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog, QRadioButton, QGroupBox
 )
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QBrush, QPen, QAction
 from PySide6.QtCore import Qt, QTimer, QPoint
 from ..core.utils import resource_path
-from ..workers import PipelineThread, GeodeticTransformThread
+from ..workers import PipelineThread, GeodeticTransformThread, AnalysisThread
 from .dialogs import JobExportDialog
 
 class PhotogrammetryGUI(QWidget):
@@ -42,6 +42,7 @@ class PhotogrammetryGUI(QWidget):
         self.setMinimumWidth(600)
         self.pipeline_thread = None
         self.geodetic_thread = None
+        self.analysis_thread = None
         self.init_ui()
     
 
@@ -122,7 +123,7 @@ class PhotogrammetryGUI(QWidget):
         painter.drawPolygon(points)
         painter.end()
         icon_new = QIcon(pixmap_new)
-        action_new = QAction(icon_new, "Lancer le nouvel onglet", self)
+        action_new = QAction(icon_new, "Lancer l'analyse", self)
         action_new.triggered.connect(self.launch_new_pipeline)
         toolbar.addAction(action_new)
         self.action_new = action_new
@@ -186,7 +187,7 @@ class PhotogrammetryGUI(QWidget):
         painter.drawPolygon(points)
         painter.end()
         icon_export_new = QIcon(pixmap_export_new)
-        action_export_new = QAction(icon_export_new, "Exporter le batch .job (Nouvel onglet)", self)
+        action_export_new = QAction(icon_export_new, "Exporter le batch .job (Analyse)", self)
         action_export_new.triggered.connect(self.export_new_job_dialog)
         toolbar.addAction(action_export_new)
         
@@ -806,15 +807,136 @@ class PhotogrammetryGUI(QWidget):
         geodetic_layout.addStretch(1)
         tabs.addTab(geodetic_tab, "Transformations géodésiques")
 
-        # Onglet 3 : Nouvel onglet vierge
+        # Onglet 3 : Analyse
         new_tab = QWidget()
         new_layout = QVBoxLayout(new_tab)
         
         # Titre de l'onglet
-        new_layout.addWidget(QLabel("Nouvel onglet"))
+        new_layout.addWidget(QLabel("Analyse"))
         
-        # Zone de contenu vide
-        new_layout.addWidget(QLabel("Contenu à définir..."))
+        # Type d'analyse (Radio buttons)
+        analysis_type_group = QGroupBox("Type d'analyse")
+        analysis_type_layout = QVBoxLayout(analysis_type_group)
+        
+        self.mnt_radio = QRadioButton("MNT")
+        self.mnt_radio.setChecked(True)
+        self.ortho_radio = QRadioButton("Ortho")
+        
+        analysis_type_layout.addWidget(self.mnt_radio)
+        analysis_type_layout.addWidget(self.ortho_radio)
+        new_layout.addWidget(analysis_type_group)
+        
+        # Image 1
+        image1_layout = QHBoxLayout()
+        self.image1_edit = QLineEdit()
+        self.image1_edit.setPlaceholderText("Chemin vers l'image 1")
+        image1_browse_btn = QPushButton()
+        image1_browse_btn.setIcon(self.create_folder_icon())
+        image1_browse_btn.setToolTip("Parcourir")
+        image1_browse_btn.clicked.connect(lambda: self.browse_file(self.image1_edit, "Images (*.tif *.tiff *.jpg *.jpeg *.png)"))
+        
+        image1_layout.addWidget(QLabel("Image 1 :"))
+        image1_layout.addWidget(self.image1_edit)
+        image1_layout.addWidget(image1_browse_btn)
+        new_layout.addLayout(image1_layout)
+        
+        # Image 2
+        image2_layout = QHBoxLayout()
+        self.image2_edit = QLineEdit()
+        self.image2_edit.setPlaceholderText("Chemin vers l'image 2")
+        image2_browse_btn = QPushButton()
+        image2_browse_btn.setIcon(self.create_folder_icon())
+        image2_browse_btn.setToolTip("Parcourir")
+        image2_browse_btn.clicked.connect(lambda: self.browse_file(self.image2_edit, "Images (*.tif *.tiff *.jpg *.jpeg *.png)"))
+        
+        image2_layout.addWidget(QLabel("Image 2 :"))
+        image2_layout.addWidget(self.image2_edit)
+        image2_layout.addWidget(image2_browse_btn)
+        new_layout.addLayout(image2_layout)
+        
+        # Résolution
+        resolution_layout = QHBoxLayout()
+        self.resolution_spin = QDoubleSpinBox()
+        self.resolution_spin.setRange(0.1, 20000.0)
+        self.resolution_spin.setValue(100.0)  # 100 mm par défaut
+        self.resolution_spin.setSuffix(" mm")
+        self.resolution_spin.setDecimals(1)
+        
+        resolution_layout.addWidget(QLabel("Résolution :"))
+        resolution_layout.addWidget(self.resolution_spin)
+        resolution_layout.addStretch(1)
+        new_layout.addLayout(resolution_layout)
+        
+        # Paramètres Farneback
+        farneback_group = QGroupBox("Paramètres Farneback")
+        farneback_layout = QVBoxLayout(farneback_group)
+        
+        # Pyr_scale
+        pyr_scale_layout = QHBoxLayout()
+        self.pyr_scale_spin = QDoubleSpinBox()
+        self.pyr_scale_spin.setRange(0.1, 0.9)
+        self.pyr_scale_spin.setValue(0.5)
+        self.pyr_scale_spin.setDecimals(1)
+        self.pyr_scale_spin.setSingleStep(0.1)
+        pyr_scale_layout.addWidget(QLabel("Pyr_scale :"))
+        pyr_scale_layout.addWidget(self.pyr_scale_spin)
+        pyr_scale_layout.addStretch(1)
+        farneback_layout.addLayout(pyr_scale_layout)
+        
+        # Levels
+        levels_layout = QHBoxLayout()
+        self.levels_spin = QSpinBox()
+        self.levels_spin.setRange(1, 10)
+        self.levels_spin.setValue(1)
+        levels_layout.addWidget(QLabel("Levels :"))
+        levels_layout.addWidget(self.levels_spin)
+        levels_layout.addStretch(1)
+        farneback_layout.addLayout(levels_layout)
+        
+        # Winsize
+        winsize_layout = QHBoxLayout()
+        self.winsize_spin = QSpinBox()
+        self.winsize_spin.setRange(3, 31)
+        self.winsize_spin.setValue(21)
+        self.winsize_spin.setSingleStep(2)
+        winsize_layout.addWidget(QLabel("Winsize :"))
+        winsize_layout.addWidget(self.winsize_spin)
+        winsize_layout.addStretch(1)
+        farneback_layout.addLayout(winsize_layout)
+        
+        # Iterations
+        iterations_layout = QHBoxLayout()
+        self.iterations_spin = QSpinBox()
+        self.iterations_spin.setRange(1, 10)
+        self.iterations_spin.setValue(5)
+        iterations_layout.addWidget(QLabel("Iterations :"))
+        iterations_layout.addWidget(self.iterations_spin)
+        iterations_layout.addStretch(1)
+        farneback_layout.addLayout(iterations_layout)
+        
+        # Poly_n
+        poly_n_layout = QHBoxLayout()
+        self.poly_n_spin = QSpinBox()
+        self.poly_n_spin.setRange(5, 7)
+        self.poly_n_spin.setValue(7)
+        poly_n_layout.addWidget(QLabel("Poly_n :"))
+        poly_n_layout.addWidget(self.poly_n_spin)
+        poly_n_layout.addStretch(1)
+        farneback_layout.addLayout(poly_n_layout)
+        
+        # Poly_sigma
+        poly_sigma_layout = QHBoxLayout()
+        self.poly_sigma_spin = QDoubleSpinBox()
+        self.poly_sigma_spin.setRange(0.5, 2.0)
+        self.poly_sigma_spin.setValue(1.5)
+        self.poly_sigma_spin.setDecimals(1)
+        self.poly_sigma_spin.setSingleStep(0.1)
+        poly_sigma_layout.addWidget(QLabel("Poly_sigma :"))
+        poly_sigma_layout.addWidget(self.poly_sigma_spin)
+        poly_sigma_layout.addStretch(1)
+        farneback_layout.addLayout(poly_sigma_layout)
+        
+        new_layout.addWidget(farneback_group)
         
         # Ligne de commande CLI équivalente
         self.new_cmd_label = QLabel("Ligne de commande CLI équivalente :")
@@ -828,7 +950,7 @@ class PhotogrammetryGUI(QWidget):
         self.new_summary_label = QLabel("")
         new_layout.addWidget(self.new_summary_label)
         new_layout.addStretch(1)
-        tabs.addTab(new_tab, "Nouvel onglet")
+        tabs.addTab(new_tab, "Analyse")
 
         # Onglet 4 : logs
         log_tab = QWidget()
@@ -865,6 +987,21 @@ class PhotogrammetryGUI(QWidget):
         self.geodetic_coord_edit.textChanged.connect(self.update_geodetic_cmd_line)
         self.geodetic_coord_edit.textChanged.connect(lambda: self.update_ref_point_combo(self.geodetic_coord_edit.text()))
         self.ref_point_combo.currentTextChanged.connect(self.update_geodetic_cmd_line)
+        
+        # Connexions pour l'onglet d'analyse
+        self.mnt_radio.toggled.connect(self.update_new_cmd_line)
+        self.ortho_radio.toggled.connect(self.update_new_cmd_line)
+        self.image1_edit.textChanged.connect(self.update_new_cmd_line)
+        self.image2_edit.textChanged.connect(self.update_new_cmd_line)
+        self.resolution_spin.valueChanged.connect(self.update_new_cmd_line)
+        
+        # Connexions pour les paramètres Farneback
+        self.pyr_scale_spin.valueChanged.connect(self.update_new_cmd_line)
+        self.levels_spin.valueChanged.connect(self.update_new_cmd_line)
+        self.winsize_spin.valueChanged.connect(self.update_new_cmd_line)
+        self.iterations_spin.valueChanged.connect(self.update_new_cmd_line)
+        self.poly_n_spin.valueChanged.connect(self.update_new_cmd_line)
+        self.poly_sigma_spin.valueChanged.connect(self.update_new_cmd_line)
         
         # Connexions pour le point de référence global
         self.global_ref_x_spin.valueChanged.connect(self.update_geodetic_cmd_line)
@@ -923,6 +1060,12 @@ class PhotogrammetryGUI(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier d'images")
         if folder:
             self.dir_edit.setText(folder)
+
+    def browse_file(self, line_edit, filter_str):
+        """Ouvre un dialogue pour sélectionner un fichier"""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Sélectionner un fichier", "", filter_str)
+        if file_path:
+            line_edit.setText(file_path)
 
     def browse_pt_file(self):
         pt_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier de coordonnées (.txt)", "", "Fichiers de coordonnées (*.txt)")
@@ -1308,6 +1451,10 @@ class PhotogrammetryGUI(QWidget):
             self.geodetic_thread.terminate()
             self.geodetic_thread.wait()
             self.append_log("<span style='color:red'>Pipeline géodésique arrêté par l'utilisateur.</span>")
+        if hasattr(self, 'analysis_thread') and self.analysis_thread and self.analysis_thread.isRunning():
+            self.analysis_thread.terminate()
+            self.analysis_thread.wait()
+            self.append_log("<span style='color:red'>Pipeline d'analyse arrêté par l'utilisateur.</span>")
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
         self.action_stop.setEnabled(False)
@@ -1498,7 +1645,7 @@ class PhotogrammetryGUI(QWidget):
                     QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
 
     def launch_new_pipeline(self):
-        """Lance le pipeline du nouvel onglet"""
+        """Lance le pipeline d'analyse"""
         self.log_text.clear()
         self.new_summary_label.setText("")
         self.action_run.setEnabled(False)
@@ -1506,32 +1653,115 @@ class PhotogrammetryGUI(QWidget):
         self.action_new.setEnabled(False)
         self.action_stop.setEnabled(True)
         
-        # Pour l'instant, juste un message de log
-        self.append_log("Démarrage du pipeline du nouvel onglet...")
-        self.append_log("Pipeline en cours de développement...")
+        # Récupération des paramètres
+        analysis_type = "mnt" if self.mnt_radio.isChecked() else "ortho"
+        image1 = self.image1_edit.text().strip()
+        image2 = self.image2_edit.text().strip()
+        resolution = self.resolution_spin.value() / 1000.0  # Conversion mm vers m
         
-        # Simuler une fin de pipeline
-        QTimer.singleShot(2000, lambda: self.new_pipeline_finished(True, "Pipeline du nouvel onglet terminé avec succès"))
+        # Paramètres Farneback
+        farneback_params = {
+            'pyr_scale': self.pyr_scale_spin.value(),
+            'levels': self.levels_spin.value(),
+            'winsize': self.winsize_spin.value(),
+            'iterations': self.iterations_spin.value(),
+            'poly_n': self.poly_n_spin.value(),
+            'poly_sigma': self.poly_sigma_spin.value()
+        }
+        
+        # Validation des paramètres
+        if not image1 or not image2:
+            self.append_log("<span style='color:red'>Erreur : Veuillez spécifier les deux images</span>")
+            self.analysis_pipeline_finished(False, "Images manquantes")
+            return
+        
+        if not os.path.exists(image1):
+            self.append_log(f"<span style='color:red'>Erreur : Image 1 introuvable : {image1}</span>")
+            self.analysis_pipeline_finished(False, "Image 1 introuvable")
+            return
+        
+        if not os.path.exists(image2):
+            self.append_log(f"<span style='color:red'>Erreur : Image 2 introuvable : {image2}</span>")
+            self.analysis_pipeline_finished(False, "Image 2 introuvable")
+            return
+        
+        # Création du dossier de sortie
+        output_dir = os.path.join(os.path.dirname(image1), "analysis_results")
+        
+        # Création et lancement du thread d'analyse
+        self.analysis_thread = AnalysisThread(
+            image1, image2, analysis_type, resolution, output_dir, farneback_params
+        )
+        self.analysis_thread.log_signal.connect(self.append_log)
+        self.analysis_thread.finished_signal.connect(self.analysis_pipeline_finished)
+        self.analysis_thread.start()
 
-    def new_pipeline_finished(self, success, message):
-        """Appelé quand le pipeline du nouvel onglet se termine"""
+    def analysis_pipeline_finished(self, success, message):
+        """Appelé quand le pipeline d'analyse se termine"""
         if success:
             self.new_summary_label.setText(f"<span style='color:green'>{message}</span>")
+            
+            # Affichage des résultats si disponibles
+            if self.analysis_thread and self.analysis_thread.get_results():
+                results = self.analysis_thread.get_results()
+                self.append_log(f"<span style='color:green'>RMSE: {results.get('rmse', 'N/A'):.6f}</span>")
+                self.append_log(f"<span style='color:green'>Corrélation Pearson: {results.get('correlation_pearson', 'N/A'):.6f}</span>")
+                self.append_log(f"<span style='color:green'>Nombre de points: {results.get('n_points', 'N/A')}</span>")
+                
+                if 'report_path' in results:
+                    self.append_log(f"<span style='color:blue'>Rapport généré: {results['report_path']}</span>")
         else:
             self.new_summary_label.setText(f"<span style='color:red'>{message}</span>")
+        
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
         self.action_new.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def update_new_cmd_line(self):
-        """Met à jour la ligne de commande CLI pour le nouvel onglet"""
-        # Pour l'instant, une commande simple
-        cmd = "python photogeoalign.py --new-pipeline"
+        """Met à jour la ligne de commande CLI pour l'analyse"""
+        # Type d'analyse
+        analysis_type = "mnt" if self.mnt_radio.isChecked() else "ortho"
+        
+        # Images
+        image1 = self.image1_edit.text().strip()
+        image2 = self.image2_edit.text().strip()
+        
+        # Résolution (conversion mm vers m)
+        resolution = self.resolution_spin.value() / 1000.0
+        
+        # Paramètres Farneback
+        pyr_scale = self.pyr_scale_spin.value()
+        levels = self.levels_spin.value()
+        winsize = self.winsize_spin.value()
+        iterations = self.iterations_spin.value()
+        poly_n = self.poly_n_spin.value()
+        poly_sigma = self.poly_sigma_spin.value()
+        
+        # Construction de la commande
+        cmd_parts = ["python", "photogeoalign.py", "--analysis"]
+        cmd_parts.append(f"--type={analysis_type}")
+        
+        if image1:
+            cmd_parts.append(f"--image1={image1}")
+        if image2:
+            cmd_parts.append(f"--image2={image2}")
+        
+        cmd_parts.append(f"--resolution={resolution}")
+        
+        # Ajout des paramètres Farneback
+        cmd_parts.append(f"--pyr-scale={pyr_scale}")
+        cmd_parts.append(f"--levels={levels}")
+        cmd_parts.append(f"--winsize={winsize}")
+        cmd_parts.append(f"--iterations={iterations}")
+        cmd_parts.append(f"--poly-n={poly_n}")
+        cmd_parts.append(f"--poly-sigma={poly_sigma}")
+        
+        cmd = " ".join(cmd_parts)
         self.new_cmd_line.setText(cmd)
 
     def export_new_job_dialog(self):
-        """Exporte le job pour le nouvel onglet"""
+        """Exporte le job pour l'analyse"""
         import sys
         import os
         exe_path = sys.executable
@@ -1553,7 +1783,7 @@ class PhotogrammetryGUI(QWidget):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
             job_content = self.generate_job_script(vals, "new")
-            file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "new.job", "Fichiers batch (*.out *.job *.sh)")
+            file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "analysis.job", "Fichiers batch (*.out *.job *.sh)")
             if file_path:
                 try:
                     with open(file_path, "w", encoding="utf-8") as f:
@@ -1578,7 +1808,7 @@ module load micmac
 # L'exécutable Python est détecté automatiquement par le script
 # Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""
         elif pipeline_type == "new":
-            # Pour le nouveau pipeline
+            # Pour le pipeline d'analyse
             modules = """module purge
 # L'exécutable Python est détecté automatiquement par le script
 # Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""

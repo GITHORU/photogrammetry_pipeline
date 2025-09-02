@@ -1463,8 +1463,8 @@ def create_unified_orthoimage_and_dtm(input_dir, logger, output_dir=None, resolu
         'Resolution': f'{resolution}m per pixel',
         'Origin_X': f'{origin_x:.6f}',
         'Origin_Y': f'{origin_y:.6f}',
-        'Extent_X': f'{global_max_coords[0] - global_min_coords[0]:.3f}m',
-        'Extent_Y': f'{global_max_coords[1] - global_min_coords[1]:.3f}m',
+        'Extent_X': f'{float(global_max_coords[0] - global_min_coords[0]):.3f}m',
+'Extent_Y': f'{float(global_max_coords[1] - global_min_coords[1]):.3f}m',
         'Source_Files': str(len(ply_files)),
         'Valid_Pixels': str(int(np.sum(~np.isnan(unified_height)))),
         'Height_Range': f'{np.nanmin(unified_height):.3f}m to {np.nanmax(unified_height):.3f}m' if np.sum(~np.isnan(unified_height)) > 0 else 'No valid pixels'
@@ -1693,7 +1693,7 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
     height = int((global_bounds.top - global_bounds.bottom) / final_resolution)
     
     logger.info(f"Grille unifiée : {width} x {height} pixels")
-    logger.info(f"Dimensions physiques : {(global_bounds.right - global_bounds.left):.3f}m x {(global_bounds.top - global_bounds.bottom):.3f}m")
+    logger.info(f"Dimensions physiques : {float(global_bounds.right - global_bounds.left):.3f}m x {float(global_bounds.top - global_bounds.bottom):.3f}m")
     
     # Calcul du géoréférencement unifié avec la résolution finale
     transform = from_origin(global_bounds.left, global_bounds.top, final_resolution, final_resolution)
@@ -2052,8 +2052,8 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
         'Resolution': f'{reference_resolution}m per pixel',
         'Origin_X': f'{global_bounds.left:.6f}',
         'Origin_Y': f'{global_bounds.top:.6f}',
-        'Extent_X': f'{global_bounds.right - global_bounds.left:.3f}m',
-        'Extent_Y': f'{global_bounds.top - global_bounds.bottom:.3f}m',
+        'Extent_X': f'{float(global_bounds.right - global_bounds.left):.3f}m',
+'Extent_Y': f'{float(global_bounds.top - global_bounds.bottom):.3f}m',
         'Source_Files': str(len(height_files)),
         'Valid_Pixels': str(int(np.sum(~np.isnan(unified_height)))),
         'Height_Range': f'{np.nanmin(unified_height):.3f}m to {np.nanmax(unified_height):.3f}m' if valid_pixels > 0 else 'No valid pixels'
@@ -2587,7 +2587,7 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=Non
                     logger.error(f"❌ Bounds invalides détectés : left={global_left}, right={global_right}, bottom={global_bottom}, top={global_top}")
                     raise ValueError("Bounds invalides - l'étendue des orthoimages est incorrecte")
                 
-                logger.info(f"  Étendue des orthos : {global_left:.2f}m à {global_right:.2f}m (X), {global_bottom:.2f}m à {global_top:.2f}m (Y)")
+                logger.info(f"  Étendue des orthos : {float(global_left):.2f}m à {float(global_right):.2f}m (X), {float(global_bottom):.2f}m à {float(global_top):.2f}m (Y)")
                 
                 # Si la taille de grille n'est pas spécifiée, l'utiliser pour contraindre
                 # 🎯 GRID AUTOMATIQUE : Utiliser l'étendue réelle des orthos
@@ -2597,8 +2597,8 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=Non
                 )
                 
                 logger.info(f"Étendue globale calculée : {global_bounds}")
-                logger.info(f"  Largeur : {global_bounds.right - global_bounds.left:.2f}m")
-                logger.info(f"  Hauteur : {global_bounds.top - global_bounds.bottom:.2f}m")
+                logger.info(f"  Largeur : {float(global_bounds.right - global_bounds.left):.2f}m")
+                logger.info(f"  Hauteur : {float(global_bounds.top - global_bounds.bottom):.2f}m")
                 
         except Exception as e:
             logger.error(f"❌ Erreur lors de l'analyse de l'orthoimage : {e}")
@@ -3110,8 +3110,8 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=None):
     )
     
     logger.info(f"🌍 Étendue globale : {global_bounds}")
-    logger.info(f"  📏 Largeur : {global_bounds.right - global_bounds.left:.3f}m")
-    logger.info(f"  📏 Hauteur : {global_bounds.top - global_bounds.bottom:.3f}m")
+    logger.info(f"  📏 Largeur : {float(global_bounds.right - global_bounds.left):.3f}m")
+    logger.info(f"  📏 Hauteur : {float(global_bounds.top - global_bounds.bottom):.3f}m")
     
     # Calculer les dimensions de la grille finale
     # CORRECTION : Utiliser round() au lieu de int() pour éviter les lignes noires

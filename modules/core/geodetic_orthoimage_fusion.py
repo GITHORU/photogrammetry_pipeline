@@ -437,7 +437,7 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=Non
                     logger.error(f"❌ Bounds invalides détectés : left={global_left}, right={global_right}, bottom={global_bottom}, top={global_top}")
                     raise ValueError("Bounds invalides - l'étendue des orthoimages est incorrecte")
                 
-                logger.info(f"  Étendue des orthos : {global_left:.2f}m à {global_right:.2f}m (X), {global_bottom:.2f}m à {global_top:.2f}m (Y)")
+                logger.info(f"  Étendue des orthos : {float(global_left):.2f}m à {float(global_right):.2f}m (X), {float(global_bottom):.2f}m à {float(global_top):.2f}m (Y)")
                 
                 # Si la taille de grille n'est pas spécifiée, l'utiliser pour contraindre
                 # 🎯 GRID AUTOMATIQUE : Utiliser l'étendue réelle des orthos
@@ -447,8 +447,8 @@ def unified_ortho_mnt_fusion(input_dir, logger, output_dir, final_resolution=Non
                 )
                 
                 logger.info(f"Étendue globale calculée : {global_bounds}")
-                logger.info(f"  Largeur : {global_bounds.right - global_bounds.left:.2f}m")
-                logger.info(f"  Hauteur : {global_bounds.top - global_bounds.bottom:.2f}m")
+                logger.info(f"  Largeur : {float(global_bounds.right - global_bounds.left):.2f}m")
+                logger.info(f"  Hauteur : {float(global_bounds.top - global_bounds.bottom):.2f}m")
                 
         except Exception as e:
             logger.error(f"❌ Erreur lors de l'analyse de l'orthoimage : {e}")

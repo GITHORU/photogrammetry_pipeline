@@ -9,6 +9,7 @@ from . import geodetic_processing
 from . import geodetic_orthoimage_basic
 from . import geodetic_orthoimage_fusion
 from . import geodetic_utils
+from . import analysis
 
 # Import des fonctions principales pour faciliter l'utilisation
 from .geodetic_core import (
@@ -45,6 +46,13 @@ from .geodetic_utils import (
     simple_ortho_assembly
 )
 
+from .analysis import (
+    run_analysis_pipeline,
+    analyze_mnt_comparison,
+    analyze_ortho_comparison,
+    generate_analysis_report
+)
+
 __all__ = [
     # Core functions
     'patch_rasterio_essentials',
@@ -73,5 +81,11 @@ __all__ = [
     'calculate_global_histogram_and_quantiles',
     'equalize_zone_to_global_quantiles',
     'simple_mnt_assembly',
-    'simple_ortho_assembly'
+    'simple_ortho_assembly',
+    
+    # Analysis functions
+    'run_analysis_pipeline',
+    'analyze_mnt_comparison',
+    'analyze_ortho_comparison',
+    'generate_analysis_report'
 ] 

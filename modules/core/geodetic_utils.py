@@ -379,7 +379,7 @@ def simple_mnt_assembly(zones_output_dir, final_resolution, logger):
     final_height = round((global_bounds.top - global_bounds.bottom) / final_resolution)
     
     logger.info(f"📏 Grille finale : {final_width} × {final_height} pixels")
-    logger.info(f"📏 Étendue : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+    logger.info(f"📏 Étendue : {float(global_bounds.right - global_bounds.left):.3f}m × {float(global_bounds.top - global_bounds.bottom):.3f}m")
     
     # Créer la transformation affine finale
     # IMPORTANT : Pour les MNT, on inverse l'axe Y car rasterio attend que Y augmente vers le bas
@@ -484,7 +484,7 @@ def simple_mnt_assembly(zones_output_dir, final_resolution, logger):
     
     logger.info(f"🎉 MNT UNIFIÉ CRÉÉ : {output_path}")
     logger.info(f"   📏 Dimensions : {final_width} × {final_height} pixels")
-    logger.info(f"   📏 Étendue : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+    logger.info(f"   📏 Étendue : {float(global_bounds.right - global_bounds.left):.3f}m × {float(global_bounds.top - global_bounds.bottom):.3f}m")
     logger.info(f"   🎯 Zones assemblées : {zones_placed}")
     
     # Statistiques sur les données
@@ -609,8 +609,8 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=None):
     )
     
     logger.info(f"🌍 Étendue globale : {global_bounds}")
-    logger.info(f"  📏 Largeur : {global_bounds.right - global_bounds.left:.3f}m")
-    logger.info(f"  📏 Hauteur : {global_bounds.top - global_bounds.bottom:.3f}m")
+    logger.info(f"  📏 Largeur : {float(global_bounds.right - global_bounds.left):.3f}m")
+    logger.info(f"  📏 Hauteur : {float(global_bounds.top - global_bounds.bottom):.3f}m")
     
     # Calculer les dimensions de la grille finale
     # CORRECTION : Utiliser round() au lieu de int() pour éviter les lignes noires
@@ -743,7 +743,7 @@ def simple_ortho_assembly(zones_output_dir, logger, final_resolution=None):
     
     logger.info(f"🎉 ORTHO UNIFIÉE CRÉÉE : {output_path}")
     logger.info(f"   📏 Dimensions : {final_width} × {final_height} pixels")
-    logger.info(f"   📏 Étendue : {(global_bounds.right - global_bounds.left):.3f}m × {(global_bounds.top - global_bounds.bottom):.3f}m")
+    logger.info(f"   📏 Étendue : {float(global_bounds.right - global_bounds.left):.3f}m × {float(global_bounds.top - global_bounds.bottom):.3f}m")
     logger.info(f"   🎯 Zones assemblées : {zones_placed}")
     
     return output_path

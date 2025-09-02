@@ -190,7 +190,7 @@ def create_unified_orthoimage_and_dtm(input_dir, logger, output_dir=None, resolu
         logger.error("Aucun nuage valide trouvé")
         return
     
-    logger.info(f"Étendue globale : X[{global_min_coords[0]:.3f}, {global_max_coords[0]:.3f}], Y[{global_min_coords[1]:.3f}, {global_max_coords[1]:.3f}]")
+    logger.info(f"Étendue globale : X[{float(global_min_coords[0]):.3f}, {float(global_max_coords[0]):.3f}], Y[{float(global_min_coords[1]):.3f}, {float(global_max_coords[1]):.3f}]")
     
     # Création de la grille globale
     x_range = np.arange(global_min_coords[0], global_max_coords[0] + resolution, resolution)
@@ -518,7 +518,7 @@ def merge_orthoimages_and_dtm(input_dir, logger, output_dir=None, target_resolut
                 logger.info(f"    Source: {source_valid} pixels valides, {source_nan} pixels NaN")
                 logger.info(f"    Source: {source_zero} pixels à 0, {source_negative} pixels négatifs")
                 if source_valid > 0:
-                    logger.info(f"    Source hauteur min/max: {np.nanmin(height_data):.3f}m / {np.nanmax(height_data):.3f}m")
+                    logger.info(f"    Source hauteur min/max: {float(np.nanmin(height_data)):.3f}m / {float(np.nanmax(height_data)):.3f}m")
                 
                 # CORRECTION: Vérification des valeurs 0 dans la source
                 if source_zero > 0:

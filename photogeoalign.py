@@ -9,6 +9,7 @@ import os
 import argparse
 import subprocess
 import multiprocessing
+import traceback
 from PySide6.QtWidgets import QApplication, QMessageBox, QLabel
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QIcon, QAction
@@ -17,12 +18,32 @@ from PySide6.QtGui import QPixmap, QIcon, QAction
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
+# Gestionnaire d'exception global pour capturer les erreurs de formatage
+def global_exception_handler(exctype, value, traceback_obj):
+    if exctype == ValueError and "Unknown format code 'f' for object of type 'str'" in str(value):
+        print(f"❌ ERREUR DE FORMATAGE DÉTECTÉE:")
+        print(f"   Type: {exctype}")
+        print(f"   Message: {value}")
+        print(f"   Fichier: {traceback_obj.tb_frame.f_code.co_filename}")
+        print(f"   Ligne: {traceback_obj.tb_lineno}")
+        print(f"   Fonction: {traceback_obj.tb_frame.f_code.co_name}")
+        print(f"   Traceback complet:")
+        traceback.print_tb(traceback_obj)
+        sys.exit(1)
+    else:
+        # Comportement par défaut pour les autres exceptions
+        sys.__excepthook__(exctype, value, traceback_obj)
+
+# Installation du gestionnaire d'exception global
+sys.excepthook = global_exception_handler
+
 # Import des modules refactorisés
 from modules.core.utils import setup_logger, resource_path
 from modules.core.micmac import (
     run_micmac_tapioca, run_micmac_tapas, run_micmac_c3dc,
     run_micmac_saisieappuisinit, run_micmac_saisieappuispredic
 )
+from modules.core.analysis import run_analysis_pipeline
 from modules.workers import GeodeticTransformThread
 from modules.gui.main_window import PhotogrammetryGUI
 
@@ -151,6 +172,21 @@ if __name__ == "__main__":
         parser.add_argument('--color-fusion-median', action='store_true', help='Utiliser la méthode de médiane pour la fusion des couleurs')
 
         parser.add_argument('--max-workers', type=int, default=4, help='Nombre maximum de processus parallèles (défaut: 4)')
+        
+        # Arguments pour le pipeline d'analyse
+        parser.add_argument('--analysis', action='store_true', help='Lancer le pipeline d\'analyse')
+        parser.add_argument('--type', choices=['mnt', 'ortho'], default='mnt', help='Type d\'analyse : mnt ou ortho (défaut: mnt)')
+        parser.add_argument('--image1', default='', help='Chemin vers l\'image 1 pour l\'analyse')
+        parser.add_argument('--image2', default='', help='Chemin vers l\'image 2 pour l\'analyse')
+        parser.add_argument('--resolution', type=float, default=10.0, help='Résolution d\'analyse en mètres (défaut: 10.0)')
+        
+        # Arguments pour les paramètres Farneback
+        parser.add_argument('--pyr-scale', type=float, default=0.5, help='Facteur d\'échelle de la pyramide (défaut: 0.5)')
+        parser.add_argument('--levels', type=int, default=1, help='Nombre de niveaux de la pyramide (défaut: 1)')
+        parser.add_argument('--winsize', type=int, default=21, help='Taille de la fenêtre de recherche (défaut: 21)')
+        parser.add_argument('--iterations', type=int, default=5, help='Nombre d\'itérations (défaut: 5)')
+        parser.add_argument('--poly-n', type=int, default=7, help='Taille du filtre polynomial (défaut: 7)')
+        parser.add_argument('--poly-sigma', type=float, default=1.5, help='Écart-type du filtre polynomial (défaut: 1.5)')
     
         args = parser.parse_args()
         if args.geodetic:
@@ -231,7 +267,57 @@ if __name__ == "__main__":
                 
                 print("Transformations géodésiques terminées avec succès !")
             except Exception as e:
-                print(f"Erreur lors des transformations géodésiques : {e}")
+                print(f"Erreur lors des transformations géodésiques : {str(e)}")
+                sys.exit(1)
+        elif args.analysis:
+            # Mode pipeline d'analyse
+            if not args.image1 or not os.path.exists(args.image1):
+                print("Erreur : veuillez spécifier un fichier image1 valide.")
+                sys.exit(1)
+            if not args.image2 or not os.path.exists(args.image2):
+                print("Erreur : veuillez spécifier un fichier image2 valide.")
+                sys.exit(1)
+            
+            log_path = os.path.join(os.path.dirname(args.image1), 'analysis_pipeline.log')
+            logger = setup_logger(log_path)
+            print(f"Début du pipeline d'analyse pour les images : {args.image1} et {args.image2}")
+            
+            try:
+                analysis_type = args.type
+                image1_path = args.image1
+                image2_path = args.image2
+                resolution = args.resolution
+                
+                # Paramètres Farneback
+                farneback_params = {
+                    'pyr_scale': args.pyr_scale,
+                    'levels': args.levels,
+                    'winsize': args.winsize,
+                    'iterations': args.iterations,
+                    'poly_n': args.poly_n,
+                    'poly_sigma': args.poly_sigma
+                }
+                
+                print(f"Type d'analyse : {analysis_type}")
+                print(f"Image 1 : {image1_path}")
+                print(f"Image 2 : {image2_path}")
+                print(f"Résolution : {resolution} m")
+                print(f"Paramètres Farneback : {farneback_params}")
+                
+                # Exécution du pipeline d'analyse
+                output_dir = os.path.join(os.path.dirname(image1_path), 'analysis_results')
+                results = run_analysis_pipeline(image1_path, image2_path, analysis_type, resolution, output_dir, farneback_params)
+                
+                if results:
+                    print(f"RMSE: {results.get('rmse', 'N/A')}")
+                    print(f"Corrélation Pearson: {results.get('correlation_pearson', 'N/A')}")
+                    print(f"Nombre de points: {results.get('n_points', 'N/A')}")
+                    if 'report_path' in results:
+                        print(f"Rapport généré: {results['report_path']}")
+                
+                print("Pipeline d'analyse terminé avec succès !")
+            except Exception as e:
+                print(f"Erreur lors de l'exécution du pipeline d'analyse : {str(e)}")
                 sys.exit(1)
         elif args.no_gui:
             # Mode pipeline photogrammétrique
@@ -261,7 +347,7 @@ if __name__ == "__main__":
                     run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf, tapas_model=tapas_model, extra_params=args.c3dc_extra)
                 print("Pipeline terminé avec succès !")
             except Exception as e:
-                print(f"Erreur lors de l'exécution du pipeline : {e}")
+                print(f"Erreur lors de l'exécution du pipeline : {str(e)}")
                 sys.exit(1)
         else:
             check_micmac_or_quit()
