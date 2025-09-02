@@ -292,9 +292,39 @@ def analyze_mnt_comparison(mnt1: np.ndarray, mnt2: np.ndarray,
     logger.info(f"Analyse MNT terminée: RMSE={float(results['rmse']):.3f}m, Corrélation={float(results['correlation_pearson']):.3f}")
     return results
 
-def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray, 
-                                    resolution: float, output_dir: str, 
-                                    logger: logging.Logger, farneback_params: dict = None) -> Dict[str, Any]:
+def adapt_farneback_params(resolution: float, base_config: dict, base_resolution: float = 0.01) -> dict:
+    """
+    Adapte les paramètres Farneback en fonction de la résolution.
+    
+    Args:
+        resolution: Résolution actuelle en mètres
+        base_config: Configuration de référence optimisée pour base_resolution
+        base_resolution: Résolution de référence (défaut: 0.01m)
+    
+    Returns:
+        dict: Paramètres adaptés avec winsize calculé dynamiquement
+    """
+    ratio = base_resolution / resolution
+    
+    adapted_config = {
+        'pyr_scale': base_config['pyr_scale'],  # Constant: 0.8 (structure optimale)
+        'levels': base_config['levels'],        # Constant: 5 (robustesse)
+        'winsize': max(3, int(base_config['winsize'] * ratio)),  # Adapté selon la résolution
+        'iterations': base_config['iterations'],  # Constant: 10
+        'poly_n': base_config['poly_n'],        # Constant: 7
+        'poly_sigma': base_config['poly_sigma']  # Constant: 1.2
+    }
+    
+    # S'assurer que winsize est impair (requis par OpenCV)
+    if adapted_config['winsize'] % 2 == 0:
+        adapted_config['winsize'] += 1
+    
+    return adapted_config
+
+
+def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray,
+                                     resolution: float, output_dir: str,
+                                     logger: logging.Logger, farneback_params: dict = None) -> Dict[str, Any]:
     """
     Calcule les déplacements entre deux images en utilisant la méthode de Farneback
     
@@ -630,6 +660,48 @@ def run_analysis_pipeline(image1_path: str, image2_path: str,
     os.makedirs(output_dir, exist_ok=True)
     
     try:
+        # Configuration de référence optimisée pour 0.01m
+        base_config = {
+            'pyr_scale': 0.8,
+            'levels': 5,
+            'winsize': 101,
+            'iterations': 10,
+            'poly_n': 7,
+            'poly_sigma': 1.2
+        }
+        
+        # Adaptation automatique des paramètres selon la résolution
+        if analysis_type == 'ortho':
+            if farneback_params is None:
+                # Utiliser la configuration de base adaptée
+                adapted_params = adapt_farneback_params(resolution, base_config)
+                logger.info(f"=== PARAMÈTRES FARNEBACK UTILISÉS ===")
+                logger.info(f"Configuration optimisée adaptée automatiquement pour résolution {resolution}m:")
+                logger.info(f"  - pyr_scale: {adapted_params['pyr_scale']} (constant)")
+                logger.info(f"  - levels: {adapted_params['levels']} (constant)")
+                ratio = 0.01 / resolution
+                logger.info(f"  - winsize: {adapted_params['winsize']} (adapté: {base_config['winsize']} * {ratio:.2f} = {base_config['winsize'] * ratio:.0f})")
+                logger.info(f"  - iterations: {adapted_params['iterations']} (constant)")
+                logger.info(f"  - poly_n: {adapted_params['poly_n']} (constant)")
+                logger.info(f"  - poly_sigma: {adapted_params['poly_sigma']} (constant)")
+                logger.info(f"=====================================")
+            else:
+                # Utiliser les paramètres fournis mais adapter winsize
+                adapted_params = farneback_params.copy()
+                adapted_winsize = adapt_farneback_params(resolution, base_config)['winsize']
+                adapted_params['winsize'] = adapted_winsize
+                logger.info(f"=== PARAMÈTRES FARNEBACK UTILISÉS ===")
+                logger.info(f"Paramètres personnalisés avec winsize adapté automatiquement:")
+                logger.info(f"  - pyr_scale: {adapted_params['pyr_scale']}")
+                logger.info(f"  - levels: {adapted_params['levels']}")
+                logger.info(f"  - winsize: {adapted_winsize} (adapté pour résolution {resolution}m)")
+                logger.info(f"  - iterations: {adapted_params['iterations']}")
+                logger.info(f"  - poly_n: {adapted_params['poly_n']}")
+                logger.info(f"  - poly_sigma: {adapted_params['poly_sigma']}")
+                logger.info(f"=====================================")
+        else:
+            adapted_params = farneback_params
+        
         # Chargement des données
         logger.info("Chargement des données...")
         data1, metadata1 = load_raster_data(image1_path)
@@ -646,7 +718,7 @@ def run_analysis_pipeline(image1_path: str, image2_path: str,
         if analysis_type == 'mnt':
             results = analyze_mnt_comparison(resampled1, resampled2, resolution)
         elif analysis_type == 'ortho':
-            results = analyze_ortho_comparison(image1_path, image2_path, resolution, output_dir, farneback_params)
+            results = analyze_ortho_comparison(image1_path, image2_path, resolution, output_dir, adapted_params)
         else:
             raise ValueError(f"Type d'analyse non supporté: {analysis_type}")
         

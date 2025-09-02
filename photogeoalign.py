@@ -180,14 +180,14 @@ if __name__ == "__main__":
         parser.add_argument('--image2', default='', help='Chemin vers l\'image 2 pour l\'analyse')
         parser.add_argument('--resolution', type=float, default=10.0, help='Résolution d\'analyse en mètres (défaut: 10.0)')
         
-        # Arguments pour les paramètres Farneback
-        parser.add_argument('--pyr-scale', type=float, default=0.5, help='Facteur d\'échelle de la pyramide (défaut: 0.5)')
-        parser.add_argument('--levels', type=int, default=1, help='Nombre de niveaux de la pyramide (défaut: 1)')
-        parser.add_argument('--winsize', type=int, default=21, help='Taille de la fenêtre de recherche (défaut: 21)')
-        parser.add_argument('--iterations', type=int, default=5, help='Nombre d\'itérations (défaut: 5)')
+        # Arguments pour les paramètres Farneback (configuration optimisée par défaut)
+        parser.add_argument('--pyr-scale', type=float, default=0.8, help='Facteur d\'échelle de la pyramide (défaut: 0.8)')
+        parser.add_argument('--levels', type=int, default=5, help='Nombre de niveaux de la pyramide (défaut: 5)')
+        parser.add_argument('--winsize', type=int, default=101, help='Taille de la fenêtre de recherche (défaut: 101, adapté automatiquement)')
+        parser.add_argument('--iterations', type=int, default=10, help='Nombre d\'itérations (défaut: 10)')
         parser.add_argument('--poly-n', type=int, default=7, help='Taille du filtre polynomial (défaut: 7)')
-        parser.add_argument('--poly-sigma', type=float, default=1.5, help='Écart-type du filtre polynomial (défaut: 1.5)')
-    
+        parser.add_argument('--poly-sigma', type=float, default=1.2, help='Écart-type du filtre polynomial (défaut: 1.2)')
+        
         args = parser.parse_args()
         if args.geodetic:
             # Mode transformations géodésiques
@@ -288,21 +288,43 @@ if __name__ == "__main__":
                 image2_path = args.image2
                 resolution = args.resolution
                 
-                # Paramètres Farneback
-                farneback_params = {
-                    'pyr_scale': args.pyr_scale,
-                    'levels': args.levels,
-                    'winsize': args.winsize,
-                    'iterations': args.iterations,
-                    'poly_n': args.poly_n,
-                    'poly_sigma': args.poly_sigma
-                }
+                # Paramètres Farneback (seulement si spécifiés explicitement)
+                farneback_params = None
+                if (args.pyr_scale != 0.8 or args.levels != 5 or args.winsize != 101 or 
+                    args.iterations != 10 or args.poly_n != 7 or args.poly_sigma != 1.2):
+                    # Paramètres personnalisés fournis
+                    farneback_params = {
+                        'pyr_scale': args.pyr_scale,
+                        'levels': args.levels,
+                        'winsize': args.winsize,  # Sera adapté automatiquement
+                        'iterations': args.iterations,
+                        'poly_n': args.poly_n,
+                        'poly_sigma': args.poly_sigma
+                    }
                 
                 print(f"Type d'analyse : {analysis_type}")
                 print(f"Image 1 : {image1_path}")
                 print(f"Image 2 : {image2_path}")
                 print(f"Résolution : {resolution} m")
-                print(f"Paramètres Farneback : {farneback_params}")
+                if farneback_params:
+                    print(f"Paramètres Farneback personnalisés : {farneback_params}")
+                else:
+                    print("Paramètres Farneback : Configuration optimale automatique")
+                    # Afficher les paramètres optimisés qui seront utilisés
+                    base_config = {
+                        'pyr_scale': 0.8, 'levels': 5, 'winsize': 101,
+                        'iterations': 10, 'poly_n': 7, 'poly_sigma': 1.2
+                    }
+                    ratio = 0.01 / resolution
+                    adapted_winsize = max(3, int(101 * ratio))
+                    if adapted_winsize % 2 == 0:
+                        adapted_winsize += 1
+                    print(f"  - pyr_scale: {base_config['pyr_scale']} (constant)")
+                    print(f"  - levels: {base_config['levels']} (constant)")
+                    print(f"  - winsize: {adapted_winsize} (adapté: 101 * {ratio:.2f} = {101 * ratio:.0f})")
+                    print(f"  - iterations: {base_config['iterations']} (constant)")
+                    print(f"  - poly_n: {base_config['poly_n']} (constant)")
+                    print(f"  - poly_sigma: {base_config['poly_sigma']} (constant)")
                 
                 # Exécution du pipeline d'analyse
                 output_dir = os.path.join(os.path.dirname(image1_path), 'analysis_results')

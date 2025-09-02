@@ -875,7 +875,7 @@ class PhotogrammetryGUI(QWidget):
         pyr_scale_layout = QHBoxLayout()
         self.pyr_scale_spin = QDoubleSpinBox()
         self.pyr_scale_spin.setRange(0.1, 0.9)
-        self.pyr_scale_spin.setValue(0.5)
+        self.pyr_scale_spin.setValue(0.8)  # Configuration optimisée
         self.pyr_scale_spin.setDecimals(1)
         self.pyr_scale_spin.setSingleStep(0.1)
         pyr_scale_layout.addWidget(QLabel("Pyr_scale :"))
@@ -887,19 +887,21 @@ class PhotogrammetryGUI(QWidget):
         levels_layout = QHBoxLayout()
         self.levels_spin = QSpinBox()
         self.levels_spin.setRange(1, 10)
-        self.levels_spin.setValue(1)
+        self.levels_spin.setValue(5)  # Configuration optimisée
         levels_layout.addWidget(QLabel("Levels :"))
         levels_layout.addWidget(self.levels_spin)
         levels_layout.addStretch(1)
         farneback_layout.addLayout(levels_layout)
         
-        # Winsize
+        # Winsize (calculé automatiquement selon la résolution)
         winsize_layout = QHBoxLayout()
         self.winsize_spin = QSpinBox()
-        self.winsize_spin.setRange(3, 31)
-        self.winsize_spin.setValue(21)
+        self.winsize_spin.setRange(3, 1000)  # Plage étendue pour l'affichage
+        self.winsize_spin.setValue(101)  # Valeur par défaut pour 0.01m
         self.winsize_spin.setSingleStep(2)
-        winsize_layout.addWidget(QLabel("Winsize :"))
+        self.winsize_spin.setReadOnly(True)  # Lecture seule
+        self.winsize_spin.setToolTip("Winsize calculé automatiquement selon la résolution (référence: 101 pour 0.01m)")
+        winsize_layout.addWidget(QLabel("Winsize (auto) :"))
         winsize_layout.addWidget(self.winsize_spin)
         winsize_layout.addStretch(1)
         farneback_layout.addLayout(winsize_layout)
@@ -907,8 +909,8 @@ class PhotogrammetryGUI(QWidget):
         # Iterations
         iterations_layout = QHBoxLayout()
         self.iterations_spin = QSpinBox()
-        self.iterations_spin.setRange(1, 10)
-        self.iterations_spin.setValue(5)
+        self.iterations_spin.setRange(1, 50)
+        self.iterations_spin.setValue(10)  # Configuration optimisée
         iterations_layout.addWidget(QLabel("Iterations :"))
         iterations_layout.addWidget(self.iterations_spin)
         iterations_layout.addStretch(1)
@@ -918,7 +920,7 @@ class PhotogrammetryGUI(QWidget):
         poly_n_layout = QHBoxLayout()
         self.poly_n_spin = QSpinBox()
         self.poly_n_spin.setRange(5, 7)
-        self.poly_n_spin.setValue(7)
+        self.poly_n_spin.setValue(7)  # Configuration optimisée
         poly_n_layout.addWidget(QLabel("Poly_n :"))
         poly_n_layout.addWidget(self.poly_n_spin)
         poly_n_layout.addStretch(1)
@@ -928,7 +930,7 @@ class PhotogrammetryGUI(QWidget):
         poly_sigma_layout = QHBoxLayout()
         self.poly_sigma_spin = QDoubleSpinBox()
         self.poly_sigma_spin.setRange(0.5, 2.0)
-        self.poly_sigma_spin.setValue(1.5)
+        self.poly_sigma_spin.setValue(1.2)  # Configuration optimisée
         self.poly_sigma_spin.setDecimals(1)
         self.poly_sigma_spin.setSingleStep(0.1)
         poly_sigma_layout.addWidget(QLabel("Poly_sigma :"))
@@ -965,6 +967,10 @@ class PhotogrammetryGUI(QWidget):
         layout.addWidget(tabs)
         main_layout.addLayout(layout)
         self.setLayout(main_layout)
+        
+        # Initialisation du winsize automatique
+        self.update_winsize_auto()
+        
         # Connexions
         self.dir_edit.textChanged.connect(self.update_cmd_line)
         self.mode_combo.currentTextChanged.connect(self.update_cmd_line)
@@ -994,6 +1000,7 @@ class PhotogrammetryGUI(QWidget):
         self.image1_edit.textChanged.connect(self.update_new_cmd_line)
         self.image2_edit.textChanged.connect(self.update_new_cmd_line)
         self.resolution_spin.valueChanged.connect(self.update_new_cmd_line)
+        self.resolution_spin.valueChanged.connect(self.update_winsize_auto)
         
         # Connexions pour les paramètres Farneback
         self.pyr_scale_spin.valueChanged.connect(self.update_new_cmd_line)
@@ -1718,6 +1725,31 @@ class PhotogrammetryGUI(QWidget):
         self.action_new.setEnabled(True)
         self.action_stop.setEnabled(False)
 
+    def update_winsize_auto(self):
+        """Met à jour automatiquement le winsize selon la résolution"""
+        resolution_mm = self.resolution_spin.value()
+        resolution_m = resolution_mm / 1000.0  # Conversion mm vers m
+        
+        # Configuration de référence optimisée pour 0.01m (10mm)
+        base_winsize = 101
+        base_resolution = 0.01  # 10mm
+        
+        # Calcul du winsize adapté
+        ratio = base_resolution / resolution_m
+        adapted_winsize = max(3, int(base_winsize * ratio))
+        
+        # S'assurer que winsize est impair (requis par OpenCV)
+        if adapted_winsize % 2 == 0:
+            adapted_winsize += 1
+        
+        # Mise à jour du spinbox (sans déclencher le signal valueChanged)
+        self.winsize_spin.blockSignals(True)
+        self.winsize_spin.setValue(adapted_winsize)
+        self.winsize_spin.blockSignals(False)
+        
+        # Mise à jour du tooltip
+        self.winsize_spin.setToolTip(f"Winsize calculé automatiquement: {adapted_winsize} (référence: {base_winsize} pour {base_resolution*1000:.0f}mm)")
+
     def update_new_cmd_line(self):
         """Met à jour la ligne de commande CLI pour l'analyse"""
         # Type d'analyse
@@ -1749,10 +1781,10 @@ class PhotogrammetryGUI(QWidget):
         
         cmd_parts.append(f"--resolution={resolution}")
         
-        # Ajout des paramètres Farneback
+        # Ajout des paramètres Farneback (winsize calculé automatiquement)
         cmd_parts.append(f"--pyr-scale={pyr_scale}")
         cmd_parts.append(f"--levels={levels}")
-        cmd_parts.append(f"--winsize={winsize}")
+        # winsize est calculé automatiquement selon la résolution, pas besoin de l'inclure
         cmd_parts.append(f"--iterations={iterations}")
         cmd_parts.append(f"--poly-n={poly_n}")
         cmd_parts.append(f"--poly-sigma={poly_sigma}")
