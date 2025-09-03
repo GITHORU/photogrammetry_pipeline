@@ -30,6 +30,12 @@ def load_raster_data(file_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
     try:
         with rasterio.open(file_path) as src:
             data = src.read(1)  # Lecture de la première bande
+            
+            # Gestion des nodata : convertir en NaN
+            if src.nodata is not None:
+                data = np.where(data == src.nodata, np.nan, data)
+                logger.info(f"Nodata {src.nodata} convertis en NaN pour {os.path.basename(file_path)}")
+            
             metadata = {
                 'crs': src.crs,
                 'transform': src.transform,
@@ -195,7 +201,7 @@ def create_common_grid_and_reproject(image1_path: str, image2_path: str,
 
 def resample_to_common_resolution(data1: np.ndarray, data2: np.ndarray, 
                                  metadata1: Dict[str, Any], metadata2: Dict[str, Any],
-                                 target_resolution: float) -> Tuple[np.ndarray, np.ndarray]:
+                                 target_resolution: float) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
     """
     Remet à l'échelle deux rasters à la même résolution (pour MNT)
     
@@ -207,7 +213,7 @@ def resample_to_common_resolution(data1: np.ndarray, data2: np.ndarray,
         target_resolution: Résolution cible en mètres
         
     Returns:
-        Tuple des deux rasters remis à l'échelle
+        Tuple des deux rasters remis à l'échelle et des métadonnées communes
     """
     logger.info(f"Remise à l'échelle à la résolution {target_resolution} m")
     
@@ -222,25 +228,121 @@ def resample_to_common_resolution(data1: np.ndarray, data2: np.ndarray,
     max_y = max(bounds1[3], bounds2[3])
     
     # Nouvelle transform
-    new_transform = from_bounds(min_x, min_y, max_x, max_y, 
-                                int((max_x - min_x) / target_resolution),
-                                int((max_y - min_y) / target_resolution))
+    width = int((max_x - min_x) / target_resolution)
+    height = int((max_y - min_y) / target_resolution)
+    new_transform = from_bounds(min_x, min_y, max_x, max_y, width, height)
     
-    # Remise à l'échelle
-    resampled1 = np.zeros((int((max_y - min_y) / target_resolution), 
-                          int((max_x - min_x) / target_resolution)))
-    resampled2 = np.zeros_like(resampled1)
+    # Remise à l'échelle avec nodata par défaut (pas de 0 artificiels)
+    resampled1 = np.full((height, width), np.nan, dtype=np.float32)
+    resampled2 = np.full((height, width), np.nan, dtype=np.float32)
     
-    reproject(data1, resampled1, src_transform=metadata1['transform'],
-              src_crs=metadata1['crs'], dst_transform=new_transform,
-              dst_crs=metadata1['crs'], resampling=Resampling.bilinear)
+    # Reprojection avec average (moyenne pondérée, avec nodata explicites)
+    reproject(
+        source=data1,
+        destination=resampled1,
+        src_transform=metadata1['transform'],
+        src_crs=metadata1['crs'],
+        dst_transform=new_transform,
+        dst_crs=metadata1['crs'],
+        dst_width=width,
+        dst_height=height,
+        resampling=Resampling.average,
+        src_nodata=metadata1.get('nodata', np.nan),  # Nodata source explicite
+        dst_nodata=np.nan  # Nodata destination explicite
+    )
     
-    reproject(data2, resampled2, src_transform=metadata2['transform'],
-              src_crs=metadata2['crs'], dst_transform=new_transform,
-              dst_crs=metadata2['crs'], resampling=Resampling.bilinear)
+    reproject(
+        source=data2,
+        destination=resampled2,
+        src_transform=metadata2['transform'],
+        src_crs=metadata2['crs'],
+        dst_transform=new_transform,
+        dst_crs=metadata2['crs'],
+        dst_width=width,
+        dst_height=height,
+        resampling=Resampling.average,
+        src_nodata=metadata2.get('nodata', np.nan),  # Nodata source explicite
+        dst_nodata=np.nan  # Nodata destination explicite
+    )
+    
+    # Métadonnées communes
+    common_metadata = {
+        'transform': new_transform,
+        'crs': metadata1['crs'],  # On utilise le CRS du premier raster
+        'width': width,
+        'height': height,
+        'resolution': target_resolution,
+        'bounds': (min_x, min_y, max_x, max_y)
+    }
     
     logger.info(f"Rasters remis à l'échelle: {resampled1.shape}")
-    return resampled1, resampled2
+    return resampled1, resampled2, common_metadata
+
+def save_resampled_mnts(resampled1: np.ndarray, resampled2: np.ndarray, 
+                       common_metadata: Dict[str, Any], image1_path: str, 
+                       image2_path: str, output_dir: str) -> Tuple[str, str]:
+    """
+    Sauvegarde les MNTs remis à l'échelle sur la grille commune
+    
+    Args:
+        resampled1: Premier MNT remis à l'échelle
+        resampled2: Deuxième MNT remis à l'échelle
+        common_metadata: Métadonnées communes
+        image1_path: Chemin du premier MNT original
+        image2_path: Chemin du deuxième MNT original
+        output_dir: Dossier de sortie
+        
+    Returns:
+        Tuple des chemins des fichiers sauvegardés
+    """
+    logger.info("Sauvegarde des MNTs remis à l'échelle...")
+    
+    # Noms des fichiers de sortie
+    base1 = os.path.splitext(os.path.basename(image1_path))[0]
+    base2 = os.path.splitext(os.path.basename(image2_path))[0]
+    
+    output1_path = os.path.join(output_dir, f"{base1}_resampled_{common_metadata['resolution']}m.tif")
+    output2_path = os.path.join(output_dir, f"{base2}_resampled_{common_metadata['resolution']}m.tif")
+    
+    # Sauvegarde du premier MNT avec nodata standard
+    with rasterio.open(
+        output1_path,
+        'w',
+        driver='GTiff',
+        height=common_metadata['height'],
+        width=common_metadata['width'],
+        count=1,
+        dtype=resampled1.dtype,
+        crs=common_metadata['crs'],
+        transform=common_metadata['transform'],
+        nodata=-9999.0
+    ) as dst:
+        # Convertir NaN en valeur nodata standard
+        data_to_write = np.where(np.isnan(resampled1), -9999.0, resampled1)
+        dst.write(data_to_write, 1)
+    
+    # Sauvegarde du deuxième MNT avec nodata standard
+    with rasterio.open(
+        output2_path,
+        'w',
+        driver='GTiff',
+        height=common_metadata['height'],
+        width=common_metadata['width'],
+        count=1,
+        dtype=resampled2.dtype,
+        crs=common_metadata['crs'],
+        transform=common_metadata['transform'],
+        nodata=-9999.0
+    ) as dst:
+        # Convertir NaN en valeur nodata standard
+        data_to_write = np.where(np.isnan(resampled2), -9999.0, resampled2)
+        dst.write(data_to_write, 1)
+    
+    logger.info(f"MNTs sauvegardés:")
+    logger.info(f"  - {output1_path}")
+    logger.info(f"  - {output2_path}")
+    
+    return output1_path, output2_path
 
 def analyze_mnt_comparison(mnt1: np.ndarray, mnt2: np.ndarray, 
                           resolution: float) -> Dict[str, Any]:
@@ -710,13 +812,22 @@ def run_analysis_pipeline(image1_path: str, image2_path: str,
         # Remise à l'échelle à la même résolution (pour MNT seulement)
         if analysis_type == 'mnt':
             logger.info("Remise à l'échelle des données...")
-            resampled1, resampled2 = resample_to_common_resolution(
+            resampled1, resampled2, common_metadata = resample_to_common_resolution(
                 data1, data2, metadata1, metadata2, resolution
+            )
+            
+            # Sauvegarde des MNTs remis à l'échelle
+            resampled1_path, resampled2_path = save_resampled_mnts(
+                resampled1, resampled2, common_metadata, 
+                image1_path, image2_path, output_dir
             )
         
         # Analyse selon le type
         if analysis_type == 'mnt':
             results = analyze_mnt_comparison(resampled1, resampled2, resolution)
+            # Ajouter les chemins des fichiers sauvegardés
+            results['resampled1_path'] = resampled1_path
+            results['resampled2_path'] = resampled2_path
         elif analysis_type == 'ortho':
             results = analyze_ortho_comparison(image1_path, image2_path, resolution, output_dir, adapted_params)
         else:
