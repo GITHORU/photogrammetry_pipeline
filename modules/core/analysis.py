@@ -12,7 +12,7 @@ import rasterio
 from rasterio.warp import reproject, Resampling
 from rasterio.transform import from_bounds
 from scipy import ndimage
-from scipy.stats import pearsonr, spearmanr
+from scipy.stats import pearsonr, spearmanr, kendalltau
 import cv2
 
 logger = logging.getLogger(__name__)
@@ -344,6 +344,91 @@ def save_resampled_mnts(resampled1: np.ndarray, resampled2: np.ndarray,
     
     return output1_path, output2_path
 
+def create_vertical_displacement_map(mnt1: np.ndarray, mnt2: np.ndarray, 
+                                   common_metadata: Dict[str, Any], 
+                                   image1_path: str, image2_path: str, 
+                                   output_dir: str) -> str:
+    """
+    Crée une carte de déplacement vertical entre deux MNTs
+    
+    Args:
+        mnt1: Premier MNT (référence)
+        mnt2: Deuxième MNT (comparaison)
+        common_metadata: Métadonnées communes
+        image1_path: Chemin du premier MNT original
+        image2_path: Chemin du deuxième MNT original
+        output_dir: Dossier de sortie
+        
+    Returns:
+        Chemin vers la carte de déplacement vertical
+    """
+    logger.info("Création de la carte de déplacement vertical...")
+    
+    # Calcul des déplacements verticaux (mnt2 - mnt1)
+    # Positif = élévation, Négatif = subsidence
+    displacement = mnt2 - mnt1
+    
+    # Masque des valeurs valides (exclure les nodata)
+    valid_mask = ~(np.isnan(mnt1) | np.isnan(mnt2))
+    displacement_clean = np.where(valid_mask, displacement, np.nan)
+    
+    # Statistiques des déplacements
+    valid_displacements = displacement_clean[valid_mask]
+    if len(valid_displacements) > 0:
+        min_disp = np.min(valid_displacements)
+        max_disp = np.max(valid_displacements)
+        mean_disp = np.mean(valid_displacements)
+        std_disp = np.std(valid_displacements)
+        
+        logger.info(f"Statistiques des déplacements verticaux:")
+        logger.info(f"  - Minimum: {min_disp:.3f} m")
+        logger.info(f"  - Maximum: {max_disp:.3f} m")
+        logger.info(f"  - Moyenne: {mean_disp:.3f} m")
+        logger.info(f"  - Écart-type: {std_disp:.3f} m")
+        logger.info(f"  - Nombre de pixels valides: {len(valid_displacements)}")
+    
+    # Nom du fichier de sortie
+    base1 = os.path.splitext(os.path.basename(image1_path))[0]
+    base2 = os.path.splitext(os.path.basename(image2_path))[0]
+    displacement_path = os.path.join(output_dir, f"vertical_displacement_{base1}_vs_{base2}_{common_metadata['resolution']}m.tif")
+    
+    # Sauvegarde de la carte de déplacement
+    with rasterio.open(
+        displacement_path,
+        'w',
+        driver='GTiff',
+        height=common_metadata['height'],
+        width=common_metadata['width'],
+        count=1,
+        dtype=displacement_clean.dtype,
+        crs=common_metadata['crs'],
+        transform=common_metadata['transform'],
+        nodata=-9999.0
+    ) as dst:
+        # Convertir NaN en valeur nodata standard
+        data_to_write = np.where(np.isnan(displacement_clean), -9999.0, displacement_clean)
+        dst.write(data_to_write, 1)
+        
+        # Ajouter des métadonnées descriptives
+        dst.update_tags(
+            Title="Carte de Déplacement Vertical",
+            Description=f"Déplacement vertical entre {base1} et {base2}",
+            Source1=os.path.basename(image1_path),
+            Source2=os.path.basename(image2_path),
+            Resolution=f"{common_metadata['resolution']}m",
+            Unit="meters",
+            Positive="élévation",
+            Negative="subsidence",
+            Min_Displacement=f"{min_disp:.3f}m" if len(valid_displacements) > 0 else "N/A",
+            Max_Displacement=f"{max_disp:.3f}m" if len(valid_displacements) > 0 else "N/A",
+            Mean_Displacement=f"{mean_disp:.3f}m" if len(valid_displacements) > 0 else "N/A",
+            Std_Displacement=f"{std_disp:.3f}m" if len(valid_displacements) > 0 else "N/A",
+            Valid_Pixels=str(len(valid_displacements)) if len(valid_displacements) > 0 else "0"
+        )
+    
+    logger.info(f"Carte de déplacement vertical sauvegardée: {displacement_path}")
+    return displacement_path
+
 def analyze_mnt_comparison(mnt1: np.ndarray, mnt2: np.ndarray, 
                           resolution: float) -> Dict[str, Any]:
     """
@@ -359,8 +444,8 @@ def analyze_mnt_comparison(mnt1: np.ndarray, mnt2: np.ndarray,
     """
     logger.info("Début de l'analyse comparative MNT")
     
-    # Masque des valeurs valides
-    valid_mask = ~(np.isnan(mnt1) | np.isnan(mnt2) | (mnt1 == 0) | (mnt2 == 0))
+    # Masque des valeurs valides (exclut seulement les nodata)
+    valid_mask = ~(np.isnan(mnt1) | np.isnan(mnt2) | (mnt1 == -9999.0) | (mnt2 == -9999.0))
     
     if not np.any(valid_mask):
         logger.warning("Aucune donnée valide trouvée pour l'analyse")
@@ -369,12 +454,13 @@ def analyze_mnt_comparison(mnt1: np.ndarray, mnt2: np.ndarray,
     mnt1_valid = mnt1[valid_mask]
     mnt2_valid = mnt2[valid_mask]
     
-    # Calcul des statistiques de base
-    diff = mnt1_valid - mnt2_valid
+    # Calcul des statistiques de base (MNT2 - MNT1 comme indiqué dans le rapport)
+    diff = mnt2_valid - mnt1_valid
     abs_diff = np.abs(diff)
     
     results = {
         'mean_diff': np.mean(diff),
+        'median_diff': np.median(diff),
         'std_diff': np.std(diff),
         'rmse': np.sqrt(np.mean(diff**2)),
         'mae': np.mean(abs_diff),
@@ -382,14 +468,14 @@ def analyze_mnt_comparison(mnt1: np.ndarray, mnt2: np.ndarray,
         'min_diff': np.min(diff),
         'correlation_pearson': pearsonr(mnt1_valid, mnt2_valid)[0],
         'correlation_spearman': spearmanr(mnt1_valid, mnt2_valid)[0],
+        'correlation_kendall': kendalltau(mnt1_valid, mnt2_valid)[0],
         'n_points': len(mnt1_valid),
         'resolution': resolution
     }
     
     # Calcul des percentiles
-    percentiles = [5, 25, 50, 75, 95]
+    percentiles = [1, 5, 10, 25, 50, 75, 90, 95, 99]
     results['percentiles_diff'] = {f'p{p}': np.percentile(diff, p) for p in percentiles}
-    results['percentiles_abs_diff'] = {f'p{p}': np.percentile(abs_diff, p) for p in percentiles}
     
     logger.info(f"Analyse MNT terminée: RMSE={float(results['rmse']):.3f}m, Corrélation={float(results['correlation_pearson']):.3f}")
     return results
@@ -688,45 +774,96 @@ def generate_analysis_report(results: Dict[str, Any], analysis_type: str,
     report_path = os.path.join(output_dir, f"analysis_report_{analysis_type}.txt")
     
     with open(report_path, 'w', encoding='utf-8') as f:
-        f.write("=" * 60 + "\n")
+        f.write("=" * 80 + "\n")
         f.write("RAPPORT D'ANALYSE PHOTOGEOALIGN\n")
-        f.write("=" * 60 + "\n\n")
+        f.write("=" * 80 + "\n\n")
         
+        # En-tête avec informations générales
+        f.write("INFORMATIONS GÉNÉRALES\n")
+        f.write("-" * 25 + "\n")
         f.write(f"Type d'analyse: {analysis_type.upper()}\n")
-        f.write(f"Image 1: {image1_path}\n")
-        f.write(f"Image 2: {image2_path}\n")
-        f.write(f"Résolution: {results.get('resolution', 'N/A')} m\n")
-        f.write(f"Nombre de points: {results.get('n_points', 'N/A')}\n\n")
+        f.write(f"Date d'analyse: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Résolution d'analyse: {results.get('resolution', 'N/A')} m\n")
+        f.write(f"Nombre de points analysés: {results.get('n_points', 'N/A'):,}\n\n")
         
-        f.write("STATISTIQUES DE DIFFÉRENCE\n")
-        f.write("-" * 30 + "\n")
-        f.write(f"Différence moyenne: {results.get('mean_diff', 'N/A')}\n")
-        f.write(f"Écart-type: {results.get('std_diff', 'N/A')}\n")
-        f.write(f"RMSE: {results.get('rmse', 'N/A')}\n")
-        f.write(f"MAE: {results.get('mae', 'N/A')}\n")
-        f.write(f"Différence max: {results.get('max_diff', 'N/A')}\n")
-        f.write(f"Différence min: {results.get('min_diff', 'N/A')}\n\n")
+        # Fichiers sources
+        f.write("FICHIERS SOURCES\n")
+        f.write("-" * 18 + "\n")
+        f.write(f"Image 1 (référence): {os.path.basename(image1_path)}\n")
+        f.write(f"Image 2 (comparaison): {os.path.basename(image2_path)}\n")
+        if analysis_type == 'mnt':
+            f.write(f"MNT 1 remis à l'échelle: {os.path.basename(results.get('resampled1_path', 'N/A'))}\n")
+            f.write(f"MNT 2 remis à l'échelle: {os.path.basename(results.get('resampled2_path', 'N/A'))}\n")
+            f.write(f"Carte de déplacement vertical: {os.path.basename(results.get('displacement_map_path', 'N/A'))}\n")
+        f.write("\n")
         
-        f.write("CORRÉLATIONS\n")
-        f.write("-" * 15 + "\n")
-        f.write(f"Pearson: {results.get('correlation_pearson', 'N/A')}\n")
-        f.write(f"Spearman: {results.get('correlation_spearman', 'N/A')}\n\n")
+        if analysis_type == 'mnt':
+            # Section spécifique aux MNTs
+            f.write("ANALYSE DES MODÈLES NUMÉRIQUES DE TERRAIN (MNT)\n")
+            f.write("-" * 55 + "\n")
+            f.write("Cette analyse compare deux MNTs pour identifier les changements topographiques.\n")
+            f.write("Les déplacements verticaux sont calculés comme: MNT2 - MNT1\n")
+            f.write("• Valeurs positives = Élévation du terrain\n")
+            f.write("• Valeurs négatives = Subsidence du terrain\n\n")
+            
+            f.write("STATISTIQUES DES DÉPLACEMENTS VERTICAUX\n")
+            f.write("-" * 40 + "\n")
+            f.write("(Calculées sur les données valides, excluant les nodata)\n")
+            f.write(f"Moyenne: {results.get('mean_diff', 'N/A')} m\n")
+            f.write(f"Médiane: {results.get('median_diff', 'N/A')} m\n")
+            f.write(f"Écart-type: {results.get('std_diff', 'N/A')} m\n")
+            f.write(f"RMSE: {results.get('rmse', 'N/A')} m\n")
+            f.write(f"MAE: {results.get('mae', 'N/A')} m\n")
+            f.write(f"Maximum: {results.get('max_diff', 'N/A')} m\n")
+            f.write(f"Minimum: {results.get('min_diff', 'N/A')} m\n\n")
+            
+            # Percentiles
+            f.write("PERCENTILES DES DÉPLACEMENTS\n")
+            f.write("-" * 30 + "\n")
+            percentiles = results.get('percentiles_diff', {})
+            if percentiles:
+                f.write(f"P1: {percentiles.get('p1', 'N/A')} m\n")
+                f.write(f"P5: {percentiles.get('p5', 'N/A')} m\n")
+                f.write(f"P10: {percentiles.get('p10', 'N/A')} m\n")
+                f.write(f"P25: {percentiles.get('p25', 'N/A')} m\n")
+                f.write(f"P50: {percentiles.get('p50', 'N/A')} m\n")
+                f.write(f"P75: {percentiles.get('p75', 'N/A')} m\n")
+                f.write(f"P90: {percentiles.get('p90', 'N/A')} m\n")
+                f.write(f"P95: {percentiles.get('p95', 'N/A')} m\n")
+                f.write(f"P99: {percentiles.get('p99', 'N/A')} m\n\n")
+            
+            f.write("CORRÉLATIONS\n")
+            f.write("-" * 15 + "\n")
+            f.write(f"Pearson: {results.get('correlation_pearson', 'N/A')}\n")
+            f.write(f"Spearman: {results.get('correlation_spearman', 'N/A')}\n")
+            f.write(f"Kendall: {results.get('correlation_kendall', 'N/A')}\n\n")
+            
+        else:
+            # Section pour les orthoimages
+            f.write("ANALYSE DES ORTHOIMAGES\n")
+            f.write("-" * 25 + "\n")
+            f.write("Cette analyse compare deux orthoimages pour identifier les déplacements.\n\n")
+            
+            f.write("STATISTIQUES DE DIFFÉRENCE\n")
+            f.write("-" * 30 + "\n")
+            f.write(f"Différence moyenne: {results.get('mean_diff', 'N/A')}\n")
+            f.write(f"Écart-type: {results.get('std_diff', 'N/A')}\n")
+            f.write(f"RMSE: {results.get('rmse', 'N/A')}\n")
+            f.write(f"MAE: {results.get('mae', 'N/A')}\n")
+            f.write(f"Différence max: {results.get('max_diff', 'N/A')}\n")
+            f.write(f"Différence min: {results.get('min_diff', 'N/A')}\n\n")
+            
+            f.write("CORRÉLATIONS\n")
+            f.write("-" * 15 + "\n")
+            f.write(f"Pearson: {results.get('correlation_pearson', 'N/A')}\n")
+            f.write(f"Spearman: {results.get('correlation_spearman', 'N/A')}\n")
+            f.write(f"Kendall: {results.get('correlation_kendall', 'N/A')}\n\n")
         
-        f.write("PERCENTILES DES DIFFÉRENCES\n")
-        f.write("-" * 30 + "\n")
-        percentiles = results.get('percentiles_diff', {})
-        for p, value in percentiles.items():
-            f.write(f"{p}: {value}\n")
+
         
-        f.write("\nPERCENTILES DES DIFFÉRENCES ABSOLUES\n")
-        f.write("-" * 40 + "\n")
-        abs_percentiles = results.get('percentiles_abs_diff', {})
-        for p, value in abs_percentiles.items():
-            f.write(f"{p}: {value}\n")
-        
-        # Ajout des statistiques de déplacement si disponibles
+        # Statistiques de déplacement Farneback (pour orthoimages)
         if 'mean_displacement_x' in results:
-            f.write("\nSTATISTIQUES DES DÉPLACEMENTS (FARNEBACK)\n")
+            f.write("STATISTIQUES DES DÉPLACEMENTS (FARNEBACK)\n")
             f.write("-" * 45 + "\n")
             f.write(f"Déplacement X moyen: {results.get('mean_displacement_x', 'N/A')} m\n")
             f.write(f"Déplacement Y moyen: {results.get('mean_displacement_y', 'N/A')} m\n")
@@ -734,7 +871,23 @@ def generate_analysis_report(results: Dict[str, Any], analysis_type: str,
             f.write(f"Amplitude max: {results.get('max_displacement_magnitude', 'N/A')} m\n")
             f.write(f"Écart-type X: {results.get('std_displacement_x', 'N/A')} m\n")
             f.write(f"Écart-type Y: {results.get('std_displacement_y', 'N/A')} m\n")
-            f.write(f"Points de déplacement valides: {results.get('n_valid_displacements', 'N/A')}\n")
+            f.write(f"Points de déplacement valides: {results.get('n_valid_displacements', 'N/A')}\n\n")
+        
+        # Informations complémentaires
+        f.write("INFORMATIONS COMPLÉMENTAIRES\n")
+        f.write("-" * 30 + "\n")
+        if analysis_type == 'mnt':
+            f.write("• Les déplacements verticaux sont calculés comme: MNT2 - MNT1\n")
+            f.write("• Valeurs positives: élévation du terrain\n")
+            f.write("• Valeurs négatives: subsidence du terrain\n")
+            f.write("• Examiner la carte de déplacement vertical pour l'analyse spatiale\n")
+        else:
+            f.write("• Examiner les cartes de déplacement pour l'analyse spatiale\n")
+            f.write("• Vérifier la cohérence des résultats avec les observations terrain\n")
+        
+        f.write("\n" + "=" * 80 + "\n")
+        f.write("Rapport généré par PhotoGeoAlign\n")
+        f.write("=" * 80 + "\n")
     
     logger.info(f"Rapport généré: {report_path}")
     return report_path
@@ -824,10 +977,19 @@ def run_analysis_pipeline(image1_path: str, image2_path: str,
         
         # Analyse selon le type
         if analysis_type == 'mnt':
+            # Création de la carte de déplacement vertical
+            displacement_path = create_vertical_displacement_map(
+                resampled1, resampled2, common_metadata, 
+                image1_path, image2_path, output_dir
+            )
+            
+            # Analyse comparative
             results = analyze_mnt_comparison(resampled1, resampled2, resolution)
+            
             # Ajouter les chemins des fichiers sauvegardés
             results['resampled1_path'] = resampled1_path
             results['resampled2_path'] = resampled2_path
+            results['displacement_map_path'] = displacement_path
         elif analysis_type == 'ortho':
             results = analyze_ortho_comparison(image1_path, image2_path, resolution, output_dir, adapted_params)
         else:
