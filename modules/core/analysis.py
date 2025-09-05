@@ -13,7 +13,7 @@ from rasterio.warp import reproject, Resampling
 from rasterio.transform import from_bounds
 from scipy import ndimage
 from scipy.stats import pearsonr, spearmanr, kendalltau
-import cv2
+import cv2  # requis (opencv-python[-headless])
 
 logger = logging.getLogger(__name__)
 
@@ -514,6 +514,7 @@ def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray,
                                      resolution: float, output_dir: str,
                                      logger: logging.Logger, farneback_params: dict = None,
                                      valid_mask: Optional[np.ndarray] = None) -> Dict[str, Any]:
+    # OpenCV requis
     """
     Calcule les déplacements entre deux images en utilisant la méthode de Farneback
     

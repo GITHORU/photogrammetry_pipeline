@@ -39,6 +39,33 @@ sys.excepthook = global_exception_handler
 
 # Import des modules refactorisés
 from modules.core.utils import setup_logger, resource_path
+
+# Initialisation GDAL/PROJ pour environnements packagés (exécutables)
+def _init_gdal_env():
+    try:
+        import rasterio
+        # Tenter de récupérer les chemins de données depuis rasterio
+        ri_env = getattr(rasterio, 'env', None)
+        if ri_env is not None:
+            pass
+        # Si GDAL_DATA non défini, essayer depuis package
+        if 'GDAL_DATA' not in os.environ:
+            gdal_data = getattr(rasterio, 'gdal_data', None)
+            if gdal_data and os.path.exists(gdal_data):
+                os.environ['GDAL_DATA'] = gdal_data
+        # PROJ
+        if 'PROJ_LIB' not in os.environ:
+            try:
+                import pyproj
+                proj_data = pyproj.datadir.get_data_dir()
+                if proj_data and os.path.exists(proj_data):
+                    os.environ['PROJ_LIB'] = proj_data
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+_init_gdal_env()
 from modules.core.micmac import (
     run_micmac_tapioca, run_micmac_tapas, run_micmac_c3dc,
     run_micmac_saisieappuisinit, run_micmac_saisieappuispredic
