@@ -16,7 +16,7 @@ open3d>=0.15.0,<0.16.0
 # OpenCV (versions anciennes pour compatibilité Python 3.6 peuvent ne pas être disponibles en wheels)
 # Si indisponible, utiliser opencv-python-headless via roue locale ou désactiver Farneback sur cet environnement.
 # Laisser en commentaire par défaut pour Rocky8/Py36:
-# opencv-python-headless==4.5.5.64
+opencv-python-headless==4.5.5.64
 
 # PyInstaller compatible Python 3.6
 pyinstaller>=4.10,<5.0.0

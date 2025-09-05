@@ -60,8 +60,8 @@ def _init_gdal_env():
                 proj_data = pyproj.datadir.get_data_dir()
                 if proj_data and os.path.exists(proj_data):
                     os.environ['PROJ_LIB'] = proj_data
-                    except Exception:
-                        pass
+            except Exception:
+                pass
     except Exception:
         pass
 
