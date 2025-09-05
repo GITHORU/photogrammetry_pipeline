@@ -295,7 +295,10 @@ def process_single_cloud_deform(args):
         control_values = np.array(control_values)
         
         # Application de la déformation selon le type
-        if deformation_type == "tps":
+        if deformation_type == "none":
+            logger.info("  Aucune déformation appliquée (mode none)")
+            deformations = np.zeros_like(points)
+        elif deformation_type == "tps":
             logger.info(f"  Interpolation TPS avec {len(control_points)} points de contrôle...")
             
             # Interpolation TPS
@@ -354,6 +357,118 @@ def process_single_cloud_deform(args):
             # Application de l'interpolation TPS
             deformations = thin_plate_spline_interpolation(points, control_points, control_values)
             
+        elif deformation_type == "radial":
+            logger.info(f"  Déformation radiale (centre libre, a1,a2,c1) avec {len(control_points)} GCPs...")
+
+            # Estimation des paramètres sur les GCPs (ENU)
+            cps_xy = control_points[:, :2]
+            offs = control_values  # (dE, dN, dU)
+
+            def compute_radial_components_xy(points_xy, center):
+                cx, cy = center
+                dx = points_xy[:, 0] - cx
+                dy = points_xy[:, 1] - cy
+                r = np.sqrt(dx * dx + dy * dy)
+                denom = np.where(r == 0.0, 1.0, r)
+                ux = np.where(r == 0.0, 0.0, dx / denom)
+                uy = np.where(r == 0.0, 0.0, dy / denom)
+                return r, ux, uy
+
+            # Gauss-Newton robuste (Huber), paramètres initiaux
+            cx, cy = float(np.mean(cps_xy[:, 0])), float(np.mean(cps_xy[:, 1]))
+            a1, a2, c1p = 0.0, 0.0, 0.0
+
+            def huber_weights(residuals, delta=1.0):
+                abs_r = np.abs(residuals)
+                w = np.ones_like(residuals)
+                mask = abs_r > delta
+                w[mask] = delta / abs_r[mask]
+                return w
+
+            max_iter = 200
+            tol = 1e-8
+            for _ in range(max_iter):
+                r, ux, uy = compute_radial_components_xy(cps_xy, (cx, cy))
+                g = a1 * r + a2 * (r ** 3)
+                pred_e = g * ux
+                pred_n = g * uy
+                pred_u = c1p * r
+
+                res_e = offs[:, 0] - pred_e
+                res_n = offs[:, 1] - pred_n
+                res_u = offs[:, 2] - pred_u
+
+                w_e = huber_weights(res_e)
+                w_n = huber_weights(res_n)
+                w_u = huber_weights(res_u)
+
+                JtWJ = np.zeros((5, 5), dtype=float)
+                JtWr = np.zeros(5, dtype=float)
+
+                dx = cps_xy[:, 0] - cx
+                dy = cps_xy[:, 1] - cy
+                r_safe = np.where(r == 0.0, 1.0, r)
+                r3 = r_safe ** 3
+                dudx_dcx = -1.0 / r_safe + (dx * dx) / r3
+                dudx_dcy = (dx * dy) / r3
+                dudy_dcx = (dx * dy) / r3
+                dudy_dcy = -1.0 / r_safe + (dy * dy) / r3
+                dg_dr = a1 + 3.0 * a2 * (r ** 2)
+                dr_dcx = -dx / r_safe
+                dr_dcy = -dy / r_safe
+
+                dpe_dcx = dg_dr * dr_dcx * ux + g * dudx_dcx
+                dpe_dcy = dg_dr * dr_dcy * ux + g * dudx_dcy
+                dpe_da1 = r * ux
+                dpe_da2 = (r ** 3) * ux
+
+                dpn_dcx = dg_dr * dr_dcx * uy + g * dudy_dcx
+                dpn_dcy = dg_dr * dr_dcy * uy + g * dudy_dcy
+                dpn_da1 = r * uy
+                dpn_da2 = (r ** 3) * uy
+
+                dpu_dcx = c1p * dr_dcx
+                dpu_dcy = c1p * dr_dcy
+                dpu_dc1 = r
+
+                for i in range(len(cps_xy)):
+                    Ji_e = np.array([dpe_dcx[i], dpe_dcy[i], dpe_da1[i], dpe_da2[i], 0.0])
+                    Ji_n = np.array([dpn_dcx[i], dpn_dcy[i], dpn_da1[i], dpn_da2[i], 0.0])
+                    Ji_u = np.array([dpu_dcx[i], dpu_dcy[i], 0.0, 0.0, dpu_dc1[i]])
+
+                    we, wn, wu = w_e[i], w_n[i], w_u[i]
+                    JtWJ += we * np.outer(Ji_e, Ji_e)
+                    JtWJ += wn * np.outer(Ji_n, Ji_n)
+                    JtWJ += wu * np.outer(Ji_u, Ji_u)
+                    JtWr += we * Ji_e * res_e[i]
+                    JtWr += wn * Ji_n * res_n[i]
+                    JtWr += wu * Ji_u * res_u[i]
+
+                try:
+                    delta = np.linalg.solve(JtWJ, JtWr)
+                except np.linalg.LinAlgError:
+                    JtWJ += np.eye(5) * 1e-8
+                    delta = np.linalg.lstsq(JtWJ, JtWr, rcond=None)[0]
+
+                dcx, dcy, da1p, da2p, dc1 = delta
+                cx += dcx
+                cy += dcy
+                a1 += da1p
+                a2 += da2p
+                c1p += dc1
+                if np.linalg.norm(delta) < tol:
+                    break
+
+            # Appliquer au nuage complet
+            r_all, ux_all, uy_all = compute_radial_components_xy(points[:, :2], (cx, cy))
+            g_all = a1 * r_all + a2 * (r_all ** 3)
+            deform_e = g_all * ux_all
+            deform_n = g_all * uy_all
+            deform_u = c1p * r_all
+            deformations = np.column_stack([deform_e, deform_n, deform_u])
+
+            logger.info(f"  Radial params: center=({cx:.6f},{cy:.6f}), a1={a1:.6e}, a2={a2:.6e}, c1={c1p:.6e}")
+
         elif deformation_type == "lineaire":
             logger.info(f"  Interpolation linéaire avec {len(control_points)} points de contrôle...")
             
@@ -391,7 +506,7 @@ def process_single_cloud_deform(args):
         max_deform = np.max(deformation_magnitudes)
         mean_deform = np.mean(deformation_magnitudes)
         
-        logger.info(f"  Déformation TPS appliquée - min: {min_deform:.6f}, max: {max_deform:.6f}, moy: {mean_deform:.6f}")
+        logger.info(f"  Déformation {deformation_type} appliquée - min: {min_deform:.6f}, max: {max_deform:.6f}, moy: {mean_deform:.6f}")
         
         # Création du nouveau nuage
         new_cloud = o3d.geometry.PointCloud()

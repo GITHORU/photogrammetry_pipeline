@@ -512,7 +512,8 @@ def adapt_farneback_params(resolution: float, base_config: dict, base_resolution
 
 def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray,
                                      resolution: float, output_dir: str,
-                                     logger: logging.Logger, farneback_params: dict = None) -> Dict[str, Any]:
+                                     logger: logging.Logger, farneback_params: dict = None,
+                                     valid_mask: Optional[np.ndarray] = None) -> Dict[str, Any]:
     """
     Calcule les déplacements entre deux images en utilisant la méthode de Farneback
     
@@ -584,11 +585,15 @@ def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray,
         # Calcul de l'amplitude des déplacements
         displacement_magnitude = np.sqrt(displacement_x_m**2 + displacement_y_m**2)
         
-        # Statistiques des déplacements
-        valid_mask = ~(np.isnan(displacement_x_m) | np.isnan(displacement_y_m))
-        valid_displacements_x = displacement_x_m[valid_mask]
-        valid_displacements_y = displacement_y_m[valid_mask]
-        valid_magnitudes = displacement_magnitude[valid_mask]
+        # Statistiques des déplacements (exclure nodata et zones 0 des orthos si fourni)
+        nan_mask = ~(np.isnan(displacement_x_m) | np.isnan(displacement_y_m))
+        if valid_mask is not None:
+            combined_valid = nan_mask & valid_mask
+        else:
+            combined_valid = nan_mask
+        valid_displacements_x = displacement_x_m[combined_valid]
+        valid_displacements_y = displacement_y_m[combined_valid]
+        valid_magnitudes = displacement_magnitude[combined_valid]
         
         # Sauvegarde des cartes de déplacement
         displacement_x_path = os.path.join(output_dir, "displacement_x.tif")
@@ -625,6 +630,9 @@ def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray,
             'mean_displacement_x': np.mean(valid_displacements_x),
             'mean_displacement_y': np.mean(valid_displacements_y),
             'mean_displacement_magnitude': np.mean(valid_magnitudes),
+            'median_displacement_x': np.median(valid_displacements_x),
+            'median_displacement_y': np.median(valid_displacements_y),
+            'median_displacement_magnitude': np.median(valid_magnitudes),
             'std_displacement_x': np.std(valid_displacements_x),
             'std_displacement_y': np.std(valid_displacements_y),
             'std_displacement_magnitude': np.std(valid_magnitudes),
@@ -634,7 +642,7 @@ def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray,
             'min_displacement_x': np.min(valid_displacements_x),
             'min_displacement_y': np.min(valid_displacements_y),
             'min_displacement_magnitude': np.min(valid_magnitudes),
-            'n_valid_displacements': len(valid_displacements_x),
+            'n_valid_displacements': int(np.sum(combined_valid)),
             'resolution_m_per_pixel': resolution
         }
         
@@ -708,11 +716,12 @@ def analyze_ortho_comparison(ortho1_path: str, ortho2_path: str,
         # Masque des valeurs valides (adapté pour RGB et niveaux de gris)
         if len(data1.shape) == 3:  # Image RGB (3, height, width)
             # Pour RGB, vérifier que tous les canaux sont valides
-            valid_mask = ~(np.isnan(data1).any(axis=0) | np.isnan(data2).any(axis=0) | 
+            valid_mask = ~(np.isnan(data1).any(axis=0) | np.isnan(data2).any(axis=0) |
                           (data1 == 0).all(axis=0) | (data2 == 0).all(axis=0))
             grid_width, grid_height = data1.shape[2], data1.shape[1]
         else:  # Image en niveaux de gris (height, width)
-            valid_mask = ~(np.isnan(data1) | np.isnan(data2) | (data1 == 0) | (data2 == 0))
+            valid_mask = ~(np.isnan(data1) | np.isnan(data2) |
+                           (data1 == 0) | (data2 == 0))
             grid_width, grid_height = data1.shape[1], data1.shape[0]
         
         if not np.any(valid_mask):
@@ -741,7 +750,7 @@ def analyze_ortho_comparison(ortho1_path: str, ortho2_path: str,
         # Étape 3 : Calcul des déplacements avec Farneback
         logger.info("Étape 3 : Calcul des déplacements avec Farneback")
         displacement_results = calculate_displacements_farneback(
-            data1, data2, resolution, output_dir, logger, farneback_params
+            data1, data2, resolution, output_dir, logger, farneback_params, valid_mask
         )
         
         # Fusion des résultats
@@ -784,7 +793,9 @@ def generate_analysis_report(results: Dict[str, Any], analysis_type: str,
         f.write(f"Type d'analyse: {analysis_type.upper()}\n")
         f.write(f"Date d'analyse: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Résolution d'analyse: {results.get('resolution', 'N/A')} m\n")
-        f.write(f"Nombre de points analysés: {results.get('n_points', 'N/A'):,}\n\n")
+        n_points = results.get('n_points', 'N/A')
+        n_points_str = f"{n_points:,}" if isinstance(n_points, (int, float)) else str(n_points)
+        f.write(f"Nombre de points analysés: {n_points_str}\n\n")
         
         # Fichiers sources
         f.write("FICHIERS SOURCES\n")
@@ -795,6 +806,14 @@ def generate_analysis_report(results: Dict[str, Any], analysis_type: str,
             f.write(f"MNT 1 remis à l'échelle: {os.path.basename(results.get('resampled1_path', 'N/A'))}\n")
             f.write(f"MNT 2 remis à l'échelle: {os.path.basename(results.get('resampled2_path', 'N/A'))}\n")
             f.write(f"Carte de déplacement vertical: {os.path.basename(results.get('displacement_map_path', 'N/A'))}\n")
+        elif analysis_type == 'mnt_ortho':
+            # Pour mnt_ortho, on affiche aussi les MNTs si fournis
+            mnt1_src = results.get('mnt1_path', '')
+            mnt2_src = results.get('mnt2_path', '')
+            if mnt1_src:
+                f.write(f"MNT 1 (source): {os.path.basename(mnt1_src)}\n")
+            if mnt2_src:
+                f.write(f"MNT 2 (source): {os.path.basename(mnt2_src)}\n")
         f.write("\n")
         
         if analysis_type == 'mnt':
@@ -837,6 +856,79 @@ def generate_analysis_report(results: Dict[str, Any], analysis_type: str,
             f.write(f"Pearson: {results.get('correlation_pearson', 'N/A')}\n")
             f.write(f"Spearman: {results.get('correlation_spearman', 'N/A')}\n")
             f.write(f"Kendall: {results.get('correlation_kendall', 'N/A')}\n\n")
+            
+        elif analysis_type == 'mnt_ortho':
+            # Section MNT (verticaux)
+            vertical = results.get('vertical_results', {})
+            f.write("ANALYSE MNT (VERTICAL)\n")
+            f.write("-" * 25 + "\n")
+            f.write("(Calculées sur les données valides, excluant les nodata)\n")
+            f.write(f"Moyenne: {vertical.get('mean_diff', 'N/A')} m\n")
+            f.write(f"Médiane: {vertical.get('median_diff', 'N/A')} m\n")
+            f.write(f"Écart-type: {vertical.get('std_diff', 'N/A')} m\n")
+            f.write(f"RMSE: {vertical.get('rmse', 'N/A')} m\n")
+            f.write(f"MAE: {vertical.get('mae', 'N/A')} m\n")
+            f.write(f"Maximum: {vertical.get('max_diff', 'N/A')} m\n")
+            f.write(f"Minimum: {vertical.get('min_diff', 'N/A')} m\n\n")
+            # Percentiles
+            vperc = vertical.get('percentiles_diff', {})
+            if vperc:
+                f.write("PERCENTILES (MNT)\n")
+                f.write("-" * 20 + "\n")
+                f.write(f"P1: {vperc.get('p1', 'N/A')} m\n")
+                f.write(f"P5: {vperc.get('p5', 'N/A')} m\n")
+                f.write(f"P10: {vperc.get('p10', 'N/A')} m\n")
+                f.write(f"P25: {vperc.get('p25', 'N/A')} m\n")
+                f.write(f"P50: {vperc.get('p50', 'N/A')} m\n")
+                f.write(f"P75: {vperc.get('p75', 'N/A')} m\n")
+                f.write(f"P90: {vperc.get('p90', 'N/A')} m\n")
+                f.write(f"P95: {vperc.get('p95', 'N/A')} m\n")
+                f.write(f"P99: {vperc.get('p99', 'N/A')} m\n\n")
+            f.write("CORRÉLATIONS (MNT)\n")
+            f.write("-" * 22 + "\n")
+            f.write(f"Pearson: {vertical.get('correlation_pearson', 'N/A')}\n")
+            f.write(f"Spearman: {vertical.get('correlation_spearman', 'N/A')}\n")
+            f.write(f"Kendall: {vertical.get('correlation_kendall', 'N/A')}\n\n")
+            
+            # Section Ortho (horizontaux)
+            horizontal = results.get('horizontal_results', {})
+            f.write("ANALYSE ORTHO (HORIZONTAL)\n")
+            f.write("-" * 28 + "\n")
+            if 'mean_displacement_x' in horizontal:
+                f.write(f"Déplacement X moyen: {horizontal.get('mean_displacement_x', 'N/A')} m\n")
+                f.write(f"Déplacement Y moyen: {horizontal.get('mean_displacement_y', 'N/A')} m\n")
+                f.write(f"Amplitude moyenne: {horizontal.get('mean_displacement_magnitude', 'N/A')} m\n")
+                f.write(f"Amplitude max: {horizontal.get('max_displacement_magnitude', 'N/A')} m\n")
+                f.write(f"Écart-type X: {horizontal.get('std_displacement_x', 'N/A')} m\n")
+                f.write(f"Écart-type Y: {horizontal.get('std_displacement_y', 'N/A')} m\n")
+                f.write(f"Points de déplacement valides: {horizontal.get('n_valid_displacements', 'N/A')}\n\n")
+            else:
+                # Fallback au format différences si présent
+                f.write(f"Différence moyenne: {horizontal.get('mean_diff', 'N/A')}\n")
+                f.write(f"Écart-type: {horizontal.get('std_diff', 'N/A')}\n")
+                f.write(f"RMSE: {horizontal.get('rmse', 'N/A')}\n")
+                f.write(f"MAE: {horizontal.get('mae', 'N/A')}\n")
+                f.write(f"Différence max: {horizontal.get('max_diff', 'N/A')}\n")
+                f.write(f"Différence min: {horizontal.get('min_diff', 'N/A')}\n\n")
+            # Corrélations (Afficher seulement si présentes)
+            if any(k in horizontal for k in ('correlation_pearson','correlation_spearman','correlation_kendall')):
+                f.write("CORRÉLATIONS (ORTHO)\n")
+                f.write("-" * 22 + "\n")
+                f.write(f"Pearson: {horizontal.get('correlation_pearson', 'N/A')}\n")
+                f.write(f"Spearman: {horizontal.get('correlation_spearman', 'N/A')}\n")
+                f.write(f"Kendall: {horizontal.get('correlation_kendall', 'N/A')}\n\n")
+            
+            # Bloc 3D (composantes moyennes + médianes + norme)
+            f.write("SYNTHÈSE 3D\n")
+            f.write("-" * 10 + "\n")
+            f.write(f"dx (moyen): {results.get('displacement_x', 'N/A')} m\n")
+            f.write(f"dy (moyen): {results.get('displacement_y', 'N/A')} m\n")
+            f.write(f"dz (moyen): {results.get('displacement_z', 'N/A')} m\n")
+            f.write(f"Norme 3D (moyenne): {results.get('displacement_3d', 'N/A')} m\n\n")
+            f.write(f"dx (médian): {results.get('median_displacement_x', 'N/A')} m\n")
+            f.write(f"dy (médian): {results.get('median_displacement_y', 'N/A')} m\n")
+            f.write(f"dz (médian): {results.get('median_displacement_z', 'N/A')} m\n")
+            f.write(f"Norme 3D (médiane): {results.get('median_displacement_3d', 'N/A')} m\n\n")
             
         else:
             # Section pour les orthoimages
@@ -892,19 +984,110 @@ def generate_analysis_report(results: Dict[str, Any], analysis_type: str,
     logger.info(f"Rapport généré: {report_path}")
     return report_path
 
+def analyze_3d_displacement(ortho1_path: str, ortho2_path: str, mnt1_path: str, mnt2_path: str,
+                           resolution: float, output_dir: str, farneback_params: dict = None) -> Dict[str, Any]:
+    """
+    Analyse 3D combinant déplacements horizontaux (orthos) et verticaux (MNTs)
+    
+    Args:
+        ortho1_path: Chemin vers la première orthoimage
+        ortho2_path: Chemin vers la deuxième orthoimage
+        mnt1_path: Chemin vers le premier MNT
+        mnt2_path: Chemin vers le deuxième MNT
+        resolution: Résolution d'analyse en mètres
+        output_dir: Dossier de sortie
+        farneback_params: Paramètres Farneback
+        
+    Returns:
+        Dictionnaire contenant les résultats de l'analyse 3D
+    """
+    logger.info("Début de l'analyse 3D (MNT + Ortho)")
+    
+    # Analyse des déplacements horizontaux (orthos)
+    logger.info("Analyse des déplacements horizontaux...")
+    horizontal_results = run_analysis_pipeline(ortho1_path, ortho2_path, 'ortho', resolution, output_dir, farneback_params, None, None, generate_report=False)
+    
+    # Analyse des déplacements verticaux (MNTs)
+    logger.info("Analyse des déplacements verticaux...")
+    vertical_results = run_analysis_pipeline(mnt1_path, mnt2_path, 'mnt', resolution, output_dir, farneback_params, None, None, generate_report=False)
+    
+    # Combinaison des résultats 3D
+    logger.info("Combinaison des résultats 3D...")
+    
+    # Calcul des déplacements 3D (hypothénuse des déplacements X, Y, Z)
+    if 'mean_displacement_x' in horizontal_results and 'mean_displacement_y' in horizontal_results and 'mean_diff' in vertical_results:
+        dx = horizontal_results['mean_displacement_x']
+        dy = horizontal_results['mean_displacement_y']
+        dz = vertical_results['mean_diff']
+        
+        # Déplacement 3D total
+        displacement_3d = np.sqrt(dx**2 + dy**2 + dz**2)
+        
+        results_3d = {
+            'displacement_3d': displacement_3d,
+            'displacement_x': dx,
+            'displacement_y': dy,
+            'displacement_z': dz,
+            'horizontal_results': horizontal_results,
+            'vertical_results': vertical_results
+        }
+        # Médianes des composantes
+        results_3d['median_displacement_z'] = vertical_results.get('median_diff', 'N/A')
+        results_3d['median_displacement_x'] = horizontal_results.get('median_displacement_x', 'N/A')
+        results_3d['median_displacement_y'] = horizontal_results.get('median_displacement_y', 'N/A')
+        # Norme 3D médiane (si les trois composantes sont des scalaires numériques)
+        mdx = results_3d.get('median_displacement_x')
+        mdy = results_3d.get('median_displacement_y')
+        mdz = results_3d.get('median_displacement_z')
+        def _is_scalar_number(v):
+            try:
+                float(v)
+                return True
+            except Exception:
+                return False
+        if _is_scalar_number(mdx) and _is_scalar_number(mdy) and _is_scalar_number(mdz):
+            mdx_f = float(mdx)
+            mdy_f = float(mdy)
+            mdz_f = float(mdz)
+            results_3d['median_displacement_3d'] = float(np.sqrt(mdx_f**2 + mdy_f**2 + mdz_f**2))
+        else:
+            results_3d['median_displacement_3d'] = 'N/A'
+        # Propager résolution et nombre de points pour le rapport
+        results_3d['resolution'] = resolution
+        # n_points: prioriser MNT (pixels valides), sinon déplacements valides Farneback
+        results_3d['n_points'] = (
+            vertical_results.get('n_points')
+            if isinstance(vertical_results, dict) and 'n_points' in vertical_results
+            else horizontal_results.get('n_valid_displacements', 'N/A')
+        )
+        
+        logger.info(f"Déplacement 3D total: {displacement_3d:.3f} m")
+        
+        return results_3d
+    else:
+        logger.warning("Impossible de combiner les résultats 3D - données manquantes")
+        return {
+            'horizontal_results': horizontal_results,
+            'vertical_results': vertical_results
+        }
+
 def run_analysis_pipeline(image1_path: str, image2_path: str, 
                          analysis_type: str, resolution: float,
-                         output_dir: str, farneback_params: dict = None) -> Dict[str, Any]:
+                         output_dir: str, farneback_params: dict = None,
+                         mnt1_path: str = None, mnt2_path: str = None,
+                         generate_report: bool = True) -> Dict[str, Any]:
     """
     Pipeline principal d'analyse
     
     Args:
         image1_path: Chemin vers la première image
         image2_path: Chemin vers la deuxième image
-        analysis_type: Type d'analyse ('mnt' ou 'ortho')
+        analysis_type: Type d'analyse ('mnt', 'ortho' ou 'mnt_ortho')
         resolution: Résolution d'analyse en mètres
         output_dir: Dossier de sortie
         farneback_params: Paramètres pour la méthode de Farneback
+        mnt1_path: Chemin vers le premier MNT (pour mode mnt_ortho)
+        mnt2_path: Chemin vers le deuxième MNT (pour mode mnt_ortho)
         
     Returns:
         Dictionnaire contenant tous les résultats
@@ -976,7 +1159,15 @@ def run_analysis_pipeline(image1_path: str, image2_path: str,
             )
         
         # Analyse selon le type
-        if analysis_type == 'mnt':
+        if analysis_type == 'mnt_ortho':
+            # Analyse 3D combinant MNTs et orthos
+            logger.info("Lancement de l'analyse 3D...")
+            results = analyze_3d_displacement(image1_path, image2_path, mnt1_path, mnt2_path, 
+                                            resolution, output_dir, adapted_params)
+            # Exposer les chemins des MNTs pour le rapport
+            results['mnt1_path'] = mnt1_path
+            results['mnt2_path'] = mnt2_path
+        elif analysis_type == 'mnt':
             # Création de la carte de déplacement vertical
             displacement_path = create_vertical_displacement_map(
                 resampled1, resampled2, common_metadata, 
@@ -995,8 +1186,8 @@ def run_analysis_pipeline(image1_path: str, image2_path: str,
         else:
             raise ValueError(f"Type d'analyse non supporté: {analysis_type}")
         
-        # Génération du rapport
-        if results:
+        # Génération du rapport (optionnelle)
+        if results and generate_report:
             report_path = generate_analysis_report(
                 results, analysis_type, image1_path, image2_path, output_dir
             )

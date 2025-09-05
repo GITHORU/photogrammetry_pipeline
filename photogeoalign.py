@@ -127,7 +127,7 @@ if __name__ == "__main__":
         # Arguments pour les transformations géodésiques
         parser.add_argument('--geodetic', action='store_true', help='Lancer les transformations géodésiques')
         parser.add_argument('--geodetic-coord', default='', help='Fichier de coordonnées de recalage pour les transformations géodésiques')
-        parser.add_argument('--deformation-type', default='tps', choices=['tps'], help='Type de déformation (défaut: tps)')
+        parser.add_argument('--deformation-type', default='none', choices=['none', 'tps', 'radial'], help='Type de déformation (none, tps, radial)')
         parser.add_argument('--deformation-params', default='', help='Paramètres de déformation (optionnel)')
         parser.add_argument('--add-offset-extra', default='', help='Paramètres supplémentaires pour l\'ajout d\'offset (optionnel)')
         parser.add_argument('--itrf-to-enu-extra', default='', help='Paramètres supplémentaires pour ITRF vers ENU (optionnel)')
@@ -175,9 +175,11 @@ if __name__ == "__main__":
         
         # Arguments pour le pipeline d'analyse
         parser.add_argument('--analysis', action='store_true', help='Lancer le pipeline d\'analyse')
-        parser.add_argument('--type', choices=['mnt', 'ortho'], default='mnt', help='Type d\'analyse : mnt ou ortho (défaut: mnt)')
+        parser.add_argument('--type', choices=['mnt', 'ortho', 'mnt_ortho'], default='mnt', help='Type d\'analyse : mnt, ortho ou mnt_ortho (défaut: mnt)')
         parser.add_argument('--image1', default='', help='Chemin vers l\'image 1 pour l\'analyse')
         parser.add_argument('--image2', default='', help='Chemin vers l\'image 2 pour l\'analyse')
+        parser.add_argument('--mnt1', default='', help='Chemin vers le MNT 1 pour l\'analyse mnt_ortho')
+        parser.add_argument('--mnt2', default='', help='Chemin vers le MNT 2 pour l\'analyse mnt_ortho')
         parser.add_argument('--resolution', type=float, default=10.0, help='Résolution d\'analyse en mètres (défaut: 10.0)')
         
         # Arguments pour les paramètres Farneback (configuration optimisée par défaut)
@@ -278,14 +280,30 @@ if __name__ == "__main__":
                 print("Erreur : veuillez spécifier un fichier image2 valide.")
                 sys.exit(1)
             
+            # Validation spécifique pour le mode mnt_ortho
+            if args.type == 'mnt_ortho':
+                if not args.mnt1 or not os.path.exists(args.mnt1):
+                    print("Erreur : veuillez spécifier un fichier mnt1 valide pour le mode mnt_ortho.")
+                    sys.exit(1)
+                if not args.mnt2 or not os.path.exists(args.mnt2):
+                    print("Erreur : veuillez spécifier un fichier mnt2 valide pour le mode mnt_ortho.")
+                    sys.exit(1)
+            
             log_path = os.path.join(os.path.dirname(args.image1), 'analysis_pipeline.log')
             logger = setup_logger(log_path)
-            print(f"Début du pipeline d'analyse pour les images : {args.image1} et {args.image2}")
+            if args.type == 'mnt_ortho':
+                print(f"Début du pipeline d'analyse 3D pour :")
+                print(f"  - Images : {args.image1} et {args.image2}")
+                print(f"  - MNTs : {args.mnt1} et {args.mnt2}")
+            else:
+                print(f"Début du pipeline d'analyse pour les images : {args.image1} et {args.image2}")
             
             try:
                 analysis_type = args.type
                 image1_path = args.image1
                 image2_path = args.image2
+                mnt1_path = args.mnt1 if args.type == 'mnt_ortho' else None
+                mnt2_path = args.mnt2 if args.type == 'mnt_ortho' else None
                 resolution = args.resolution
                 
                 # Paramètres Farneback (seulement si spécifiés explicitement)
@@ -328,7 +346,7 @@ if __name__ == "__main__":
                 
                 # Exécution du pipeline d'analyse
                 output_dir = os.path.join(os.path.dirname(image1_path), 'analysis_results')
-                results = run_analysis_pipeline(image1_path, image2_path, analysis_type, resolution, output_dir, farneback_params)
+                results = run_analysis_pipeline(image1_path, image2_path, analysis_type, resolution, output_dir, farneback_params, mnt1_path, mnt2_path)
                 
                 if results:
                     print(f"RMSE: {results.get('rmse', 'N/A')}")

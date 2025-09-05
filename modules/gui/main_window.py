@@ -505,8 +505,8 @@ class PhotogrammetryGUI(QWidget):
         # 3. Type de déformation
         deformation_layout = QHBoxLayout()
         self.deformation_combo = QComboBox()
-        self.deformation_combo.addItems(["tps"])
-        self.deformation_combo.setCurrentText("tps")
+        self.deformation_combo.addItems(["none", "tps", "radial"])  # radial ajouté
+        self.deformation_combo.setCurrentText("none")
         deformation_layout.addWidget(QLabel("Type de déformation :"))
         deformation_layout.addWidget(self.deformation_combo)
         geodetic_layout.addLayout(deformation_layout)
@@ -821,9 +821,11 @@ class PhotogrammetryGUI(QWidget):
         self.mnt_radio = QRadioButton("MNT")
         self.mnt_radio.setChecked(True)
         self.ortho_radio = QRadioButton("Ortho")
+        self.mnt_ortho_radio = QRadioButton("MNT et Ortho")
         
         analysis_type_layout.addWidget(self.mnt_radio)
         analysis_type_layout.addWidget(self.ortho_radio)
+        analysis_type_layout.addWidget(self.mnt_ortho_radio)
         new_layout.addWidget(analysis_type_group)
         
         # Image 1
@@ -854,6 +856,34 @@ class PhotogrammetryGUI(QWidget):
         image2_layout.addWidget(image2_browse_btn)
         new_layout.addLayout(image2_layout)
         
+        # MNT 1 (pour MNT et Ortho)
+        mnt1_layout = QHBoxLayout()
+        self.mnt1_edit = QLineEdit()
+        self.mnt1_edit.setPlaceholderText("Chemin du premier MNT")
+        mnt1_browse_btn = QPushButton()
+        mnt1_browse_btn.setIcon(self.create_folder_icon())
+        mnt1_browse_btn.setToolTip("Parcourir")
+        mnt1_browse_btn.clicked.connect(lambda: self.browse_file(self.mnt1_edit, "MNT (*.tif *.tiff)"))
+        
+        mnt1_layout.addWidget(QLabel("MNT 1 :"))
+        mnt1_layout.addWidget(self.mnt1_edit)
+        mnt1_layout.addWidget(mnt1_browse_btn)
+        new_layout.addLayout(mnt1_layout)
+        
+        # MNT 2 (pour MNT et Ortho)
+        mnt2_layout = QHBoxLayout()
+        self.mnt2_edit = QLineEdit()
+        self.mnt2_edit.setPlaceholderText("Chemin du deuxième MNT")
+        mnt2_browse_btn = QPushButton()
+        mnt2_browse_btn.setIcon(self.create_folder_icon())
+        mnt2_browse_btn.setToolTip("Parcourir")
+        mnt2_browse_btn.clicked.connect(lambda: self.browse_file(self.mnt2_edit, "MNT (*.tif *.tiff)"))
+        
+        mnt2_layout.addWidget(QLabel("MNT 2 :"))
+        mnt2_layout.addWidget(self.mnt2_edit)
+        mnt2_layout.addWidget(mnt2_browse_btn)
+        new_layout.addLayout(mnt2_layout)
+        
         # Résolution
         resolution_layout = QHBoxLayout()
         self.resolution_spin = QDoubleSpinBox()
@@ -868,8 +898,8 @@ class PhotogrammetryGUI(QWidget):
         new_layout.addLayout(resolution_layout)
         
         # Paramètres Farneback
-        farneback_group = QGroupBox("Paramètres Farneback")
-        farneback_layout = QVBoxLayout(farneback_group)
+        self.farneback_group = QGroupBox("Paramètres Farneback")
+        farneback_layout = QVBoxLayout(self.farneback_group)
         
         # Pyr_scale
         pyr_scale_layout = QHBoxLayout()
@@ -938,7 +968,7 @@ class PhotogrammetryGUI(QWidget):
         poly_sigma_layout.addStretch(1)
         farneback_layout.addLayout(poly_sigma_layout)
         
-        new_layout.addWidget(farneback_group)
+        new_layout.addWidget(self.farneback_group)
         
         # Ligne de commande CLI équivalente
         self.new_cmd_label = QLabel("Ligne de commande CLI équivalente :")
@@ -996,9 +1026,18 @@ class PhotogrammetryGUI(QWidget):
         
         # Connexions pour l'onglet d'analyse
         self.mnt_radio.toggled.connect(self.update_new_cmd_line)
+        self.mnt_radio.toggled.connect(self.toggle_farneback_params)
+        self.mnt_radio.toggled.connect(self.toggle_mnt_fields)
         self.ortho_radio.toggled.connect(self.update_new_cmd_line)
+        self.ortho_radio.toggled.connect(self.toggle_farneback_params)
+        self.ortho_radio.toggled.connect(self.toggle_mnt_fields)
+        self.mnt_ortho_radio.toggled.connect(self.update_new_cmd_line)
+        self.mnt_ortho_radio.toggled.connect(self.toggle_farneback_params)
+        self.mnt_ortho_radio.toggled.connect(self.toggle_mnt_fields)
         self.image1_edit.textChanged.connect(self.update_new_cmd_line)
         self.image2_edit.textChanged.connect(self.update_new_cmd_line)
+        self.mnt1_edit.textChanged.connect(self.update_new_cmd_line)
+        self.mnt2_edit.textChanged.connect(self.update_new_cmd_line)
         self.resolution_spin.valueChanged.connect(self.update_new_cmd_line)
         self.resolution_spin.valueChanged.connect(self.update_winsize_auto)
         
@@ -1059,6 +1098,12 @@ class PhotogrammetryGUI(QWidget):
         
         # Initialisation de la ligne de commande pour le nouvel onglet
         self.update_new_cmd_line()
+        
+        # Initialisation de la visibilité des paramètres Farneback
+        self.toggle_farneback_params()
+        
+        # Initialisation de la visibilité des champs MNT
+        self.toggle_mnt_fields()
         
         # Initialisation de l'état des contrôles de point de référence
         self.on_ref_point_type_changed()
@@ -1750,14 +1795,45 @@ class PhotogrammetryGUI(QWidget):
         # Mise à jour du tooltip
         self.winsize_spin.setToolTip(f"Winsize calculé automatiquement: {adapted_winsize} (référence: {base_winsize} pour {base_resolution*1000:.0f}mm)")
 
+    def toggle_farneback_params(self):
+        """Affiche ou cache les paramètres Farneback selon le type d'analyse sélectionné"""
+        if self.ortho_radio.isChecked() or self.mnt_ortho_radio.isChecked():
+            self.farneback_group.setVisible(True)
+        else:  # MNT seul sélectionné
+            self.farneback_group.setVisible(False)
+    
+    def toggle_mnt_fields(self):
+        """Affiche ou cache les champs MNT selon le type d'analyse sélectionné"""
+        if self.mnt_ortho_radio.isChecked():
+            # Afficher les champs MNT pour "MNT et Ortho"
+            self.mnt1_edit.setVisible(True)
+            self.mnt1_edit.parent().setVisible(True)
+            self.mnt2_edit.setVisible(True)
+            self.mnt2_edit.parent().setVisible(True)
+        else:
+            # Cacher les champs MNT pour "MNT" ou "Ortho" seul
+            self.mnt1_edit.setVisible(False)
+            self.mnt1_edit.parent().setVisible(False)
+            self.mnt2_edit.setVisible(False)
+            self.mnt2_edit.parent().setVisible(False)
+
     def update_new_cmd_line(self):
         """Met à jour la ligne de commande CLI pour l'analyse"""
         # Type d'analyse
-        analysis_type = "mnt" if self.mnt_radio.isChecked() else "ortho"
+        if self.mnt_radio.isChecked():
+            analysis_type = "mnt"
+        elif self.ortho_radio.isChecked():
+            analysis_type = "ortho"
+        else:  # mnt_ortho_radio.isChecked()
+            analysis_type = "mnt_ortho"
         
         # Images
         image1 = self.image1_edit.text().strip()
         image2 = self.image2_edit.text().strip()
+        
+        # MNTs (pour le mode mnt_ortho)
+        mnt1 = self.mnt1_edit.text().strip()
+        mnt2 = self.mnt2_edit.text().strip()
         
         # Résolution (conversion mm vers m)
         resolution = self.resolution_spin.value() / 1000.0
@@ -1774,10 +1850,22 @@ class PhotogrammetryGUI(QWidget):
         cmd_parts = ["python", "photogeoalign.py", "--analysis"]
         cmd_parts.append(f"--type={analysis_type}")
         
-        if image1:
-            cmd_parts.append(f"--image1={image1}")
-        if image2:
-            cmd_parts.append(f"--image2={image2}")
+        if analysis_type == "mnt_ortho":
+            # Mode MNT et Ortho : 4 fichiers
+            if image1:
+                cmd_parts.append(f"--image1={image1}")
+            if image2:
+                cmd_parts.append(f"--image2={image2}")
+            if mnt1:
+                cmd_parts.append(f"--mnt1={mnt1}")
+            if mnt2:
+                cmd_parts.append(f"--mnt2={mnt2}")
+        else:
+            # Mode MNT ou Ortho seul : 2 fichiers
+            if image1:
+                cmd_parts.append(f"--image1={image1}")
+            if image2:
+                cmd_parts.append(f"--image2={image2}")
         
         cmd_parts.append(f"--resolution={resolution}")
         
