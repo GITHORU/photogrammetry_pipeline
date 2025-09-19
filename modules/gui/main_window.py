@@ -1261,7 +1261,7 @@ class PhotogrammetryGUI(QWidget):
         run_c3dc = self.c3dc_cb.isChecked()
         
         # Construction de la ligne de commande
-        base_cmd = ["photogeoalign.py", f'\"{input_dir}\"']
+        base_cmd = ["photogeoalign.py", "--no-gui", f'\"{input_dir}\"']
         
         if mode != "MulScale":
             base_cmd.append(f"--mode {mode}")
@@ -1363,7 +1363,7 @@ class PhotogrammetryGUI(QWidget):
         deform_output_dir = self.deform_output_edit.text().strip()
         orthoimage_output_dir = self.orthoimage_output_edit.text().strip()
         
-        base_cmd = ["photogeoalign.py", "--geodetic", f'\"{geodetic_dir}\"']
+        base_cmd = ["photogeoalign.py", "--geodetic", "--no-gui", f'\"{geodetic_dir}\"']
         
         if coord_file:
             base_cmd.append(f"--geodetic-coord \"{coord_file}\"")
@@ -1847,7 +1847,7 @@ class PhotogrammetryGUI(QWidget):
         poly_sigma = self.poly_sigma_spin.value()
         
         # Construction de la commande
-        cmd_parts = ["python", "photogeoalign.py", "--analysis"]
+        cmd_parts = ["python", "photogeoalign.py", "--analysis", "--no-gui"]
         cmd_parts.append(f"--type={analysis_type}")
         
         if analysis_type == "mnt_ortho":
@@ -1899,7 +1899,7 @@ class PhotogrammetryGUI(QWidget):
             # Cas Python
             cmd = [exe_path, script_path] + filtered_args
         cli_cmd = " ".join(cmd)
-        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_New", output="PhotoGeoAlign_New.out", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_Analysis", output="PhotoGeoAlign_Analysis.out", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             vals = dialog.get_values()
             job_content = self.generate_job_script(vals, "new")

@@ -263,6 +263,13 @@ def process_single_cloud_deform(args):
     # Création d'un logger pour ce processus
     logger = logging.getLogger(f"Deform_{os.getpid()}")
     logger.setLevel(logging.INFO)
+    # Assurer un handler en sous-processus pour voir les logs (console)
+    if not logger.handlers:
+        _sh = logging.StreamHandler()
+        _sh.setLevel(logging.INFO)
+        _sh.setFormatter(logging.Formatter('%(asctime)s [%(name)s] %(levelname)s: %(message)s'))
+        logger.addHandler(_sh)
+        logger.propagate = False
     
     try:
         import open3d as o3d
@@ -364,6 +371,20 @@ def process_single_cloud_deform(args):
             cps_xy = control_points[:, :2]
             offs = control_values  # (dE, dN, dU)
 
+            # Barycentre XY des GCPs (diagnostic d'invariance au repère)
+            bary_x = float(np.mean(cps_xy[:, 0]))
+            bary_y = float(np.mean(cps_xy[:, 1]))
+            # Quelques stats de rayon par rapport au barycentre
+            _dxb = cps_xy[:, 0] - bary_x
+            _dyb = cps_xy[:, 1] - bary_y
+            _rb = np.sqrt(_dxb * _dxb + _dyb * _dyb)
+            rb_min = float(np.min(_rb)) if _rb.size else 0.0
+            rb_med = float(np.median(_rb)) if _rb.size else 0.0
+            rb_max = float(np.max(_rb)) if _rb.size else 0.0
+            logger.info(
+                f"    Barycentre GCPs (E,N)=({bary_x:.6f},{bary_y:.6f}) | r(min/med/max)={rb_min:.3f}/{rb_med:.3f}/{rb_max:.3f} m"
+            )
+
             def compute_radial_components_xy(points_xy, center):
                 cx, cy = center
                 dx = points_xy[:, 0] - cx
@@ -375,21 +396,19 @@ def process_single_cloud_deform(args):
                 return r, ux, uy
 
             # Gauss-Newton robuste (Huber), paramètres initiaux
-            cx, cy = float(np.mean(cps_xy[:, 0])), float(np.mean(cps_xy[:, 1]))
-            a1, a2, c1p = 0.0, 0.0, 0.0
-
-            def huber_weights(residuals, delta=1.0):
-                abs_r = np.abs(residuals)
-                w = np.ones_like(residuals)
-                mask = abs_r > delta
-                w[mask] = delta / abs_r[mask]
-                return w
+            cx, cy = bary_x, bary_y
+            a1, a2, c1p = 0.0, 0.0, 0.0  # a2 forcé à 0 (pas de terme r^3)
+            logger.info(
+                f"    Init centre (cx,cy)=({cx:.6f},{cy:.6f}), a1={a1:.3e}, a2={a2:.3e}, c1={c1p:.3e}"
+            )
 
             max_iter = 200
             tol = 1e-8
-            for _ in range(max_iter):
+            prev_cost = None
+            for it in range(max_iter):
                 r, ux, uy = compute_radial_components_xy(cps_xy, (cx, cy))
-                g = a1 * r + a2 * (r ** 3)
+                # Modèle simple sans normalisation ni pondération robuste
+                g = a1 * r  # a2=0 → pas de terme r^3
                 pred_e = g * ux
                 pred_n = g * uy
                 pred_u = c1p * r
@@ -398,9 +417,10 @@ def process_single_cloud_deform(args):
                 res_n = offs[:, 1] - pred_n
                 res_u = offs[:, 2] - pred_u
 
-                w_e = huber_weights(res_e)
-                w_n = huber_weights(res_n)
-                w_u = huber_weights(res_u)
+                # Poids uniformes (pas de Huber)
+                w_e = np.ones_like(res_e)
+                w_n = np.ones_like(res_n)
+                w_u = np.ones_like(res_u)
 
                 JtWJ = np.zeros((5, 5), dtype=float)
                 JtWr = np.zeros(5, dtype=float)
@@ -413,20 +433,24 @@ def process_single_cloud_deform(args):
                 dudx_dcy = (dx * dy) / r3
                 dudy_dcx = (dx * dy) / r3
                 dudy_dcy = -1.0 / r_safe + (dy * dy) / r3
-                dg_dr = a1 + 3.0 * a2 * (r ** 2)
+                # g = a1 * r + a2 * r^3 ; dg/dr = a1 + 3*a2*r^2
+                dg_dr = (a1 + 3.0 * a2 * (r ** 2))
                 dr_dcx = -dx / r_safe
                 dr_dcy = -dy / r_safe
 
                 dpe_dcx = dg_dr * dr_dcx * ux + g * dudx_dcx
                 dpe_dcy = dg_dr * dr_dcy * ux + g * dudx_dcy
                 dpe_da1 = r * ux
-                dpe_da2 = (r ** 3) * ux
+                # Neutraliser la colonne a2 (suppression du terme r^3)
+                dpe_da2 = np.zeros_like(r)
 
                 dpn_dcx = dg_dr * dr_dcx * uy + g * dudy_dcx
                 dpn_dcy = dg_dr * dr_dcy * uy + g * dudy_dcy
                 dpn_da1 = r * uy
-                dpn_da2 = (r ** 3) * uy
+                # Neutraliser la colonne a2 (suppression du terme r^3)
+                dpn_da2 = np.zeros_like(r)
 
+                # pred_u = c1p * r
                 dpu_dcx = c1p * dr_dcx
                 dpu_dcy = c1p * dr_dcy
                 dpu_dc1 = r
@@ -454,20 +478,44 @@ def process_single_cloud_deform(args):
                 cx += dcx
                 cy += dcy
                 a1 += da1p
-                a2 += da2p
+                # a2 reste forcé à 0 (ignorer la mise à jour éventuelle)
+                a2 = 0.0
                 c1p += dc1
-                if np.linalg.norm(delta) < tol:
+                step_norm = float(np.linalg.norm(delta))
+
+                # Coût et diagnostics d'itération
+                cost = float(np.sum(w_e * res_e * res_e) + np.sum(w_n * res_n * res_n) + np.sum(w_u * res_u * res_u))
+                rms_e = float(np.sqrt(np.mean(res_e * res_e)))
+                rms_n = float(np.sqrt(np.mean(res_n * res_n)))
+                rms_u = float(np.sqrt(np.mean(res_u * res_u)))
+                if it == 0 or it % 5 == 0:
+                    logger.info(
+                        f"    it={it:03d} cost={cost:.6e} step={step_norm:.3e} | RMS(E,N,U)=({rms_e:.4e},{rms_n:.4e},{rms_u:.4e}) | "
+                        f"params: cx={cx:.6f} cy={cy:.6f} a1={a1:.3e} a2={a2:.3e} c1={c1p:.3e}"
+                    )
+                if step_norm < tol:
+                    logger.info(
+                        f"    Convergence atteinte à it={it} (step={step_norm:.3e}, Δcost={(0.0 if prev_cost is None else prev_cost - cost):.3e})"
+                    )
                     break
+                prev_cost = cost
 
             # Appliquer au nuage complet
             r_all, ux_all, uy_all = compute_radial_components_xy(points[:, :2], (cx, cy))
-            g_all = a1 * r_all + a2 * (r_all ** 3)
+            g_all = a1 * r_all  # a2=0
             deform_e = g_all * ux_all
             deform_n = g_all * uy_all
             deform_u = c1p * r_all
             deformations = np.column_stack([deform_e, deform_n, deform_u])
 
             logger.info(f"  Radial params: center=({cx:.6f},{cy:.6f}), a1={a1:.6e}, a2={a2:.6e}, c1={c1p:.6e}")
+            # Résidus finaux sur GCPs pour contrôle (modèle simple)
+            res_e_f = offs[:, 0] - (a1 * r * ux)
+            res_n_f = offs[:, 1] - (a1 * r * uy)
+            res_u_f = offs[:, 2] - (c1p * r)
+            logger.info(
+                f"  Résidus finaux GCPs RMS(E,N,U)=({np.sqrt(np.mean(res_e_f**2)):.4e},{np.sqrt(np.mean(res_n_f**2)):.4e},{np.sqrt(np.mean(res_u_f**2)):.4e})"
+            )
 
         elif deformation_type == "lineaire":
             logger.info(f"  Interpolation linéaire avec {len(control_points)} points de contrôle...")
