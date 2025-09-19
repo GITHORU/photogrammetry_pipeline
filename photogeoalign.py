@@ -26,9 +26,16 @@ if getattr(sys, 'frozen', False):
                 # Nettoyer pour forcer l'utilisation des données de l'exécutable
                 del os.environ[var]
         
-        # Protection supplémentaire : désactiver complètement PROJ si version incompatible
-        print("[INFO] Protection PROJ: désactivation des imports rasterio/PROJ problématiques")
+        # Protection supplémentaire : forcer l'utilisation des données PROJ de l'exécutable
+        print("[INFO] Protection PROJ: nettoyage du PYTHONPATH système")
         os.environ['PYTHONPATH'] = ''  # Nettoyer le PYTHONPATH système
+        
+        # Forcer la priorité aux données de l'exécutable
+        if hasattr(sys, '_MEIPASS'):
+            exe_proj_data = os.path.join(sys._MEIPASS, 'pyproj', 'proj_dir', 'share', 'proj')
+            if os.path.exists(exe_proj_data):
+                print(f"[INFO] Protection PROJ: utilisation des données de l'exécutable: {exe_proj_data}")
+                os.environ['PROJ_LIB'] = exe_proj_data
     else:
         print("[INFO] Protection PROJ désactivée par PHOTOGEOSKIP_PROJ_PROTECTION")
 

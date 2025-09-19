@@ -7,7 +7,7 @@ Contient tous les modules de base pour la photogrammétrie.
 from . import geodetic_core
 from . import geodetic_processing
 from . import geodetic_orthoimage_basic
-# from . import geodetic_orthoimage_fusion  # Désactivé temporairement - conflit PROJ dans l'exécutable
+from . import geodetic_orthoimage_fusion
 from . import geodetic_utils
 from . import analysis
 
@@ -34,10 +34,10 @@ from .geodetic_orthoimage_basic import (
     merge_orthoimages_and_dtm
 )
 
-# from .geodetic_orthoimage_fusion import (
-#     process_zone_with_orthos,
-#     unified_ortho_mnt_fusion
-# )
+from .geodetic_orthoimage_fusion import (
+    process_zone_with_orthos,
+    unified_ortho_mnt_fusion
+)
 
 from .geodetic_utils import (
     calculate_global_histogram_and_quantiles,
@@ -73,9 +73,9 @@ __all__ = [
     'create_unified_orthoimage_and_dtm',
     'merge_orthoimages_and_dtm',
     
-    # Fusion orthoimage functions (désactivées temporairement - conflit PROJ)
-    # 'process_zone_with_orthos',
-    # 'unified_ortho_mnt_fusion',
+    # Fusion orthoimage functions
+    'process_zone_with_orthos',
+    'unified_ortho_mnt_fusion',
     
     # Utils functions
     'calculate_global_histogram_and_quantiles',
