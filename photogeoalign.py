@@ -15,13 +15,18 @@ import traceback
 if getattr(sys, 'frozen', False):
     # Si on est dans un exécutable PyInstaller, nettoyer les variables d'environnement système
     # qui pourraient interférer avec les bibliothèques embarquées
-    env_vars_to_clean = ['PROJ_LIB', 'GDAL_DATA', 'GDAL_DRIVER_PATH']
-    for var in env_vars_to_clean:
-        if var in os.environ:
-            # Garder une copie de la valeur système pour debug si nécessaire
-            sys_val = os.environ[var]
-            # Nettoyer pour forcer l'utilisation des données de l'exécutable
-            del os.environ[var]
+    # Peut être désactivé avec PHOTOGEOSKIP_PROJ_PROTECTION=1
+    if os.environ.get('PHOTOGEOSKIP_PROJ_PROTECTION', '').lower() not in ['1', 'true', 'yes']:
+        env_vars_to_clean = ['PROJ_LIB', 'GDAL_DATA', 'GDAL_DRIVER_PATH']
+        for var in env_vars_to_clean:
+            if var in os.environ:
+                # Garder une copie de la valeur système pour debug si nécessaire
+                sys_val = os.environ[var]
+                print(f"[INFO] Protection PROJ: suppression de {var}={sys_val}")
+                # Nettoyer pour forcer l'utilisation des données de l'exécutable
+                del os.environ[var]
+    else:
+        print("[INFO] Protection PROJ désactivée par PHOTOGEOSKIP_PROJ_PROTECTION")
 
 from PySide6.QtWidgets import QApplication, QMessageBox, QLabel
 from PySide6.QtCore import Qt, QTimer
