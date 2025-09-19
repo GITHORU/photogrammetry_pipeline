@@ -1849,6 +1849,11 @@ class PhotogrammetryGUI(QWidget):
         is_mnt_ortho = self.mnt_ortho_radio.isChecked()
         print(f"[DEBUG] MNT={is_mnt}, Ortho={is_ortho}, MNT+Ortho={is_mnt_ortho}")
         
+        # S'assurer que tous les éléments sont visibles au départ
+        self.farneback_group.setVisible(True)
+        self.mnt1_edit.parent().setVisible(True)
+        self.mnt2_edit.parent().setVisible(True)
+        
         # Mise à jour des placeholders, labels et états des champs
         if is_mnt:
             # Mode MNT : images = MNTs
