@@ -32,10 +32,24 @@ if getattr(sys, 'frozen', False):
         
         # Forcer la priorité aux données de l'exécutable
         if hasattr(sys, '_MEIPASS'):
-            exe_proj_data = os.path.join(sys._MEIPASS, 'pyproj', 'proj_dir', 'share', 'proj')
-            if os.path.exists(exe_proj_data):
-                print(f"[INFO] Protection PROJ: utilisation des données de l'exécutable: {exe_proj_data}")
-                os.environ['PROJ_LIB'] = exe_proj_data
+            # Essayer plusieurs chemins possibles pour les données PROJ
+            possible_proj_paths = [
+                os.path.join(sys._MEIPASS, 'pyproj', 'proj_dir', 'share', 'proj'),
+                os.path.join(sys._MEIPASS, 'share', 'proj'),
+                os.path.join(sys._MEIPASS, 'proj'),
+                os.path.join(sys._MEIPASS, 'pyproj', 'share', 'proj')
+            ]
+            
+            for proj_path in possible_proj_paths:
+                if os.path.exists(proj_path):
+                    print(f"[INFO] Protection PROJ: utilisation des données de l'exécutable: {proj_path}")
+                    os.environ['PROJ_LIB'] = proj_path
+                    break
+            
+            # Protection supplémentaire : désactiver la vérification de version PROJ
+            os.environ['PROJ_DISABLE_USER_DATA'] = '1'
+            os.environ['PROJ_SKIP_READ_USER_WRITABLE_DIRECTORY'] = '1'
+            print("[INFO] Protection PROJ: désactivation des données utilisateur PROJ")
     else:
         print("[INFO] Protection PROJ désactivée par PHOTOGEOSKIP_PROJ_PROTECTION")
 
