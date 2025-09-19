@@ -10,6 +10,19 @@ import argparse
 import subprocess
 import multiprocessing
 import traceback
+
+# Protection contre les conflits PROJ/GDAL système sur cluster
+if getattr(sys, 'frozen', False):
+    # Si on est dans un exécutable PyInstaller, nettoyer les variables d'environnement système
+    # qui pourraient interférer avec les bibliothèques embarquées
+    env_vars_to_clean = ['PROJ_LIB', 'GDAL_DATA', 'GDAL_DRIVER_PATH']
+    for var in env_vars_to_clean:
+        if var in os.environ:
+            # Garder une copie de la valeur système pour debug si nécessaire
+            sys_val = os.environ[var]
+            # Nettoyer pour forcer l'utilisation des données de l'exécutable
+            del os.environ[var]
+
 from PySide6.QtWidgets import QApplication, QMessageBox, QLabel
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QIcon, QAction
@@ -42,26 +55,38 @@ from modules.core.utils import setup_logger, resource_path
 
 # Initialisation GDAL/PROJ pour environnements packagés (exécutables)
 def _init_gdal_env():
+    """Initialise l'environnement GDAL/PROJ pour éviter les conflits de versions"""
     try:
         import rasterio
-        # Tenter de récupérer les chemins de données depuis rasterio
-        ri_env = getattr(rasterio, 'env', None)
-        if ri_env is not None:
+        
+        # FORCER l'utilisation des données de l'exécutable (priorité sur système)
+        gdal_data = getattr(rasterio, 'gdal_data', None)
+        if gdal_data and os.path.exists(gdal_data):
+            os.environ['GDAL_DATA'] = gdal_data
+        
+        # FORCER l'utilisation des données PROJ de l'exécutable
+        try:
+            import pyproj
+            proj_data = pyproj.datadir.get_data_dir()
+            if proj_data and os.path.exists(proj_data):
+                os.environ['PROJ_LIB'] = proj_data
+        except Exception:
             pass
-        # Si GDAL_DATA non défini, essayer depuis package
-        if 'GDAL_DATA' not in os.environ:
-            gdal_data = getattr(rasterio, 'gdal_data', None)
-            if gdal_data and os.path.exists(gdal_data):
-                os.environ['GDAL_DATA'] = gdal_data
-        # PROJ
-        if 'PROJ_LIB' not in os.environ:
-            try:
-                import pyproj
-                proj_data = pyproj.datadir.get_data_dir()
-                if proj_data and os.path.exists(proj_data):
-                    os.environ['PROJ_LIB'] = proj_data
-            except Exception:
-                pass
+            
+        # Désactiver les chemins système qui pourraient interférer
+        if 'PROJ_LIB' in os.environ and getattr(sys, 'frozen', False):
+            # Si on est dans un exécutable, s'assurer que PROJ_LIB pointe vers les données de l'exécutable
+            current_proj_lib = os.environ['PROJ_LIB']
+            if not current_proj_lib.startswith(sys._MEIPASS):
+                # Récupérer le chemin depuis pyproj
+                try:
+                    import pyproj
+                    proj_data = pyproj.datadir.get_data_dir()
+                    if proj_data and os.path.exists(proj_data):
+                        os.environ['PROJ_LIB'] = proj_data
+                except Exception:
+                    pass
+                    
     except Exception:
         pass
 
