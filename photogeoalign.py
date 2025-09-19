@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False):
     # qui pourraient interférer avec les bibliothèques embarquées
     # Peut être désactivé avec PHOTOGEOSKIP_PROJ_PROTECTION=1
     if os.environ.get('PHOTOGEOSKIP_PROJ_PROTECTION', '').lower() not in ['1', 'true', 'yes']:
-        env_vars_to_clean = ['PROJ_LIB', 'GDAL_DATA', 'GDAL_DRIVER_PATH']
+        env_vars_to_clean = ['PROJ_LIB', 'GDAL_DATA', 'GDAL_DRIVER_PATH', 'PROJ_DATA', 'GDAL_CONFIG']
         for var in env_vars_to_clean:
             if var in os.environ:
                 # Garder une copie de la valeur système pour debug si nécessaire
@@ -25,6 +25,10 @@ if getattr(sys, 'frozen', False):
                 print(f"[INFO] Protection PROJ: suppression de {var}={sys_val}")
                 # Nettoyer pour forcer l'utilisation des données de l'exécutable
                 del os.environ[var]
+        
+        # Protection supplémentaire : désactiver complètement PROJ si version incompatible
+        print("[INFO] Protection PROJ: désactivation des imports rasterio/PROJ problématiques")
+        os.environ['PYTHONPATH'] = ''  # Nettoyer le PYTHONPATH système
     else:
         print("[INFO] Protection PROJ désactivée par PHOTOGEOSKIP_PROJ_PROTECTION")
 
