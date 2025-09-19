@@ -1068,7 +1068,9 @@ class PhotogrammetryGUI(QWidget):
         self.resolution_spin.valueChanged.connect(self.update_winsize_auto)
         
         # Connexions pour les radio buttons d'analyse
-        self.analysis_radio_group.buttonToggled.connect(self.update_analysis_ui)
+        self.mnt_radio.toggled.connect(self.update_analysis_ui)
+        self.ortho_radio.toggled.connect(self.update_analysis_ui)
+        self.mnt_ortho_radio.toggled.connect(self.update_analysis_ui)
         
         # Connexions pour les paramètres Farneback
         self.pyr_scale_spin.valueChanged.connect(self.update_new_cmd_line)
@@ -1848,11 +1850,13 @@ class PhotogrammetryGUI(QWidget):
         self.action_new.setEnabled(True)
         self.action_stop.setEnabled(False)
 
-    def update_analysis_ui(self):
+    def update_analysis_ui(self, checked=None):
         """Met à jour l'interface selon le type d'analyse sélectionné"""
+        print(f"[DEBUG] update_analysis_ui appelée, checked={checked}")
         is_mnt = self.mnt_radio.isChecked()
         is_ortho = self.ortho_radio.isChecked()
         is_mnt_ortho = self.mnt_ortho_radio.isChecked()
+        print(f"[DEBUG] MNT={is_mnt}, Ortho={is_ortho}, MNT+Ortho={is_mnt_ortho}")
         
         # Mise à jour des placeholders, labels et états des champs
         if is_mnt:
