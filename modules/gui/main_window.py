@@ -837,6 +837,10 @@ class PhotogrammetryGUI(QWidget):
         analysis_type_layout.addWidget(self.mnt_ortho_radio)
         new_layout.addWidget(analysis_type_group)
         
+        # Bloc Images (Ortho 1 et Ortho 2)
+        self.images_group = QGroupBox("Images")
+        images_layout = QVBoxLayout(self.images_group)
+        
         # Image 1
         image1_layout = QHBoxLayout()
         self.image1_edit = QLineEdit()
@@ -850,7 +854,7 @@ class PhotogrammetryGUI(QWidget):
         image1_layout.addWidget(self.image1_label)
         image1_layout.addWidget(self.image1_edit)
         image1_layout.addWidget(image1_browse_btn)
-        new_layout.addLayout(image1_layout)
+        images_layout.addLayout(image1_layout)
         
         # Image 2
         image2_layout = QHBoxLayout()
@@ -865,11 +869,16 @@ class PhotogrammetryGUI(QWidget):
         image2_layout.addWidget(self.image2_label)
         image2_layout.addWidget(self.image2_edit)
         image2_layout.addWidget(image2_browse_btn)
-        new_layout.addLayout(image2_layout)
+        images_layout.addLayout(image2_layout)
         
-        # MNT 1 (pour MNT et Ortho)
-        self.mnt1_group = QGroupBox("MNT 1")
-        mnt1_layout = QHBoxLayout(self.mnt1_group)
+        new_layout.addWidget(self.images_group)
+        
+        # Bloc MNT (MNT 1 et MNT 2)
+        self.mnt_group = QGroupBox("MNT")
+        mnt_layout = QVBoxLayout(self.mnt_group)
+        
+        # MNT 1
+        mnt1_layout = QHBoxLayout()
         self.mnt1_edit = QLineEdit()
         self.mnt1_edit.setPlaceholderText("Chemin du premier MNT")
         mnt1_browse_btn = QPushButton()
@@ -877,13 +886,13 @@ class PhotogrammetryGUI(QWidget):
         mnt1_browse_btn.setToolTip("Parcourir")
         mnt1_browse_btn.clicked.connect(lambda: self.browse_file(self.mnt1_edit, "MNT (*.tif *.tiff)"))
         
+        mnt1_layout.addWidget(QLabel("MNT 1 :"))
         mnt1_layout.addWidget(self.mnt1_edit)
         mnt1_layout.addWidget(mnt1_browse_btn)
-        new_layout.addWidget(self.mnt1_group)
+        mnt_layout.addLayout(mnt1_layout)
         
-        # MNT 2 (pour MNT et Ortho)
-        self.mnt2_group = QGroupBox("MNT 2")
-        mnt2_layout = QHBoxLayout(self.mnt2_group)
+        # MNT 2
+        mnt2_layout = QHBoxLayout()
         self.mnt2_edit = QLineEdit()
         self.mnt2_edit.setPlaceholderText("Chemin du deuxième MNT")
         mnt2_browse_btn = QPushButton()
@@ -891,9 +900,12 @@ class PhotogrammetryGUI(QWidget):
         mnt2_browse_btn.setToolTip("Parcourir")
         mnt2_browse_btn.clicked.connect(lambda: self.browse_file(self.mnt2_edit, "MNT (*.tif *.tiff)"))
         
+        mnt2_layout.addWidget(QLabel("MNT 2 :"))
         mnt2_layout.addWidget(self.mnt2_edit)
         mnt2_layout.addWidget(mnt2_browse_btn)
-        new_layout.addWidget(self.mnt2_group)
+        mnt_layout.addLayout(mnt2_layout)
+        
+        new_layout.addWidget(self.mnt_group)
         
         # Résolution
         resolution_layout = QHBoxLayout()
@@ -1843,16 +1855,14 @@ class PhotogrammetryGUI(QWidget):
 
     def update_analysis_ui(self, checked=None):
         """Met à jour l'interface selon le type d'analyse sélectionné"""
-        print(f"[DEBUG] update_analysis_ui appelée, checked={checked}")
         is_mnt = self.mnt_radio.isChecked()
         is_ortho = self.ortho_radio.isChecked()
         is_mnt_ortho = self.mnt_ortho_radio.isChecked()
-        print(f"[DEBUG] MNT={is_mnt}, Ortho={is_ortho}, MNT+Ortho={is_mnt_ortho}")
         
         # S'assurer que tous les éléments sont visibles au départ
+        self.images_group.setVisible(True)
+        self.mnt_group.setVisible(True)
         self.farneback_group.setVisible(True)
-        self.mnt1_group.setVisible(True)
-        self.mnt2_group.setVisible(True)
         
         # Mise à jour des placeholders, labels et états des champs
         if is_mnt:
@@ -1863,9 +1873,8 @@ class PhotogrammetryGUI(QWidget):
             self.image2_edit.setPlaceholderText("Chemin vers le deuxième MNT")
             self.image1_edit.setEnabled(True)
             self.image2_edit.setEnabled(True)
-            # Cacher les champs MNT séparés
-            self.mnt1_group.setVisible(False)
-            self.mnt2_group.setVisible(False)
+            # Cacher le bloc MNT séparé
+            self.mnt_group.setVisible(False)
             self.farneback_group.setVisible(False)  # Pas de Farneback pour MNT
         elif is_ortho:
             # Mode Ortho : images = orthoimages
@@ -1875,9 +1884,8 @@ class PhotogrammetryGUI(QWidget):
             self.image2_edit.setPlaceholderText("Chemin vers la deuxième orthoimage")
             self.image1_edit.setEnabled(True)
             self.image2_edit.setEnabled(True)
-            # Cacher les champs MNT séparés
-            self.mnt1_group.setVisible(False)
-            self.mnt2_group.setVisible(False)
+            # Cacher le bloc MNT séparé
+            self.mnt_group.setVisible(False)
             self.farneback_group.setVisible(True)  # Farneback pour ortho
         elif is_mnt_ortho:
             # Mode MNT+Ortho : images = orthos, MNTs séparés
@@ -1887,9 +1895,8 @@ class PhotogrammetryGUI(QWidget):
             self.image2_edit.setPlaceholderText("Chemin vers la deuxième orthoimage")
             self.image1_edit.setEnabled(True)
             self.image2_edit.setEnabled(True)
-            # Afficher les champs MNT séparés
-            self.mnt1_group.setVisible(True)
-            self.mnt2_group.setVisible(True)
+            # Afficher le bloc MNT séparé
+            self.mnt_group.setVisible(True)
             self.farneback_group.setVisible(True)  # Farneback pour ortho
         
         # Mise à jour de la ligne de commande
