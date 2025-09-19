@@ -1052,14 +1052,8 @@ class PhotogrammetryGUI(QWidget):
         
         # Connexions pour l'onglet d'analyse
         self.mnt_radio.toggled.connect(self.update_new_cmd_line)
-        self.mnt_radio.toggled.connect(self.toggle_farneback_params)
-        self.mnt_radio.toggled.connect(self.toggle_mnt_fields)
         self.ortho_radio.toggled.connect(self.update_new_cmd_line)
-        self.ortho_radio.toggled.connect(self.toggle_farneback_params)
-        self.ortho_radio.toggled.connect(self.toggle_mnt_fields)
         self.mnt_ortho_radio.toggled.connect(self.update_new_cmd_line)
-        self.mnt_ortho_radio.toggled.connect(self.toggle_farneback_params)
-        self.mnt_ortho_radio.toggled.connect(self.toggle_mnt_fields)
         self.image1_edit.textChanged.connect(self.update_new_cmd_line)
         self.image2_edit.textChanged.connect(self.update_new_cmd_line)
         self.mnt1_edit.textChanged.connect(self.update_new_cmd_line)
@@ -1131,11 +1125,8 @@ class PhotogrammetryGUI(QWidget):
         # Initialisation de la ligne de commande pour le nouvel onglet
         self.update_new_cmd_line()
         
-        # Initialisation de la visibilité des paramètres Farneback
-        self.toggle_farneback_params()
-        
-        # Initialisation de la visibilité des champs MNT
-        self.toggle_mnt_fields()
+        # Initialisation de l'interface d'analyse
+        self.update_analysis_ui()
         
         # Initialisation de l'état des contrôles de point de référence
         self.on_ref_point_type_changed()
@@ -1867,9 +1858,10 @@ class PhotogrammetryGUI(QWidget):
             self.image2_edit.setPlaceholderText("Chemin vers le deuxième MNT")
             self.image1_edit.setEnabled(True)
             self.image2_edit.setEnabled(True)
-            self.mnt1_edit.setEnabled(False)
-            self.mnt2_edit.setEnabled(False)
-            self.farneback_group.setEnabled(False)  # Pas de Farneback pour MNT
+            # Cacher les champs MNT séparés
+            self.mnt1_edit.parent().setVisible(False)
+            self.mnt2_edit.parent().setVisible(False)
+            self.farneback_group.setVisible(False)  # Pas de Farneback pour MNT
         elif is_ortho:
             # Mode Ortho : images = orthoimages
             self.image1_label.setText("Ortho 1 :")
@@ -1878,9 +1870,10 @@ class PhotogrammetryGUI(QWidget):
             self.image2_edit.setPlaceholderText("Chemin vers la deuxième orthoimage")
             self.image1_edit.setEnabled(True)
             self.image2_edit.setEnabled(True)
-            self.mnt1_edit.setEnabled(False)
-            self.mnt2_edit.setEnabled(False)
-            self.farneback_group.setEnabled(True)  # Farneback pour ortho
+            # Cacher les champs MNT séparés
+            self.mnt1_edit.parent().setVisible(False)
+            self.mnt2_edit.parent().setVisible(False)
+            self.farneback_group.setVisible(True)  # Farneback pour ortho
         elif is_mnt_ortho:
             # Mode MNT+Ortho : images = orthos, MNTs séparés
             self.image1_label.setText("Ortho 1 :")
@@ -1889,9 +1882,10 @@ class PhotogrammetryGUI(QWidget):
             self.image2_edit.setPlaceholderText("Chemin vers la deuxième orthoimage")
             self.image1_edit.setEnabled(True)
             self.image2_edit.setEnabled(True)
-            self.mnt1_edit.setEnabled(True)
-            self.mnt2_edit.setEnabled(True)
-            self.farneback_group.setEnabled(True)  # Farneback pour ortho
+            # Afficher les champs MNT séparés
+            self.mnt1_edit.parent().setVisible(True)
+            self.mnt2_edit.parent().setVisible(True)
+            self.farneback_group.setVisible(True)  # Farneback pour ortho
         
         # Mise à jour de la ligne de commande
         self.update_new_cmd_line()
@@ -1921,27 +1915,6 @@ class PhotogrammetryGUI(QWidget):
         # Mise à jour du tooltip
         self.winsize_spin.setToolTip(f"Winsize calculé automatiquement: {adapted_winsize} (référence: {base_winsize} pour {base_resolution*1000:.0f}mm)")
 
-    def toggle_farneback_params(self):
-        """Affiche ou cache les paramètres Farneback selon le type d'analyse sélectionné"""
-        if self.ortho_radio.isChecked() or self.mnt_ortho_radio.isChecked():
-            self.farneback_group.setVisible(True)
-        else:  # MNT seul sélectionné
-            self.farneback_group.setVisible(False)
-    
-    def toggle_mnt_fields(self):
-        """Affiche ou cache les champs MNT selon le type d'analyse sélectionné"""
-        if self.mnt_ortho_radio.isChecked():
-            # Afficher les champs MNT pour "MNT et Ortho"
-            self.mnt1_edit.setVisible(True)
-            self.mnt1_edit.parent().setVisible(True)
-            self.mnt2_edit.setVisible(True)
-            self.mnt2_edit.parent().setVisible(True)
-        else:
-            # Cacher les champs MNT pour "MNT" ou "Ortho" seul
-            self.mnt1_edit.setVisible(False)
-            self.mnt1_edit.parent().setVisible(False)
-            self.mnt2_edit.setVisible(False)
-            self.mnt2_edit.parent().setVisible(False)
 
     def update_new_cmd_line(self):
         """Met à jour la ligne de commande CLI pour l'analyse"""
