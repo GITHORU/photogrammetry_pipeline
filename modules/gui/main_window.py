@@ -835,9 +835,10 @@ class PhotogrammetryGUI(QWidget):
         image1_browse_btn = QPushButton()
         image1_browse_btn.setIcon(self.create_folder_icon())
         image1_browse_btn.setToolTip("Parcourir")
-        image1_browse_btn.clicked.connect(lambda: self.browse_file(self.image1_edit, "Images (*.tif *.tiff *.jpg *.jpeg *.png)"))
+        image1_browse_btn.clicked.connect(lambda: self.browse_analysis_file(self.image1_edit, "image1"))
         
-        image1_layout.addWidget(QLabel("Image 1 :"))
+        self.image1_label = QLabel("Image 1 :")
+        image1_layout.addWidget(self.image1_label)
         image1_layout.addWidget(self.image1_edit)
         image1_layout.addWidget(image1_browse_btn)
         new_layout.addLayout(image1_layout)
@@ -849,9 +850,10 @@ class PhotogrammetryGUI(QWidget):
         image2_browse_btn = QPushButton()
         image2_browse_btn.setIcon(self.create_folder_icon())
         image2_browse_btn.setToolTip("Parcourir")
-        image2_browse_btn.clicked.connect(lambda: self.browse_file(self.image2_edit, "Images (*.tif *.tiff *.jpg *.jpeg *.png)"))
+        image2_browse_btn.clicked.connect(lambda: self.browse_analysis_file(self.image2_edit, "image2"))
         
-        image2_layout.addWidget(QLabel("Image 2 :"))
+        self.image2_label = QLabel("Image 2 :")
+        image2_layout.addWidget(self.image2_label)
         image2_layout.addWidget(self.image2_edit)
         image2_layout.addWidget(image2_browse_btn)
         new_layout.addLayout(image2_layout)
@@ -1012,8 +1014,9 @@ class PhotogrammetryGUI(QWidget):
         main_layout.addLayout(layout)
         self.setLayout(main_layout)
         
-        # Initialisation du winsize automatique
+        # Initialisation du winsize automatique et de l'interface d'analyse
         self.update_winsize_auto()
+        self.update_analysis_ui()
         
         # Connexions
         self.dir_edit.textChanged.connect(self.update_cmd_line)
@@ -1054,6 +1057,11 @@ class PhotogrammetryGUI(QWidget):
         self.mnt2_edit.textChanged.connect(self.update_new_cmd_line)
         self.resolution_spin.valueChanged.connect(self.update_new_cmd_line)
         self.resolution_spin.valueChanged.connect(self.update_winsize_auto)
+        
+        # Connexions pour les radio buttons d'analyse
+        self.mnt_radio.toggled.connect(self.update_analysis_ui)
+        self.ortho_radio.toggled.connect(self.update_analysis_ui)
+        self.mnt_ortho_radio.toggled.connect(self.update_analysis_ui)
         
         # Connexions pour les paramètres Farneback
         self.pyr_scale_spin.valueChanged.connect(self.update_new_cmd_line)
@@ -1244,6 +1252,25 @@ class PhotogrammetryGUI(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'analyse")
         if folder:
             self.output_dir_edit.setText(folder)
+    
+    def browse_analysis_file(self, line_edit, field_type):
+        """Ouvre un dialogue de sélection de fichier adapté au type d'analyse"""
+        is_mnt = self.mnt_radio.isChecked()
+        is_ortho = self.ortho_radio.isChecked()
+        is_mnt_ortho = self.mnt_ortho_radio.isChecked()
+        
+        if is_mnt:
+            # Mode MNT : sélectionner des fichiers MNT
+            file_filter = "MNT (*.tif *.tiff)"
+            title = f"Sélectionner le {field_type.replace('image', 'MNT')}"
+        elif is_ortho or is_mnt_ortho:
+            # Mode Ortho ou MNT+Ortho : sélectionner des orthoimages
+            file_filter = "Images (*.tif *.tiff *.jpg *.jpeg *.png)"
+            title = f"Sélectionner l'orthoimage {field_type.replace('image', '')}"
+        
+        file_path, _ = QFileDialog.getOpenFileName(self, title, "", file_filter)
+        if file_path:
+            line_edit.setText(file_path)
 
     def on_ref_point_type_changed(self):
         """Gère l'activation/désactivation des contrôles selon le type de point de référence choisi"""
@@ -1813,6 +1840,50 @@ class PhotogrammetryGUI(QWidget):
         self.action_geodetic.setEnabled(True)
         self.action_new.setEnabled(True)
         self.action_stop.setEnabled(False)
+
+    def update_analysis_ui(self):
+        """Met à jour l'interface selon le type d'analyse sélectionné"""
+        is_mnt = self.mnt_radio.isChecked()
+        is_ortho = self.ortho_radio.isChecked()
+        is_mnt_ortho = self.mnt_ortho_radio.isChecked()
+        
+        # Mise à jour des placeholders, labels et états des champs
+        if is_mnt:
+            # Mode MNT : images = MNTs
+            self.image1_label.setText("MNT 1 :")
+            self.image2_label.setText("MNT 2 :")
+            self.image1_edit.setPlaceholderText("Chemin vers le premier MNT")
+            self.image2_edit.setPlaceholderText("Chemin vers le deuxième MNT")
+            self.image1_edit.setEnabled(True)
+            self.image2_edit.setEnabled(True)
+            self.mnt1_edit.setEnabled(False)
+            self.mnt2_edit.setEnabled(False)
+            self.farneback_group.setEnabled(False)  # Pas de Farneback pour MNT
+        elif is_ortho:
+            # Mode Ortho : images = orthoimages
+            self.image1_label.setText("Ortho 1 :")
+            self.image2_label.setText("Ortho 2 :")
+            self.image1_edit.setPlaceholderText("Chemin vers la première orthoimage")
+            self.image2_edit.setPlaceholderText("Chemin vers la deuxième orthoimage")
+            self.image1_edit.setEnabled(True)
+            self.image2_edit.setEnabled(True)
+            self.mnt1_edit.setEnabled(False)
+            self.mnt2_edit.setEnabled(False)
+            self.farneback_group.setEnabled(True)  # Farneback pour ortho
+        elif is_mnt_ortho:
+            # Mode MNT+Ortho : images = orthos, MNTs séparés
+            self.image1_label.setText("Ortho 1 :")
+            self.image2_label.setText("Ortho 2 :")
+            self.image1_edit.setPlaceholderText("Chemin vers la première orthoimage")
+            self.image2_edit.setPlaceholderText("Chemin vers la deuxième orthoimage")
+            self.image1_edit.setEnabled(True)
+            self.image2_edit.setEnabled(True)
+            self.mnt1_edit.setEnabled(True)
+            self.mnt2_edit.setEnabled(True)
+            self.farneback_group.setEnabled(True)  # Farneback pour ortho
+        
+        # Mise à jour de la ligne de commande
+        self.update_new_cmd_line()
 
     def update_winsize_auto(self):
         """Met à jour automatiquement le winsize selon la résolution"""
