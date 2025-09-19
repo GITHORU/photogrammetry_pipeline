@@ -3,7 +3,8 @@ import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QLineEdit,
-    QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog, QRadioButton, QGroupBox
+    QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog, QRadioButton, QGroupBox,
+    QButtonGroup
 )
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QBrush, QPen, QAction
 from PySide6.QtCore import Qt, QTimer, QPoint
@@ -818,10 +819,18 @@ class PhotogrammetryGUI(QWidget):
         analysis_type_group = QGroupBox("Type d'analyse")
         analysis_type_layout = QVBoxLayout(analysis_type_group)
         
+        # Groupe de boutons mutuellement exclusifs
+        self.analysis_radio_group = QButtonGroup()
+        
         self.mnt_radio = QRadioButton("MNT")
         self.mnt_radio.setChecked(True)
         self.ortho_radio = QRadioButton("Ortho")
         self.mnt_ortho_radio = QRadioButton("MNT et Ortho")
+        
+        # Ajouter les boutons au groupe
+        self.analysis_radio_group.addButton(self.mnt_radio, 0)
+        self.analysis_radio_group.addButton(self.ortho_radio, 1)
+        self.analysis_radio_group.addButton(self.mnt_ortho_radio, 2)
         
         analysis_type_layout.addWidget(self.mnt_radio)
         analysis_type_layout.addWidget(self.ortho_radio)
@@ -1059,9 +1068,7 @@ class PhotogrammetryGUI(QWidget):
         self.resolution_spin.valueChanged.connect(self.update_winsize_auto)
         
         # Connexions pour les radio buttons d'analyse
-        self.mnt_radio.toggled.connect(self.update_analysis_ui)
-        self.ortho_radio.toggled.connect(self.update_analysis_ui)
-        self.mnt_ortho_radio.toggled.connect(self.update_analysis_ui)
+        self.analysis_radio_group.buttonToggled.connect(self.update_analysis_ui)
         
         # Connexions pour les paramètres Farneback
         self.pyr_scale_spin.valueChanged.connect(self.update_new_cmd_line)
