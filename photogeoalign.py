@@ -246,6 +246,7 @@ if __name__ == "__main__":
         parser.add_argument('--iterations', type=int, default=10, help='Nombre d\'itérations (défaut: 10)')
         parser.add_argument('--poly-n', type=int, default=7, help='Taille du filtre polynomial (défaut: 7)')
         parser.add_argument('--poly-sigma', type=float, default=1.2, help='Écart-type du filtre polynomial (défaut: 1.2)')
+        parser.add_argument('--output-dir', default='', help='Dossier de sortie pour les résultats d\'analyse (défaut: analysis_results dans le dossier de l\'image 1)')
         
         args = parser.parse_args()
         if args.geodetic:
@@ -402,7 +403,10 @@ if __name__ == "__main__":
                     print(f"  - poly_sigma: {base_config['poly_sigma']} (constant)")
                 
                 # Exécution du pipeline d'analyse
-                output_dir = os.path.join(os.path.dirname(image1_path), 'analysis_results')
+                if args.output_dir:
+                    output_dir = args.output_dir
+                else:
+                    output_dir = os.path.join(os.path.dirname(image1_path), 'analysis_results')
                 results = run_analysis_pipeline(image1_path, image2_path, analysis_type, resolution, output_dir, farneback_params, mnt1_path, mnt2_path)
                 
                 if results:

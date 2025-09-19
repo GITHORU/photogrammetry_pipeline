@@ -897,6 +897,20 @@ class PhotogrammetryGUI(QWidget):
         resolution_layout.addStretch(1)
         new_layout.addLayout(resolution_layout)
         
+        # Dossier de sortie
+        output_dir_layout = QHBoxLayout()
+        self.output_dir_edit = QLineEdit()
+        self.output_dir_edit.setPlaceholderText("Dossier de sortie (laisser vide pour analysis_results dans le dossier de l'image 1)")
+        self.output_dir_browse_btn = QPushButton()
+        self.output_dir_browse_btn.setIcon(self.create_folder_icon())
+        self.output_dir_browse_btn.setToolTip("Parcourir")
+        self.output_dir_browse_btn.clicked.connect(self.browse_analysis_output_dir)
+        
+        output_dir_layout.addWidget(QLabel("Dossier de sortie :"))
+        output_dir_layout.addWidget(self.output_dir_edit)
+        output_dir_layout.addWidget(self.output_dir_browse_btn)
+        new_layout.addLayout(output_dir_layout)
+        
         # Paramètres Farneback
         self.farneback_group = QGroupBox("Paramètres Farneback")
         farneback_layout = QVBoxLayout(self.farneback_group)
@@ -1048,6 +1062,7 @@ class PhotogrammetryGUI(QWidget):
         self.iterations_spin.valueChanged.connect(self.update_new_cmd_line)
         self.poly_n_spin.valueChanged.connect(self.update_new_cmd_line)
         self.poly_sigma_spin.valueChanged.connect(self.update_new_cmd_line)
+        self.output_dir_edit.textChanged.connect(self.update_new_cmd_line)
         
         # Connexions pour le point de référence global
         self.global_ref_x_spin.valueChanged.connect(self.update_geodetic_cmd_line)
@@ -1224,6 +1239,11 @@ class PhotogrammetryGUI(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'orthoimage unifiée")
         if folder:
             self.unified_orthoimage_output_edit.setText(folder)
+    
+    def browse_analysis_output_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sortie pour l'analyse")
+        if folder:
+            self.output_dir_edit.setText(folder)
 
     def on_ref_point_type_changed(self):
         """Gère l'activation/désactivation des contrôles selon le type de point de référence choisi"""
@@ -1706,7 +1726,12 @@ class PhotogrammetryGUI(QWidget):
         self.action_stop.setEnabled(True)
         
         # Récupération des paramètres
-        analysis_type = "mnt" if self.mnt_radio.isChecked() else "ortho"
+        if self.mnt_radio.isChecked():
+            analysis_type = "mnt"
+        elif self.ortho_radio.isChecked():
+            analysis_type = "ortho"
+        else:  # mnt_ortho_radio.isChecked()
+            analysis_type = "mnt_ortho"
         image1 = self.image1_edit.text().strip()
         image2 = self.image2_edit.text().strip()
         resolution = self.resolution_spin.value() / 1000.0  # Conversion mm vers m
@@ -1737,8 +1762,27 @@ class PhotogrammetryGUI(QWidget):
             self.analysis_pipeline_finished(False, "Image 2 introuvable")
             return
         
+        # Validation des MNTs pour le mode mnt_ortho
+        if analysis_type == "mnt_ortho":
+            mnt1 = self.mnt1_edit.text().strip()
+            mnt2 = self.mnt2_edit.text().strip()
+            if not mnt1 or not mnt2:
+                self.append_log("<span style='color:red'>Erreur : Mode MNT+Ortho nécessite les chemins des deux MNTs</span>")
+                self.analysis_pipeline_finished(False, "MNTs manquants pour le mode mnt_ortho")
+                return
+            if not os.path.exists(mnt1):
+                self.append_log(f"<span style='color:red'>Erreur : MNT 1 introuvable : {mnt1}</span>")
+                self.analysis_pipeline_finished(False, "MNT 1 introuvable")
+                return
+            if not os.path.exists(mnt2):
+                self.append_log(f"<span style='color:red'>Erreur : MNT 2 introuvable : {mnt2}</span>")
+                self.analysis_pipeline_finished(False, "MNT 2 introuvable")
+                return
+        
         # Création du dossier de sortie
-        output_dir = os.path.join(os.path.dirname(image1), "analysis_results")
+        output_dir = self.output_dir_edit.text().strip()
+        if not output_dir:
+            output_dir = os.path.join(os.path.dirname(image1), "analysis_results")
         
         # Création et lancement du thread d'analyse
         self.analysis_thread = AnalysisThread(
@@ -1838,6 +1882,9 @@ class PhotogrammetryGUI(QWidget):
         # Résolution (conversion mm vers m)
         resolution = self.resolution_spin.value() / 1000.0
         
+        # Dossier de sortie
+        output_dir = self.output_dir_edit.text().strip()
+        
         # Paramètres Farneback
         pyr_scale = self.pyr_scale_spin.value()
         levels = self.levels_spin.value()
@@ -1868,6 +1915,10 @@ class PhotogrammetryGUI(QWidget):
                 cmd_parts.append(f"--image2={image2}")
         
         cmd_parts.append(f"--resolution={resolution}")
+        
+        # Ajout du dossier de sortie si spécifié
+        if output_dir:
+            cmd_parts.append(f"--output-dir \"{output_dir}\"")
         
         # Ajout des paramètres Farneback (winsize calculé automatiquement)
         cmd_parts.append(f"--pyr-scale={pyr_scale}")
