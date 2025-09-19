@@ -1568,6 +1568,7 @@ class PhotogrammetryGUI(QWidget):
             self.append_log("<span style='color:red'>Pipeline d'analyse arrêté par l'utilisateur.</span>")
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
+        self.action_new.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def pipeline_finished(self, success, message):
@@ -1577,6 +1578,7 @@ class PhotogrammetryGUI(QWidget):
             self.summary_label.setText(f"<span style='color:red'>{message}</span>")
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
+        self.action_new.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def launch_geodetic_pipeline(self):
@@ -1615,6 +1617,7 @@ class PhotogrammetryGUI(QWidget):
         self.geodetic_summary_label.setText("")
         self.action_run.setEnabled(False)
         self.action_geodetic.setEnabled(False)
+        self.action_new.setEnabled(False)
         self.action_stop.setEnabled(True)
         
         # Récupération des dossiers d'entrée personnalisés
@@ -1686,6 +1689,7 @@ class PhotogrammetryGUI(QWidget):
             self.geodetic_summary_label.setText(f"<span style='color:red'>{message}</span>")
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
+        self.action_new.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def export_job_dialog(self):
