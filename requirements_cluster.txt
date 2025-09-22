@@ -4,7 +4,7 @@
 PySide6>=6.4.0
 # NumPy version avec wheels Python 3.11 (évite OpenBLAS64 si possible)
 numpy>=1.23.0,<1.25.0
-pyproj==3.6.1
+pyproj>=3.7.0
 # SciPy version avec wheels Python 3.11
 scipy>=1.9.0,<1.12.0
 Pillow>=9.0.0,<10.0.0
