@@ -111,6 +111,7 @@ def _init_gdal_env():
                     '/usr/lib/proj/share/proj'
                 ]
             
+            
             for path in system_proj_paths:
                 if os.path.exists(path):
                     os.environ['PROJ_DATA'] = path
