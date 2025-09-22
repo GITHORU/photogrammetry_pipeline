@@ -32,24 +32,10 @@ if getattr(sys, 'frozen', False):
         
         # Forcer la priorité aux données de l'exécutable
         if hasattr(sys, '_MEIPASS'):
-            # Essayer plusieurs chemins possibles pour les données PROJ
-            possible_proj_paths = [
-                os.path.join(sys._MEIPASS, 'pyproj', 'proj_dir', 'share', 'proj'),
-                os.path.join(sys._MEIPASS, 'share', 'proj'),
-                os.path.join(sys._MEIPASS, 'proj'),
-                os.path.join(sys._MEIPASS, 'pyproj', 'share', 'proj')
-            ]
-            
-            for proj_path in possible_proj_paths:
-                if os.path.exists(proj_path):
-                    print(f"[INFO] Protection PROJ: utilisation des données de l'exécutable: {proj_path}")
-                    os.environ['PROJ_LIB'] = proj_path
-                    break
-            
-            # Protection supplémentaire : désactiver la vérification de version PROJ
-            os.environ['PROJ_DISABLE_USER_DATA'] = '1'
-            os.environ['PROJ_SKIP_READ_USER_WRITABLE_DIRECTORY'] = '1'
-            print("[INFO] Protection PROJ: désactivation des données utilisateur PROJ")
+            exe_proj_data = os.path.join(sys._MEIPASS, 'pyproj', 'proj_dir', 'share', 'proj')
+            if os.path.exists(exe_proj_data):
+                print(f"[INFO] Protection PROJ: utilisation des données de l'exécutable: {exe_proj_data}")
+                os.environ['PROJ_LIB'] = exe_proj_data
     else:
         print("[INFO] Protection PROJ désactivée par PHOTOGEOSKIP_PROJ_PROTECTION")
 
@@ -86,39 +72,66 @@ from modules.core.utils import setup_logger, resource_path
 # Initialisation GDAL/PROJ pour environnements packagés (exécutables)
 def _init_gdal_env():
     """Initialise l'environnement GDAL/PROJ pour éviter les conflits de versions"""
-    try:
-        import rasterio
+    if getattr(sys, 'frozen', False):
+        # Exécutable PyInstaller
+        if os.environ.get('PHOTOGEOSKIP_PROJ_PROTECTION') != '1':
+            # Nettoyer les variables système
+            for var in ['PROJ_LIB', 'GDAL_DATA', 'GDAL_DRIVER_PATH', 'PROJ_DATA', 'GDAL_CONFIG']:
+                if var in os.environ:
+                    del os.environ[var]
         
-        # FORCER l'utilisation des données de l'exécutable (priorité sur système)
-        gdal_data = getattr(rasterio, 'gdal_data', None)
-        if gdal_data and os.path.exists(gdal_data):
-            os.environ['GDAL_DATA'] = gdal_data
+        # Stratégie de fallback multi-plateforme
+        proj_found = False
         
-        # FORCER l'utilisation des données PROJ de l'exécutable
+        # 1. Essayer PROJ embarqué (dans l'exécutable)
+        proj_data_path = os.path.join(sys._MEIPASS, 'pyproj', 'proj_dir', 'share', 'proj')
+        if os.path.exists(proj_data_path):
+            os.environ['PROJ_DATA'] = proj_data_path
+            os.environ['GDAL_DATA'] = os.path.join(sys._MEIPASS, 'gdal_data')
+            proj_found = True
+            print(f"[INFO] PROJ embarqué trouvé: {proj_data_path}")
+        
+        if not proj_found:
+            # 2. Fallback : essayer PROJ système selon l'OS
+            if sys.platform.startswith('win'):
+                # Windows
+                username = os.getenv('USERNAME', '')
+                system_proj_paths = [
+                    r'C:\Program Files\PROJ\share\proj',
+                    r'C:\Program Files (x86)\PROJ\share\proj',
+                    rf'C:\Users\{username}\anaconda3\Library\share\proj',
+                    rf'C:\Users\{username}\miniconda3\Library\share\proj'
+                ]
+            else:
+                # Linux/Unix
+                system_proj_paths = [
+                    '/usr/share/proj',
+                    '/usr/local/share/proj',
+                    '/opt/proj/share/proj',
+                    '/usr/lib/proj/share/proj'
+                ]
+            
+            for path in system_proj_paths:
+                if os.path.exists(path):
+                    os.environ['PROJ_DATA'] = path
+                    proj_found = True
+                    print(f"[INFO] PROJ système trouvé: {path}")
+                    break
+            
+            if not proj_found:
+                # 3. Dernier recours : désactiver la validation
+                os.environ['PROJ_DISABLE_CACHE'] = '1'
+                os.environ['PROJ_NETWORK'] = 'OFF'
+                print("[WARNING] PROJ non trouvé, désactivation de la validation")
+    else:
+        # Mode développement - utiliser les données par défaut
         try:
-            import pyproj
-            proj_data = pyproj.datadir.get_data_dir()
-            if proj_data and os.path.exists(proj_data):
-                os.environ['PROJ_LIB'] = proj_data
+            import rasterio
+            gdal_data = getattr(rasterio, 'gdal_data', None)
+            if gdal_data and os.path.exists(gdal_data):
+                os.environ['GDAL_DATA'] = gdal_data
         except Exception:
             pass
-            
-        # Désactiver les chemins système qui pourraient interférer
-        if 'PROJ_LIB' in os.environ and getattr(sys, 'frozen', False):
-            # Si on est dans un exécutable, s'assurer que PROJ_LIB pointe vers les données de l'exécutable
-            current_proj_lib = os.environ['PROJ_LIB']
-            if not current_proj_lib.startswith(sys._MEIPASS):
-                # Récupérer le chemin depuis pyproj
-                try:
-                    import pyproj
-                    proj_data = pyproj.datadir.get_data_dir()
-                    if proj_data and os.path.exists(proj_data):
-                        os.environ['PROJ_LIB'] = proj_data
-                except Exception:
-                    pass
-                    
-    except Exception:
-        pass
 
 _init_gdal_env()
 from modules.core.micmac import (
