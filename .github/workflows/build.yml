@@ -251,7 +251,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: docker-${{ matrix.container }}-pip-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/*.py') }}-${{ hashFiles('.github/workflows/build.yml') }}-pyproj-3.6-proj-fallback-${{ github.run_id }}
+        key: docker-${{ matrix.container }}-pip-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/*.py') }}-${{ hashFiles('.github/workflows/build.yml') }}-pyproj-3.7-proj-8x-${{ github.run_id }}
         restore-keys: |
           docker-${{ matrix.container }}-pip-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/*.py') }}
           docker-${{ matrix.container }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -357,7 +357,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~\AppData\Local\pip\Cache
-        key: windows-pip-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/*.py') }}-${{ hashFiles('.github/workflows/build.yml') }}-pyproj-3.6-proj-fallback-${{ github.run_id }}
+        key: windows-pip-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/*.py') }}-${{ hashFiles('.github/workflows/build.yml') }}-pyproj-3.7-proj-8x-${{ github.run_id }}
         restore-keys: |
           windows-pip-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/*.py') }}
           windows-pip-${{ hashFiles('**/requirements.txt') }}
