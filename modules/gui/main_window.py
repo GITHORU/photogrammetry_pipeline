@@ -201,7 +201,7 @@ class PhotogrammetryGUI(QWidget):
         # 1. Dossier image
         dir_layout = QHBoxLayout()
         self.dir_edit = QLineEdit()
-        self.dir_edit.setPlaceholderText("Dossier d'images DNG à traiter")
+        self.dir_edit.setPlaceholderText("Dossier d'images TIFF à traiter")
         browse_btn = QPushButton()
         browse_btn.setIcon(self.create_folder_icon())
         browse_btn.setToolTip("Parcourir")
@@ -279,6 +279,31 @@ class PhotogrammetryGUI(QWidget):
         pt_layout.addWidget(self.pt_lineedit)
         pt_layout.addWidget(pt_browse_btn)
         param_layout.addLayout(pt_layout)
+        # 5.5. RTK Drone
+        rtk_group = QGroupBox("Coordonnées RTK du drone")
+        rtk_layout = QVBoxLayout()
+        rtk_checkbox_layout = QHBoxLayout()
+        self.rtk_cb = QCheckBox("Utiliser les coordonnées RTK du drone")
+        self.rtk_cb.setChecked(False)
+        self.rtk_cb.stateChanged.connect(self.on_rtk_checkbox_changed)
+        rtk_checkbox_layout.addWidget(self.rtk_cb)
+        rtk_layout.addLayout(rtk_checkbox_layout)
+        rtk_file_layout = QHBoxLayout()
+        self.rtk_positions_lineedit = QLineEdit()
+        self.rtk_positions_lineedit.setPlaceholderText("Chemin du fichier de positions RTK des images (.txt)")
+        self.rtk_positions_lineedit.setText("")
+        self.rtk_positions_lineedit.setEnabled(False)
+        self.rtk_browse_btn = QPushButton()
+        self.rtk_browse_btn.setIcon(self.create_folder_icon())
+        self.rtk_browse_btn.setToolTip("Parcourir")
+        self.rtk_browse_btn.setEnabled(False)
+        self.rtk_browse_btn.clicked.connect(self.browse_rtk_positions_file)
+        rtk_file_layout.addWidget(QLabel("Fichier de positions RTK :"))
+        rtk_file_layout.addWidget(self.rtk_positions_lineedit)
+        rtk_file_layout.addWidget(self.rtk_browse_btn)
+        rtk_layout.addLayout(rtk_file_layout)
+        rtk_group.setLayout(rtk_layout)
+        param_layout.addWidget(rtk_group)
         # 6. Paramètres supplémentaires + cases à cocher associées
         # Création des cases à cocher d'abord
         # Tapioca
@@ -1054,6 +1079,8 @@ class PhotogrammetryGUI(QWidget):
         self.saisieappuisinit_cb.stateChanged.connect(self.update_cmd_line)
         self.saisieappuispredic_cb.stateChanged.connect(self.update_cmd_line)
         self.pt_lineedit.textChanged.connect(self.update_cmd_line)
+        self.rtk_cb.stateChanged.connect(self.update_cmd_line)
+        self.rtk_positions_lineedit.textChanged.connect(self.update_cmd_line)
         self.update_cmd_line()
         
         # Connexions pour l'onglet géodésique
@@ -1158,6 +1185,19 @@ class PhotogrammetryGUI(QWidget):
         pt_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier de coordonnées (.txt)", "", "Fichiers de coordonnées (*.txt)")
         if pt_file:
             self.pt_lineedit.setText(pt_file)
+    
+    def browse_rtk_positions_file(self):
+        rtk_file, _ = QFileDialog.getOpenFileName(self, "Choisir le fichier de positions RTK (.txt)", "", "Fichiers de coordonnées (*.txt)")
+        if rtk_file:
+            self.rtk_positions_lineedit.setText(rtk_file)
+    
+    def on_rtk_checkbox_changed(self, state):
+        """Active/désactive le champ fichier RTK selon l'état de la checkbox"""
+        is_checked = state == 2  # Qt.Checked = 2
+        self.rtk_positions_lineedit.setEnabled(is_checked)
+        self.rtk_browse_btn.setEnabled(is_checked)
+        # Mise à jour de la ligne de commande
+        self.update_cmd_line()
 
     def browse_geodetic_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier contenant les nuages .ply")
@@ -1313,6 +1353,8 @@ class PhotogrammetryGUI(QWidget):
         saisieappuisinit_pt = self.pt_lineedit.text().strip()
         saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
         saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
+        use_rtk = self.rtk_cb.isChecked()
+        rtk_positions_file = self.rtk_positions_lineedit.text().strip()
         run_tapioca = self.tapioca_cb.isChecked()
         run_tapas = self.tapas_cb.isChecked()
         run_saisieappuisinit = self.saisieappuisinit_cb.isChecked()
@@ -1330,6 +1372,12 @@ class PhotogrammetryGUI(QWidget):
         
         if tapas_model != "Fraser":
             base_cmd.append(f"--tapas-model {tapas_model}")
+        
+        # Paramètres RTK
+        if use_rtk:
+            base_cmd.append("--use-rtk")
+            if rtk_positions_file:
+                base_cmd.append(f"--rtk-positions-file \"{rtk_positions_file}\"")
         
         if tapioca_extra:
             base_cmd.append(f"--tapioca-extra \"{tapioca_extra}\"")
@@ -1383,11 +1431,19 @@ class PhotogrammetryGUI(QWidget):
         saisieappuisinit_pt = self.pt_lineedit.text().strip()
         saisieappuisinit_extra = self.saisieappuisinit_extra.text().strip()
         saisieappuispredic_extra = self.saisieappuispredic_extra.text().strip()
+        use_rtk = self.rtk_cb.isChecked()
+        rtk_positions_file = self.rtk_positions_lineedit.text().strip() if use_rtk else None
         run_tapioca = self.tapioca_cb.isChecked()
         run_tapas = self.tapas_cb.isChecked()
         run_saisieappuisinit = self.saisieappuisinit_cb.isChecked()
         run_saisieappuispredic = self.saisieappuispredic_cb.isChecked()
         run_c3dc = self.c3dc_cb.isChecked()
+        
+        # Validation RTK
+        if use_rtk and not rtk_positions_file:
+            self.log_text.append("<span style='color:red'>Veuillez spécifier le fichier de positions RTK.</span>")
+            return
+        
         # Avertissement si incohérence
         if run_c3dc and not run_tapas:
             self.log_text.append("<span style='color:orange'>Attention : lancer C3DC sans Tapas n'a pas de sens !</span>")
@@ -1398,7 +1454,9 @@ class PhotogrammetryGUI(QWidget):
         self.action_run.setEnabled(False)
         self.action_geodetic.setEnabled(False)
         self.action_stop.setEnabled(True)
-        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, saisieappuisinit_extra, saisieappuispredic_extra, c3dc_extra, saisieappuisinit_pt, run_tapioca, run_tapas, run_saisieappuisinit, run_saisieappuispredic, run_c3dc)
+        self.pipeline_thread = PipelineThread(input_dir, mode, zoomf, tapas_model, tapioca_extra, tapas_extra, saisieappuisinit_extra, saisieappuispredic_extra, c3dc_extra, saisieappuisinit_pt, 
+                                               use_rtk=use_rtk, rtk_positions_file=rtk_positions_file,
+                                               run_tapioca=run_tapioca, run_tapas=run_tapas, run_saisieappuisinit=run_saisieappuisinit, run_saisieappuispredic=run_saisieappuispredic, run_c3dc=run_c3dc)
         self.pipeline_thread.log_signal.connect(self.append_log)
         self.pipeline_thread.finished_signal.connect(self.pipeline_finished)
         self.pipeline_thread.start()

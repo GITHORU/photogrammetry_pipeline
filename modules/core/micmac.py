@@ -3,14 +3,83 @@ import subprocess
 from pathlib import Path
 from .utils import run_command, micmac_command_exists
 
-def run_micmac_tapioca(input_dir, logger, extra_params=""):
+def run_micmac_xifgps2xml(input_dir, logger, extra_params=""):
+    """Extrait les coordonnées GPS depuis les métadonnées EXIF des images TIFF"""
     abs_input_dir = os.path.abspath(input_dir)
-    pattern = '.*.DNG'
-    logger.info(f"Tapioca va utiliser les DNG dans {abs_input_dir} avec le motif {pattern} ...")
-    # 1. Génération des tie points (pipeline)
+    pattern = '.*.tiff'
+    logger.info(f"XifGps2Xml va extraire les coordonnées GPS depuis les EXIF des TIFF dans {abs_input_dir} avec le motif {pattern} ...")
     cmd = [
-        'mm3d', 'Tapioca', 'MulScale', pattern, '500', '2700'
+        'mm3d', 'XifGps2Xml', pattern, 'RAWGNSS'
     ]
+    if extra_params:
+        cmd += extra_params.split()
+    run_command(cmd, logger, cwd=abs_input_dir)
+    rawgnss_dir = Path(abs_input_dir) / 'Ori-RAWGNSS'
+    if rawgnss_dir.exists() and rawgnss_dir.is_dir() and any(rawgnss_dir.iterdir()):
+        logger.info(f"Dossier d'orientation RAWGNSS généré : {rawgnss_dir}")
+    else:
+        logger.warning("Le dossier d'orientation Ori-RAWGNSS n'a pas été généré par XifGps2Xml.")
+    logger.info("XifGps2Xml terminé.")
+    return 'RAWGNSS'  # Retourne le nom de l'orientation (sans préfixe Ori-)
+
+def run_micmac_oriconvert(input_dir, logger, positions_file, tapas_model="Fraser", extra_params=""):
+    """Convertit les coordonnées GPS en orientations initiales"""
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*.tiff'
+    if not positions_file:
+        logger.error("Aucun fichier de positions RTK fourni pour OriConvert.")
+        raise RuntimeError("Aucun fichier de positions RTK fourni pour OriConvert.")
+    positions_file = os.path.abspath(positions_file)
+    if not os.path.exists(positions_file):
+        logger.error(f"Fichier de positions RTK introuvable : {positions_file}")
+        raise RuntimeError(f"Fichier de positions RTK introuvable : {positions_file}")
+    
+    positions_file_rel = os.path.relpath(positions_file, abs_input_dir)
+    rawgnss_n = 'RAWGNSS_N'
+    chsys_file = f'ChSys=DegreeWGS84@RTLFromExif.xml'
+    
+    logger.info(f"OriConvert va convertir les coordonnées GPS en orientations initiales dans {abs_input_dir} ...")
+    logger.info(f"  Fichier de positions : {positions_file_rel}")
+    logger.info(f"  Système de coordonnées : {chsys_file}")
+    
+    cmd = [
+        'mm3d', 'OriConvert', '#F=N X Y Z', positions_file_rel, rawgnss_n,
+        chsys_file, 'MTD1=1', 'NameCple=FileImagesNeighbour.xml', 'OkNoIm=1'
+    ]
+    if extra_params:
+        cmd += extra_params.split()
+    run_command(cmd, logger, cwd=abs_input_dir)
+    
+    rawgnss_n_file = Path(abs_input_dir) / rawgnss_n
+    neighbor_file = Path(abs_input_dir) / 'FileImagesNeighbour.xml'
+    if rawgnss_n_file.exists():
+        logger.info(f"Orientation RAWGNSS_N générée : {rawgnss_n_file}")
+    if neighbor_file.exists():
+        logger.info(f"Fichier FileImagesNeighbour.xml généré : {neighbor_file}")
+    logger.info("OriConvert terminé.")
+    return rawgnss_n, neighbor_file
+
+def run_micmac_tapioca(input_dir, logger, use_neighbor_file=False, extra_params=""):
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*.tiff'
+    
+    if use_neighbor_file:
+        neighbor_file = Path(abs_input_dir) / 'FileImagesNeighbour.xml'
+        if not neighbor_file.exists():
+            logger.error(f"Le fichier FileImagesNeighbour.xml est introuvable : {neighbor_file}")
+            raise RuntimeError(f"Le fichier FileImagesNeighbour.xml est introuvable : {neighbor_file}")
+        neighbor_file_rel = os.path.relpath(neighbor_file, abs_input_dir)
+        logger.info(f"Tapioca va utiliser le fichier FileImagesNeighbour.xml dans {abs_input_dir} ...")
+        cmd = [
+            'mm3d', 'Tapioca', 'File', neighbor_file_rel, '2700'
+        ]
+    else:
+        logger.info(f"Tapioca va utiliser les TIFF dans {abs_input_dir} avec le motif {pattern} ...")
+        # 1. Génération des tie points (pipeline)
+        cmd = [
+            'mm3d', 'Tapioca', 'MulScale', pattern, '500', '2700'
+        ]
+    
     if extra_params:
         cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
@@ -22,21 +91,84 @@ def run_micmac_tapioca(input_dir, logger, extra_params=""):
         raise RuntimeError("Le dossier Homol n'a pas été généré par Tapioca.")
     logger.info("Tapioca terminé. Les tie points .dat sont utilisés pour le pipeline.")
 
-def run_micmac_tapas(input_dir, logger, tapas_model="Fraser", extra_params=""):
+def run_micmac_tapas(input_dir, logger, tapas_model="Fraser", use_arbitrary=False, extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
-    pattern = '.*.DNG'
-    logger.info(f"Tapas va utiliser les DNG dans {abs_input_dir} avec le motif {pattern} ...")
+    pattern = '.*.tiff'
+    if use_arbitrary:
+        out_ori = 'Arbitrary'
+        logger.info(f"Tapas va utiliser les TIFF dans {abs_input_dir} avec le motif {pattern} et générer l'orientation Arbitrary ...")
+    else:
+        out_ori = tapas_model
+        logger.info(f"Tapas va utiliser les TIFF dans {abs_input_dir} avec le motif {pattern} ...")
     cmd = [
-        'mm3d', 'Tapas', tapas_model, pattern, f'Out={tapas_model}'
+        'mm3d', 'Tapas', tapas_model, pattern, f'Out={out_ori}'
     ]
     if extra_params:
         cmd += extra_params.split()
     run_command(cmd, logger, cwd=abs_input_dir)
     logger.info("Tapas terminé.")
+    return out_ori
+
+def run_micmac_centerbascule(input_dir, logger, ori_in="Arbitrary", rawgnss_n="RAWGNSS_N", tapas_model="Fraser", extra_params=""):
+    """Recalage initial utilisant les positions GPS RTK"""
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*.tiff'
+    ori_out = f"{tapas_model}_Init_RTL"
+    
+    # MicMac utilise le nom d'orientation sans préfixe Ori-, il ajoute automatiquement le préfixe
+    # Le dossier réel s'appelle Ori-RAWGNSS_N mais on passe juste RAWGNSS_N à MicMac
+    rawgnss_n_name = rawgnss_n  # Nom de l'orientation (sans préfixe Ori-)
+    
+    logger.info(f"CenterBascule va recaler l'orientation {ori_in} avec les GPS RTK dans {abs_input_dir} ...")
+    logger.info(f"  Orientation d'entrée : {ori_in}")
+    logger.info(f"  Orientation de sortie : {ori_out}")
+    logger.info(f"  Orientation GPS : {rawgnss_n_name} (MicMac utilisera Ori-{rawgnss_n_name})")
+    
+    cmd = [
+        'mm3d', 'CenterBascule', pattern, ori_in, rawgnss_n_name, ori_out
+    ]
+    if extra_params:
+        cmd += extra_params.split()
+    run_command(cmd, logger, cwd=abs_input_dir)
+    logger.info("CenterBascule terminé.")
+    return ori_out
+
+def run_micmac_campari(input_dir, logger, ori_in, tapas_model="Fraser", rawgnss_n="RAWGNSS_N", 
+                       gps_weights=(0.05, 0.07), extra_params=""):
+    """Ajustement bundle avec contraintes GPS RTK
+    
+    Args:
+        gps_weights: Tuple (sigma_plani, sigma_alti) - poids GPS pour planimétrie et altitude
+                     Par défaut: (0.05, 0.07) - 0.05m en planimétrie, 0.07m en altitude
+    """
+    abs_input_dir = os.path.abspath(input_dir)
+    pattern = '.*.tiff'
+    ori_out = tapas_model  # Normalisation : toujours utiliser le nom du modèle
+    
+    # MicMac utilise le nom d'orientation sans préfixe Ori-, il ajoute automatiquement le préfixe
+    # Le dossier réel s'appelle Ori-RAWGNSS_N mais on passe juste RAWGNSS_N à MicMac
+    rawgnss_n_name = rawgnss_n  # Nom de l'orientation (sans préfixe Ori-)
+    # Campari utilise 2 poids : sigma_plani (pour X et Y) et sigma_alti (pour Z)
+    gps_weight_str = f"[{rawgnss_n_name},{gps_weights[0]},{gps_weights[1]}]"
+    
+    logger.info(f"Campari va ajuster l'orientation {ori_in} avec contraintes GPS RTK dans {abs_input_dir} ...")
+    logger.info(f"  Orientation d'entrée : {ori_in}")
+    logger.info(f"  Orientation de sortie : {ori_out} (normalisée)")
+    logger.info(f"  Contraintes GPS : {gps_weight_str} (sigma_plani={gps_weights[0]}m, sigma_alti={gps_weights[1]}m)")
+    logger.info(f"  Orientation GPS : {rawgnss_n_name} (MicMac utilisera Ori-{rawgnss_n_name})")
+    
+    cmd = [
+        'mm3d', 'Campari', pattern, ori_in, ori_out, f'EmGPS={gps_weight_str}'
+    ]
+    if extra_params:
+        cmd += extra_params.split()
+    run_command(cmd, logger, cwd=abs_input_dir)
+    logger.info("Campari terminé.")
+    return ori_out
 
 def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1, tapas_model='Fraser', extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
-    pattern = '.*.DNG'
+    pattern = '.*.tiff'
     ori = f"{tapas_model}_abs"
     logger.info(f"Lancement de C3DC ({mode}) dans {abs_input_dir} avec le motif {pattern} et Ori={ori} ...")
     cmd = [
@@ -49,7 +181,7 @@ def run_micmac_c3dc(input_dir, logger, mode='QuickMac', zoomf=1, tapas_model='Fr
 
 def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_file=None, extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
-    pattern = '.*DNG'
+    pattern = '.*.tiff'
     ori = tapas_model
     if not appuis_file:
         logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisInit.")
@@ -92,7 +224,7 @@ def run_micmac_saisieappuisinit(input_dir, logger, tapas_model="Fraser", appuis_
 
 def run_micmac_gcpbascule_init(input_dir, logger, tapas_model="Fraser", appuis_file=None):
     abs_input_dir = os.path.abspath(input_dir)
-    pattern = '.*DNG'
+    pattern = '.*.tiff'
     ori_in = tapas_model
     ori_out = f"{tapas_model}_abs_init"
     if not appuis_file:
@@ -113,7 +245,7 @@ def run_micmac_gcpbascule_init(input_dir, logger, tapas_model="Fraser", appuis_f
 
 def run_micmac_saisieappuispredic(input_dir, logger, tapas_model="Fraser", ori_abs_init=None, appuis_file=None, extra_params=""):
     abs_input_dir = os.path.abspath(input_dir)
-    pattern = '.*DNG'
+    pattern = '.*.tiff'
     ori = ori_abs_init or f"{tapas_model}_abs_init"  # Utilise l'orientation de sortie de GCPBascule
     if not appuis_file:
         logger.error("Aucun fichier de coordonnées fourni pour SaisieAppuisPredic.")
@@ -139,7 +271,7 @@ def run_micmac_saisieappuispredic(input_dir, logger, tapas_model="Fraser", ori_a
 
 def run_micmac_gcpbascule_predic(input_dir, logger, tapas_model="Fraser", appuis_file=None):
     abs_input_dir = os.path.abspath(input_dir)
-    pattern = '.*DNG'
+    pattern = '.*.tiff'
     ori_in = f"{tapas_model}_abs_init"
     ori_out = f"{tapas_model}_abs"
     if not appuis_file:

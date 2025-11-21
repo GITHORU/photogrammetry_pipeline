@@ -220,6 +220,12 @@ if __name__ == "__main__":
         parser.add_argument('--skip-tapas', action='store_true', help='Ne pas exécuter Tapas')
         parser.add_argument('--skip-c3dc', action='store_true', help='Ne pas exécuter C3DC')
         
+        # Arguments pour RTK
+        parser.add_argument('--use-rtk', action='store_true', help='Utiliser les coordonnées RTK du drone')
+        parser.add_argument('--rtk-positions-file', default='', help='Fichier de positions RTK des images (.txt)')
+        parser.add_argument('--rtk-gps-weight-plani', type=float, default=0.05, help='Poids GPS RTK pour planimétrie X/Y (défaut: 0.05)')
+        parser.add_argument('--rtk-gps-weight-alti', type=float, default=0.07, help='Poids GPS RTK pour altitude Z (défaut: 0.07)')
+        
         # Arguments pour les transformations géodésiques
         parser.add_argument('--geodetic', action='store_true', help='Lancer les transformations géodésiques')
         parser.add_argument('--geodetic-coord', default='', help='Fichier de coordonnées de recalage pour les transformations géodésiques')
@@ -465,29 +471,50 @@ if __name__ == "__main__":
             if not args.input_dir or not os.path.isdir(args.input_dir):
                 print("Erreur : veuillez spécifier un dossier d'images valide.")
                 sys.exit(1)
+            
+            # Validation RTK
+            if args.use_rtk and not args.rtk_positions_file:
+                print("Erreur : --rtk-positions-file est requis lorsque --use-rtk est activé.")
+                sys.exit(1)
+            
             log_path = os.path.join(args.input_dir, 'photogrammetry_pipeline.log')
             logger = setup_logger(log_path)
             print(f"Début du pipeline photogrammétrique pour le dossier : {args.input_dir}")
+            if args.use_rtk:
+                print("Mode RTK activé")
+            
             try:
+                from modules.workers import PipelineThread
                 tapas_model = args.tapas_model
                 saisieappuisinit_pt = args.saisieappuisinit_pt or None
                 saisieappuisinit_extra = args.saisieappuisinit_extra
                 saisieappuispredic_extra = args.saisieappuispredic_extra
                 run_saisieappuisinit = not args.skip_saisieappuisinit
                 run_saisieappuispredic = not args.skip_saisieappuispredic
-                if not args.skip_tapioca:
-                    run_micmac_tapioca(args.input_dir, logger, args.tapioca_extra)
-                if not args.skip_tapas:
-                    run_micmac_tapas(args.input_dir, logger, tapas_model, args.tapas_extra)
-                if run_saisieappuisinit:
-                    run_micmac_saisieappuisinit(args.input_dir, logger, tapas_model, saisieappuisinit_pt, saisieappuisinit_extra)
-                if run_saisieappuispredic:
-                    run_micmac_saisieappuispredic(args.input_dir, logger, tapas_model, saisieappuisinit_pt, saisieappuispredic_extra)
-                if not args.skip_c3dc:
-                    run_micmac_c3dc(args.input_dir, logger, mode=args.mode, zoomf=args.zoomf, tapas_model=tapas_model, extra_params=args.c3dc_extra)
+                use_rtk = args.use_rtk
+                rtk_positions_file = args.rtk_positions_file if use_rtk else None
+                rtk_gps_weights = (args.rtk_gps_weight_plani, args.rtk_gps_weight_alti)
+                
+                # Utiliser le PipelineThread pour gérer le pipeline RTK et classique
+                pipeline_thread = PipelineThread(
+                    args.input_dir, args.mode, args.zoomf, tapas_model,
+                    args.tapioca_extra, args.tapas_extra,
+                    saisieappuisinit_extra, saisieappuispredic_extra,
+                    args.c3dc_extra, saisieappuisinit_pt,
+                    use_rtk=use_rtk, rtk_positions_file=rtk_positions_file,
+                    rtk_gps_weights=rtk_gps_weights,
+                    run_tapioca=not args.skip_tapioca,
+                    run_tapas=not args.skip_tapas,
+                    run_saisieappuisinit=run_saisieappuisinit,
+                    run_saisieappuispredic=run_saisieappuispredic,
+                    run_c3dc=not args.skip_c3dc
+                )
+                pipeline_thread.run()
                 print("Pipeline terminé avec succès !")
             except Exception as e:
                 print(f"Erreur lors de l'exécution du pipeline : {str(e)}")
+                import traceback
+                traceback.print_exc()
                 sys.exit(1)
         else:
             check_micmac_or_quit()
