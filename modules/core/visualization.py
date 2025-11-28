@@ -113,25 +113,29 @@ def load_pairwise_results(output_dir: str) -> Optional[Dict[str, Any]]:
                     
                     for key, filenames in displacement_files.items():
                         # Essayer chaque nom de fichier possible
+                        # Stocker le chemin au lieu de charger les données (chargement à la demande)
                         data_loaded = False
                         for filename in filenames:
                             filepath = os.path.join(pair_path, filename)
                             if os.path.exists(filepath):
-                                try:
-                                    with rasterio.open(filepath) as src:
-                                        data = src.read(1)
-                                        comparisons[pair_id][key] = data
-                                        if key == 'displacement_x':  # Utiliser les métadonnées de X pour tous
+                                # Stocker le chemin au lieu de charger les données
+                                comparisons[pair_id][key] = filepath  # Stocker le chemin
+                                
+                                # Charger uniquement les métadonnées pour displacement_x
+                                if key == 'displacement_x':
+                                    try:
+                                        with rasterio.open(filepath) as src:
                                             comparisons[pair_id]['metadata'] = {
                                                 'transform': src.transform,
                                                 'crs': src.crs,
                                                 'width': src.width,
                                                 'height': src.height
                                             }
-                                        data_loaded = True
-                                        break
-                                except Exception as e:
-                                    logger.warning(f"Erreur lors du chargement de {filepath}: {e}")
+                                    except Exception as e:
+                                        logger.warning(f"Erreur lors du chargement des métadonnées de {filepath}: {e}")
+                                
+                                data_loaded = True
+                                break
                         
                         if not data_loaded and key != 'valid_mask':  # valid_mask peut être absent
                             logger.debug(f"Fichier de déplacement {key} non trouvé dans {pair_path}")
@@ -161,13 +165,29 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
     Note: La magnitude est 3D (X, Y, Z) pour mnt_ortho, 2D (X, Y) pour ortho seul.
     
     Args:
-        comparison_data: Données de comparaison pour une paire
+        comparison_data: Données de comparaison pour une paire (peut contenir des chemins ou des arrays)
         pair_id: Identifiant de la paire (ex: "0_vs_1")
         output_path: Chemin pour sauvegarder la figure (optionnel)
         
     Returns:
         Figure matplotlib
     """
+    # Fonction helper pour charger les données à la demande
+    def load_data_if_needed(data_or_path):
+        """Charge les données si c'est un chemin, sinon retourne les données"""
+        if isinstance(data_or_path, str) and os.path.exists(data_or_path):
+            # C'est un chemin, charger les données
+            try:
+                with rasterio.open(data_or_path) as src:
+                    return src.read(1)
+            except Exception as e:
+                logger.warning(f"Erreur lors du chargement de {data_or_path}: {e}")
+                return None
+        elif data_or_path is not None:
+            # C'est déjà des données (compatibilité avec ancien code)
+            return data_or_path
+        return None
+    
     # Créer une nouvelle figure explicitement pour éviter les conflits avec Qt
     fig = Figure(figsize=(14, 12))
     axes = fig.subplots(2, 2)
@@ -175,80 +195,105 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
     
     # Carte X
     ax = axes[0, 0]
-    if comparison_data['displacement_x'] is not None:
-        dx = comparison_data['displacement_x']
-        valid_mask = comparison_data.get('valid_mask')
-        if valid_mask is not None:
-            dx_masked = np.where(valid_mask, dx, np.nan)
+    dx_path_or_data = comparison_data.get('displacement_x')
+    if dx_path_or_data is not None:
+        dx = load_data_if_needed(dx_path_or_data)
+        if dx is not None:
+            valid_mask_path_or_data = comparison_data.get('valid_mask')
+            valid_mask = load_data_if_needed(valid_mask_path_or_data) if valid_mask_path_or_data else None
+            if valid_mask is not None:
+                dx_masked = np.where(valid_mask, dx, np.nan)
+            else:
+                dx_masked = dx
+            
+            im = ax.imshow(dx_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
+            ax.set_title('Déplacement X (m)', fontsize=12, fontweight='bold')
+            ax.set_xlabel('Colonne (pixels)')
+            ax.set_ylabel('Ligne (pixels)')
+            fig.colorbar(im, ax=ax, label='m')
         else:
-            dx_masked = dx
-        
-        im = ax.imshow(dx_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
-        ax.set_title('Déplacement X (m)', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Colonne (pixels)')
-        ax.set_ylabel('Ligne (pixels)')
-        fig.colorbar(im, ax=ax, label='m')
+            ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Déplacement X (m)', fontsize=12, fontweight='bold')
     else:
         ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
         ax.set_title('Déplacement X (m)', fontsize=12, fontweight='bold')
     
     # Carte Y
     ax = axes[0, 1]
-    if comparison_data['displacement_y'] is not None:
-        dy = comparison_data['displacement_y']
-        valid_mask = comparison_data.get('valid_mask')
-        if valid_mask is not None:
-            dy_masked = np.where(valid_mask, dy, np.nan)
+    dy_path_or_data = comparison_data.get('displacement_y')
+    if dy_path_or_data is not None:
+        dy = load_data_if_needed(dy_path_or_data)
+        if dy is not None:
+            valid_mask_path_or_data = comparison_data.get('valid_mask')
+            valid_mask = load_data_if_needed(valid_mask_path_or_data) if valid_mask_path_or_data else None
+            if valid_mask is not None:
+                dy_masked = np.where(valid_mask, dy, np.nan)
+            else:
+                dy_masked = dy
+            
+            im = ax.imshow(dy_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
+            ax.set_title('Déplacement Y (m)', fontsize=12, fontweight='bold')
+            ax.set_xlabel('Colonne (pixels)')
+            ax.set_ylabel('Ligne (pixels)')
+            fig.colorbar(im, ax=ax, label='m')
         else:
-            dy_masked = dy
-        
-        im = ax.imshow(dy_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
-        ax.set_title('Déplacement Y (m)', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Colonne (pixels)')
-        ax.set_ylabel('Ligne (pixels)')
-        fig.colorbar(im, ax=ax, label='m')
+            ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Déplacement Y (m)', fontsize=12, fontweight='bold')
     else:
         ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
         ax.set_title('Déplacement Y (m)', fontsize=12, fontweight='bold')
     
     # Carte Z
     ax = axes[1, 0]
-    if comparison_data['displacement_z'] is not None:
-        dz = comparison_data['displacement_z']
-        valid_mask = comparison_data.get('valid_mask')
-        if valid_mask is not None:
-            dz_masked = np.where(valid_mask, dz, np.nan)
+    dz_path_or_data = comparison_data.get('displacement_z')
+    if dz_path_or_data is not None:
+        dz = load_data_if_needed(dz_path_or_data)
+        if dz is not None:
+            valid_mask_path_or_data = comparison_data.get('valid_mask')
+            valid_mask = load_data_if_needed(valid_mask_path_or_data) if valid_mask_path_or_data else None
+            if valid_mask is not None:
+                dz_masked = np.where(valid_mask, dz, np.nan)
+            else:
+                dz_masked = dz
+            
+            im = ax.imshow(dz_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
+            ax.set_title('Déplacement Z (m)', fontsize=12, fontweight='bold')
+            ax.set_xlabel('Colonne (pixels)')
+            ax.set_ylabel('Ligne (pixels)')
+            fig.colorbar(im, ax=ax, label='m')
         else:
-            dz_masked = dz
-        
-        im = ax.imshow(dz_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
-        ax.set_title('Déplacement Z (m)', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Colonne (pixels)')
-        ax.set_ylabel('Ligne (pixels)')
-        fig.colorbar(im, ax=ax, label='m')
+            ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Déplacement Z (m)', fontsize=12, fontweight='bold')
     else:
         ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
         ax.set_title('Déplacement Z (m)', fontsize=12, fontweight='bold')
     
     # Magnitude (3D pour mnt_ortho, 2D pour ortho seul)
     ax = axes[1, 1]
-    if comparison_data['displacement_magnitude'] is not None:
-        mag = comparison_data['displacement_magnitude']
-        valid_mask = comparison_data.get('valid_mask')
-        if valid_mask is not None:
-            mag_masked = np.where(valid_mask, mag, np.nan)
+    mag_path_or_data = comparison_data.get('displacement_magnitude')
+    if mag_path_or_data is not None:
+        mag = load_data_if_needed(mag_path_or_data)
+        if mag is not None:
+            valid_mask_path_or_data = comparison_data.get('valid_mask')
+            valid_mask = load_data_if_needed(valid_mask_path_or_data) if valid_mask_path_or_data else None
+            if valid_mask is not None:
+                mag_masked = np.where(valid_mask, mag, np.nan)
+            else:
+                mag_masked = mag
+            
+            im = ax.imshow(mag_masked, cmap='viridis', aspect='auto', vmin=vmin, vmax=vmax)
+            # Déterminer si c'est 3D ou 2D selon la présence de Z
+            dz_path_or_data = comparison_data.get('displacement_z')
+            if dz_path_or_data is not None:
+                ax.set_title('Magnitude 3D (m)', fontsize=12, fontweight='bold')
+            else:
+                ax.set_title('Magnitude 2D (m)', fontsize=12, fontweight='bold')
+            ax.set_xlabel('Colonne (pixels)')
+            ax.set_ylabel('Ligne (pixels)')
+            fig.colorbar(im, ax=ax, label='m')
         else:
-            mag_masked = mag
-        
-        im = ax.imshow(mag_masked, cmap='viridis', aspect='auto', vmin=vmin, vmax=vmax)
-        # Déterminer si c'est 3D ou 2D selon la présence de Z
-        if comparison_data.get('displacement_z') is not None:
-            ax.set_title('Magnitude 3D (m)', fontsize=12, fontweight='bold')
-        else:
-            ax.set_title('Magnitude 2D (m)', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Colonne (pixels)')
-        ax.set_ylabel('Ligne (pixels)')
-        fig.colorbar(im, ax=ax, label='m')
+            ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Magnitude (m)', fontsize=12, fontweight='bold')
     else:
         ax.text(0.5, 0.5, 'Données non disponibles', ha='center', va='center', transform=ax.transAxes)
         ax.set_title('Magnitude (m)', fontsize=12, fontweight='bold')
@@ -273,7 +318,7 @@ def plot_displacement_vectors(comparison_data: Dict[str, Any], pair_id: str,
     Note: Affiche uniquement les composantes X et Y (magnitude 2D).
     
     Args:
-        comparison_data: Données de comparaison pour une paire
+        comparison_data: Données de comparaison pour une paire (peut contenir des chemins ou des arrays)
         pair_id: Identifiant de la paire
         subsample: Facteur de sous-échantillonnage pour les vecteurs
         output_path: Chemin pour sauvegarder la figure (optionnel)
@@ -281,19 +326,38 @@ def plot_displacement_vectors(comparison_data: Dict[str, Any], pair_id: str,
     Returns:
         Figure matplotlib
     """
+    # Fonction helper pour charger les données à la demande
+    def load_data_if_needed(data_or_path):
+        """Charge les données si c'est un chemin, sinon retourne les données"""
+        if isinstance(data_or_path, str) and os.path.exists(data_or_path):
+            try:
+                with rasterio.open(data_or_path) as src:
+                    return src.read(1)
+            except Exception as e:
+                logger.warning(f"Erreur lors du chargement de {data_or_path}: {e}")
+                return None
+        elif data_or_path is not None:
+            return data_or_path
+        return None
+    
     # Créer une nouvelle figure explicitement pour éviter les conflits avec Qt
     fig = Figure(figsize=(12, 10))
     ax = fig.add_subplot(111)
     
-    dx = comparison_data.get('displacement_x')
-    dy = comparison_data.get('displacement_y')
-    valid_mask = comparison_data.get('valid_mask')
+    dx_path_or_data = comparison_data.get('displacement_x')
+    dy_path_or_data = comparison_data.get('displacement_y')
+    dx = load_data_if_needed(dx_path_or_data) if dx_path_or_data else None
+    dy = load_data_if_needed(dy_path_or_data) if dy_path_or_data else None
     
     if dx is None or dy is None:
         ax.text(0.5, 0.5, 'Données de déplacement X/Y non disponibles', 
                 ha='center', va='center', transform=ax.transAxes)
         ax.set_title(f'Vecteurs de déplacement - Paire {pair_id}', fontsize=14, fontweight='bold')
         return fig
+    
+    # Charger le masque si nécessaire
+    valid_mask_path_or_data = comparison_data.get('valid_mask')
+    valid_mask = load_data_if_needed(valid_mask_path_or_data) if valid_mask_path_or_data else None
     
     # Appliquer le masque
     if valid_mask is not None:
