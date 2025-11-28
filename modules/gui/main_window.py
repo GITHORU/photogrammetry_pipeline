@@ -2680,7 +2680,7 @@ module load micmac
         
         # Ajout du nombre de workers parallèles (si différent de 128 = auto)
         if max_workers_value != 128:
-            cmd_parts.append(f"--max-workers={max_workers_value}")
+            cmd_parts.append(f"--pairwise-max-workers={max_workers_value}")
         
         # Ajout des paramètres Farneback (si nécessaire)
         if analysis_type in ('ortho', 'mnt_ortho'):

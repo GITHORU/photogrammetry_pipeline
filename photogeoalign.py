@@ -297,7 +297,7 @@ if __name__ == "__main__":
         parser.add_argument('--pairwise-analysis', action='store_true', help='Lancer le pipeline d\'analyse paire par paire')
         parser.add_argument('--models', nargs='+', default=[], help='Liste des chemins vers les orthoimages pour l\'analyse paire par paire')
         parser.add_argument('--mnts', nargs='+', default=[], help='Liste des chemins vers les MNTs pour l\'analyse paire par paire (requis si --type=mnt_ortho)')
-        parser.add_argument('--max-workers', type=int, default=None, help='Nombre maximum de workers parallèles pour l\'analyse paire par paire (défaut: utilise tous les CPUs disponibles)')
+        parser.add_argument('--pairwise-max-workers', type=int, default=None, help='Nombre maximum de workers parallèles pour l\'analyse paire par paire (défaut: utilise tous les CPUs disponibles)')
         
         args = parser.parse_args()
         if args.geodetic:
@@ -552,7 +552,7 @@ if __name__ == "__main__":
                     print(f"  - poly_sigma: {base_config['poly_sigma']} (constant)")
                 
                 # Exécution du pipeline d'analyse paire par paire
-                max_workers = args.max_workers if hasattr(args, 'max_workers') and args.max_workers is not None else None
+                max_workers = args.pairwise_max_workers if hasattr(args, 'pairwise_max_workers') and args.pairwise_max_workers is not None else None
                 results = run_pairwise_analysis_pipeline(
                     model_paths, analysis_type, resolution, output_dir,
                     farneback_params, mnt_paths, parallel=True, max_workers=max_workers
