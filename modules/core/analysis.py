@@ -594,7 +594,7 @@ def calculate_displacements_farneback(data1: np.ndarray, data2: np.ndarray,
         displacement_x_m = flow_x * resolution  # mètres
         displacement_y_m = flow_y * resolution  # mètres
         
-        # Calcul de l'amplitude des déplacements
+        # Calcul de l'amplitude 2D des déplacements (X, Y seulement)
         displacement_magnitude = np.sqrt(displacement_x_m**2 + displacement_y_m**2)
         
         # Statistiques des déplacements (exclure nodata et zones 0 des orthos si fourni)
@@ -1803,9 +1803,54 @@ def run_pairwise_analysis_pipeline(model_paths: list, analysis_type: str, resolu
                     with rasterio.open(mask_path, 'w', **profile) as dst:
                         dst.write(valid_mask.astype(rasterio.uint8), 1)
             
+            # Sauvegarder les cartes de déplacement avec les mêmes métadonnées que le masque
+            # Déterminer le profil à utiliser (même que pour le masque)
+            if reference_image_path and os.path.exists(reference_image_path):
+                with rasterio.open(reference_image_path) as src:
+                    displacement_profile = src.profile.copy()
+                    displacement_profile.update(dtype=rasterio.float32, count=1, nodata=np.nan)
+                    if displacement_profile['height'] != valid_mask.shape[0] or displacement_profile['width'] != valid_mask.shape[1]:
+                        displacement_profile['height'] = valid_mask.shape[0]
+                        displacement_profile['width'] = valid_mask.shape[1]
+            else:
+                # Fallback : utiliser model1_path
+                with rasterio.open(model1_path) as src:
+                    displacement_profile = src.profile.copy()
+                    displacement_profile.update(dtype=rasterio.float32, count=1, nodata=np.nan)
+                    if displacement_profile['height'] != valid_mask.shape[0] or displacement_profile['width'] != valid_mask.shape[1]:
+                        displacement_profile['height'] = valid_mask.shape[0]
+                        displacement_profile['width'] = valid_mask.shape[1]
+            
+            # Sauvegarder displacement_x.tif
+            displacement_x_path = os.path.join(pair_output_dir, 'displacement_x.tif')
+            with rasterio.open(displacement_x_path, 'w', **displacement_profile) as dst:
+                dst.write(displacement_x.astype(rasterio.float32), 1)
+            
+            # Sauvegarder displacement_y.tif
+            displacement_y_path = os.path.join(pair_output_dir, 'displacement_y.tif')
+            with rasterio.open(displacement_y_path, 'w', **displacement_profile) as dst:
+                dst.write(displacement_y.astype(rasterio.float32), 1)
+            
+            # Sauvegarder displacement_z.tif
+            displacement_z_path = os.path.join(pair_output_dir, 'displacement_z.tif')
+            with rasterio.open(displacement_z_path, 'w', **displacement_profile) as dst:
+                dst.write(displacement_z.astype(rasterio.float32), 1)
+            
+            # Calculer et sauvegarder la magnitude 3D (X, Y, Z)
+            displacement_magnitude_3d = np.sqrt(displacement_x**2 + displacement_y**2 + displacement_z**2)
+            displacement_magnitude_path = os.path.join(pair_output_dir, 'displacement_magnitude_3d.tif')
+            with rasterio.open(displacement_magnitude_path, 'w', **displacement_profile) as dst:
+                dst.write(displacement_magnitude_3d.astype(rasterio.float32), 1)
+            
+            logger.info(f"Cartes de déplacement sauvegardées pour la paire {i}-{j}")
+            
             # Ajouter les métriques aux résultats
             results['pairwise_metrics'] = metrics
             results['valid_mask_path'] = mask_path
+            results['displacement_x_path'] = displacement_x_path
+            results['displacement_y_path'] = displacement_y_path
+            results['displacement_z_path'] = displacement_z_path
+            results['displacement_magnitude_path'] = displacement_magnitude_path
             results['model1_index'] = i
             results['model2_index'] = j
             results['model1_path'] = os.path.abspath(model1_path)

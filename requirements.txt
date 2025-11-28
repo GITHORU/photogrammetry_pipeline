@@ -8,6 +8,9 @@ scipy>=1.7.0
 Pillow>=8.0.0
 rasterio>=1.3.0
 opencv-python-headless>=4.7.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+pandas>=1.3.0
 
 # Les autres modules utilisés (argparse, logging, subprocess, os, sys, time, re, pathlib, multiprocessing)
 # font partie de la bibliothèque standard Python (>=3.8)

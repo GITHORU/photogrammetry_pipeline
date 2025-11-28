@@ -4,13 +4,17 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QLineEdit,
     QMessageBox, QTabWidget, QCheckBox, QToolBar, QDialog, QRadioButton, QGroupBox,
-    QButtonGroup
+    QButtonGroup, QScrollArea, QSplitter
 )
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QBrush, QPen, QAction
 from PySide6.QtCore import Qt, QTimer, QPoint
 from ..core.utils import resource_path
 from ..workers import PipelineThread, GeodeticTransformThread, AnalysisThread, PairwiseAnalysisThread
 from .dialogs import JobExportDialog
+import matplotlib
+matplotlib.use('Qt5Agg')
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 class PhotogrammetryGUI(QWidget):
     def create_folder_icon(self):
@@ -1263,7 +1267,154 @@ class PhotogrammetryGUI(QWidget):
         pairwise_layout.addStretch(1)
         tabs.addTab(pairwise_tab, "Analyse paire par paire")
 
-        # Onglet 5 : logs
+        # Onglet 5 : Visualisations
+        visualization_tab = QWidget()
+        visualization_layout = QVBoxLayout(visualization_tab)
+        
+        # Sélection du dossier de résultats
+        results_dir_layout = QHBoxLayout()
+        results_dir_layout.addWidget(QLabel("Dossier de résultats d'analyse paire par paire :"))
+        self.visualization_results_dir_edit = QLineEdit()
+        self.visualization_results_dir_edit.setPlaceholderText("Sélectionner le dossier contenant les résultats...")
+        browse_results_btn = QPushButton()
+        browse_results_btn.setIcon(self.create_folder_icon())
+        browse_results_btn.setToolTip("Parcourir")
+        browse_results_btn.clicked.connect(self.browse_visualization_results_dir)
+        load_results_btn = QPushButton("Charger les résultats")
+        load_results_btn.clicked.connect(self.load_visualization_results)
+        results_dir_layout.addWidget(self.visualization_results_dir_edit)
+        results_dir_layout.addWidget(browse_results_btn)
+        results_dir_layout.addWidget(load_results_btn)
+        visualization_layout.addLayout(results_dir_layout)
+        
+        # Splitter pour diviser l'interface
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Panneau de contrôle (gauche)
+        control_panel = QWidget()
+        control_layout = QVBoxLayout(control_panel)
+        control_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Type de visualisation
+        viz_type_group = QGroupBox("Type de visualisation")
+        viz_type_layout = QVBoxLayout()
+        self.viz_type_combo = QComboBox()
+        self.viz_type_combo.addItems([
+            "Cartes de déplacement",
+            "Vecteurs de déplacement",
+            "Matrices de comparaison"
+        ])
+        self.viz_type_combo.currentIndexChanged.connect(self.update_visualization_controls)
+        viz_type_layout.addWidget(self.viz_type_combo)
+        viz_type_group.setLayout(viz_type_layout)
+        control_layout.addWidget(viz_type_group)
+        
+        # Sélection de la paire (pour les cartes/vecteurs)
+        self.pair_selection_group = QGroupBox("Sélection de la paire")
+        pair_selection_layout = QVBoxLayout()
+        self.pair_combo = QComboBox()
+        pair_selection_layout.addWidget(QLabel("Paire :"))
+        pair_selection_layout.addWidget(self.pair_combo)
+        self.pair_selection_group.setLayout(pair_selection_layout)
+        control_layout.addWidget(self.pair_selection_group)
+        
+        # Sélection de la matrice (pour les matrices)
+        self.matrix_selection_group = QGroupBox("Sélection de la matrice")
+        matrix_selection_layout = QVBoxLayout()
+        self.matrix_combo = QComboBox()
+        self.matrix_combo.addItems([
+            "Déplacement 3D - Moyenne",
+            "Déplacement 3D - Médiane",
+            "Déplacement 3D - Écart-type",
+            "Déplacement 3D - Maximum",
+            "Déplacement 3D - P95",
+            "Déplacement 3D - P99",
+            "Déplacement X - Moyenne",
+            "Déplacement Y - Moyenne",
+            "Déplacement Z - Moyenne",
+            "Déplacement X - Médiane",
+            "Déplacement Y - Médiane",
+            "Déplacement Z - Médiane",
+            "Déplacement X - Écart-type",
+            "Déplacement Y - Écart-type",
+            "Déplacement Z - Écart-type",
+            "RMSE",
+            "MAE",
+            "Couverture"
+        ])
+        matrix_selection_layout.addWidget(QLabel("Métrique :"))
+        matrix_selection_layout.addWidget(self.matrix_combo)
+        self.matrix_selection_group.setLayout(matrix_selection_layout)
+        self.matrix_selection_group.setVisible(False)
+        control_layout.addWidget(self.matrix_selection_group)
+        
+        # Contrôles pour les bornes de l'échelle de couleur (pour les cartes)
+        self.colorbar_group = QGroupBox("Échelle de couleur")
+        colorbar_layout = QVBoxLayout()
+        
+        colorbar_min_layout = QHBoxLayout()
+        colorbar_min_layout.addWidget(QLabel("Min :"))
+        self.colorbar_min_spin = QDoubleSpinBox()
+        self.colorbar_min_spin.setRange(-999999.0, 999999.0)
+        self.colorbar_min_spin.setValue(0.0)
+        self.colorbar_min_spin.setSingleStep(0.1)
+        self.colorbar_min_spin.setDecimals(3)
+        self.colorbar_min_checkbox = QCheckBox("Auto")
+        self.colorbar_min_checkbox.setChecked(True)
+        self.colorbar_min_checkbox.toggled.connect(lambda checked: self.colorbar_min_spin.setEnabled(not checked))
+        self.colorbar_min_spin.setEnabled(False)
+        colorbar_min_layout.addWidget(self.colorbar_min_spin)
+        colorbar_min_layout.addWidget(self.colorbar_min_checkbox)
+        colorbar_layout.addLayout(colorbar_min_layout)
+        
+        colorbar_max_layout = QHBoxLayout()
+        colorbar_max_layout.addWidget(QLabel("Max :"))
+        self.colorbar_max_spin = QDoubleSpinBox()
+        self.colorbar_max_spin.setRange(-999999.0, 999999.0)
+        self.colorbar_max_spin.setValue(1.0)
+        self.colorbar_max_spin.setSingleStep(0.1)
+        self.colorbar_max_spin.setDecimals(3)
+        self.colorbar_max_checkbox = QCheckBox("Auto")
+        self.colorbar_max_checkbox.setChecked(True)
+        self.colorbar_max_checkbox.toggled.connect(lambda checked: self.colorbar_max_spin.setEnabled(not checked))
+        self.colorbar_max_spin.setEnabled(False)
+        colorbar_max_layout.addWidget(self.colorbar_max_spin)
+        colorbar_max_layout.addWidget(self.colorbar_max_checkbox)
+        colorbar_layout.addLayout(colorbar_max_layout)
+        
+        self.colorbar_group.setLayout(colorbar_layout)
+        control_layout.addWidget(self.colorbar_group)
+        
+        # Bouton pour générer le plot
+        generate_plot_btn = QPushButton("Générer la visualisation")
+        generate_plot_btn.clicked.connect(self.generate_visualization)
+        control_layout.addWidget(generate_plot_btn)
+        
+        control_layout.addStretch()
+        
+        # Zone d'affichage (droite) - sera remplie dynamiquement
+        self.visualization_scroll_area = QScrollArea()
+        self.visualization_scroll_area.setWidgetResizable(True)
+        # Widget vide initial
+        empty_widget = QWidget()
+        empty_widget.setMinimumSize(400, 300)
+        self.visualization_scroll_area.setWidget(empty_widget)
+        self.visualization_canvas = None
+        
+        splitter.addWidget(control_panel)
+        splitter.addWidget(self.visualization_scroll_area)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([300, 700])
+        
+        visualization_layout.addWidget(splitter)
+        
+        # Stockage des résultats chargés
+        self.visualization_results = None
+        
+        tabs.addTab(visualization_tab, "Visualisations")
+
+        # Onglet 6 : logs
         log_tab = QWidget()
         log_layout = QVBoxLayout(log_tab)
         log_layout.addWidget(QLabel("Logs :"))
@@ -2662,6 +2813,174 @@ module load micmac
         self.append_log(f"<span style='color:blue'>Type d'analyse: {analysis_type}</span>")
         self.append_log(f"<span style='color:blue'>Résolution: {resolution} m</span>")
         self.append_log(f"<span style='color:blue'>Dossier de sortie: {output_dir}</span>")
+    
+    def browse_visualization_results_dir(self):
+        """Ouvre un dialogue pour sélectionner le dossier de résultats"""
+        dir_path = QFileDialog.getExistingDirectory(
+            self, "Sélectionner le dossier de résultats d'analyse paire par paire"
+        )
+        if dir_path:
+            self.visualization_results_dir_edit.setText(dir_path)
+    
+    def load_visualization_results(self):
+        """Charge les résultats d'analyse paire par paire"""
+        results_dir = self.visualization_results_dir_edit.text().strip()
+        if not results_dir or not os.path.exists(results_dir):
+            QMessageBox.warning(self, "Erreur", "Veuillez sélectionner un dossier de résultats valide.")
+            return
+        
+        try:
+            from ..core.visualization import load_pairwise_results
+            self.visualization_results = load_pairwise_results(results_dir)
+            
+            if self.visualization_results is None:
+                QMessageBox.warning(self, "Erreur", "Impossible de charger les résultats. Vérifiez que le dossier contient les fichiers nécessaires.")
+                return
+            
+            # Mettre à jour la liste des paires
+            self.pair_combo.clear()
+            if 'comparisons' in self.visualization_results:
+                for pair_id in sorted(self.visualization_results['comparisons'].keys()):
+                    self.pair_combo.addItem(pair_id)
+            
+            QMessageBox.information(self, "Succès", 
+                                  f"Résultats chargés : {len(self.visualization_results.get('comparisons', {}))} comparaisons, "
+                                  f"{len(self.visualization_results.get('matrices', {}))} matrices disponibles.")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur lors du chargement des résultats : {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def update_visualization_controls(self):
+        """Met à jour les contrôles selon le type de visualisation sélectionné"""
+        viz_type = self.viz_type_combo.currentText()
+        
+        if viz_type == "Matrices de comparaison":
+            self.pair_selection_group.setVisible(False)
+            self.matrix_selection_group.setVisible(True)
+            self.colorbar_group.setVisible(False)
+        elif viz_type == "Cartes de déplacement":
+            self.pair_selection_group.setVisible(True)
+            self.matrix_selection_group.setVisible(False)
+            self.colorbar_group.setVisible(True)
+        else:
+            self.pair_selection_group.setVisible(True)
+            self.matrix_selection_group.setVisible(False)
+            self.colorbar_group.setVisible(False)
+    
+    def generate_visualization(self):
+        """Génère la visualisation selon les paramètres sélectionnés"""
+        if self.visualization_results is None:
+            QMessageBox.warning(self, "Erreur", "Veuillez d'abord charger les résultats.")
+            return
+        
+        viz_type = self.viz_type_combo.currentText()
+        
+        try:
+            from ..core.visualization import (
+                plot_displacement_maps, plot_displacement_vectors,
+                plot_comparison_matrix
+            )
+            
+            # Créer un nouveau canvas pour chaque visualisation
+            # Supprimer l'ancien canvas et fermer la figure matplotlib s'il existe
+            if self.visualization_canvas is not None:
+                # Fermer la figure matplotlib pour libérer la mémoire
+                try:
+                    import matplotlib.pyplot as plt
+                    fig_to_close = self.visualization_canvas.figure
+                    plt.close(fig_to_close)
+                except Exception:
+                    pass
+                self.visualization_canvas.deleteLater()
+                self.visualization_canvas = None
+                # Forcer le nettoyage
+                from PySide6.QtCore import QCoreApplication
+                QCoreApplication.processEvents()
+            
+            if viz_type == "Cartes de déplacement":
+                pair_id = self.pair_combo.currentText()
+                if not pair_id:
+                    QMessageBox.warning(self, "Erreur", "Veuillez sélectionner une paire.")
+                    return
+                
+                comparison_data = self.visualization_results['comparisons'].get(pair_id)
+                if comparison_data is None:
+                    QMessageBox.warning(self, "Erreur", f"Données non disponibles pour la paire {pair_id}.")
+                    return
+                
+                # Récupérer les bornes de l'échelle de couleur
+                vmin = None if self.colorbar_min_checkbox.isChecked() else self.colorbar_min_spin.value()
+                vmax = None if self.colorbar_max_checkbox.isChecked() else self.colorbar_max_spin.value()
+                
+                fig = plot_displacement_maps(comparison_data, pair_id, vmin=vmin, vmax=vmax)
+                self.visualization_canvas = FigureCanvas(fig)
+                self.visualization_scroll_area.setWidget(self.visualization_canvas)
+                
+            elif viz_type == "Vecteurs de déplacement":
+                pair_id = self.pair_combo.currentText()
+                if not pair_id:
+                    QMessageBox.warning(self, "Erreur", "Veuillez sélectionner une paire.")
+                    return
+                
+                comparison_data = self.visualization_results['comparisons'].get(pair_id)
+                if comparison_data is None:
+                    QMessageBox.warning(self, "Erreur", f"Données non disponibles pour la paire {pair_id}.")
+                    return
+                
+                fig = plot_displacement_vectors(comparison_data, pair_id)
+                self.visualization_canvas = FigureCanvas(fig)
+                self.visualization_scroll_area.setWidget(self.visualization_canvas)
+                
+            elif viz_type == "Matrices de comparaison":
+                matrix_name = self.matrix_combo.currentText()
+                
+                # Mapping des noms vers les clés de matrices
+                matrix_key_map = {
+                    "Déplacement 3D - Moyenne": "displacement_mean_3d",
+                    "Déplacement 3D - Médiane": "displacement_median_3d",
+                    "Déplacement 3D - Écart-type": "displacement_std_3d",
+                    "Déplacement 3D - Maximum": "displacement_max_3d",
+                    "Déplacement 3D - P95": "displacement_p95_3d",
+                    "Déplacement 3D - P99": "displacement_p99_3d",
+                    "Déplacement X - Moyenne": "displacement_x_mean",
+                    "Déplacement Y - Moyenne": "displacement_y_mean",
+                    "Déplacement Z - Moyenne": "displacement_z_mean",
+                    "Déplacement X - Médiane": "displacement_x_median",
+                    "Déplacement Y - Médiane": "displacement_y_median",
+                    "Déplacement Z - Médiane": "displacement_z_median",
+                    "Déplacement X - Écart-type": "displacement_x_std",
+                    "Déplacement Y - Écart-type": "displacement_y_std",
+                    "Déplacement Z - Écart-type": "displacement_z_std",
+                    "RMSE": "rmse",
+                    "MAE": "mae",
+                    "Couverture": "coverage",
+                }
+                
+                matrix_key = matrix_key_map.get(matrix_name)
+                if matrix_key is None:
+                    QMessageBox.warning(self, "Erreur", "Matrice non trouvée.")
+                    return
+                
+                matrices = self.visualization_results.get('matrices', {})
+                matrix = matrices.get(matrix_key)
+                if matrix is None:
+                    QMessageBox.warning(self, "Erreur", f"Matrice '{matrix_name}' non disponible dans les résultats.")
+                    return
+                
+                # Générer les labels des modèles
+                model_mapping = self.visualization_results.get('model_mapping', {})
+                n_models = len(model_mapping)
+                model_labels = [f"Modèle {i}" for i in range(n_models)]
+                
+                fig = plot_comparison_matrix(matrix, matrix_name, model_labels)
+                self.visualization_canvas = FigureCanvas(fig)
+                self.visualization_scroll_area.setWidget(self.visualization_canvas)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur lors de la génération de la visualisation : {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def pairwise_analysis_pipeline_finished(self, success, message):
         """Appelé quand le pipeline d'analyse paire par paire se termine"""
