@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QBrush, QPen, QAction
 from PySide6.QtCore import Qt, QTimer, QPoint
 from ..core.utils import resource_path
-from ..workers import PipelineThread, GeodeticTransformThread, AnalysisThread
+from ..workers import PipelineThread, GeodeticTransformThread, AnalysisThread, PairwiseAnalysisThread
 from .dialogs import JobExportDialog
 
 class PhotogrammetryGUI(QWidget):
@@ -44,6 +44,7 @@ class PhotogrammetryGUI(QWidget):
         self.pipeline_thread = None
         self.geodetic_thread = None
         self.analysis_thread = None
+        self.pairwise_analysis_thread = None
         self.init_ui()
     
 
@@ -129,6 +130,26 @@ class PhotogrammetryGUI(QWidget):
         toolbar.addAction(action_new)
         self.action_new = action_new
         
+        # Icône flèche bleue pour Lancer l'analyse paire par paire
+        pixmap_pairwise = QPixmap(24, 24)
+        pixmap_pairwise.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_pairwise)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QBrush(QColor(33, 150, 243)))  # bleu
+        painter.setPen(Qt.GlobalColor.transparent)
+        points = [
+            pixmap_pairwise.rect().topLeft() + QPoint(6, 4),
+            pixmap_pairwise.rect().bottomLeft() + QPoint(6, -4),
+            pixmap_pairwise.rect().center() + QPoint(6, 0)
+        ]
+        painter.drawPolygon(points)
+        painter.end()
+        icon_pairwise = QIcon(pixmap_pairwise)
+        action_pairwise = QAction(icon_pairwise, "Lancer l'analyse paire par paire", self)
+        action_pairwise.triggered.connect(self.launch_pairwise_analysis)
+        toolbar.addAction(action_pairwise)
+        self.action_pairwise = action_pairwise
+        
         # Icône pour Export .job (flèche vers le bas verte - même couleur que lancement MicMac)
         pixmap_export = QPixmap(24, 24)
         pixmap_export.fill(Qt.GlobalColor.transparent)
@@ -191,6 +212,27 @@ class PhotogrammetryGUI(QWidget):
         action_export_new = QAction(icon_export_new, "Exporter le batch .job (Analyse)", self)
         action_export_new.triggered.connect(self.export_new_job_dialog)
         toolbar.addAction(action_export_new)
+        
+        # Icône pour Export .job paire par paire (flèche vers le bas bleue - même couleur que lancement)
+        pixmap_export_pairwise = QPixmap(24, 24)
+        pixmap_export_pairwise.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap_export_pairwise)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        blue = QColor(33, 150, 243)  # même bleu que lancement
+        painter.setBrush(QBrush(blue))
+        painter.setPen(Qt.GlobalColor.transparent)
+        # Tige de la flèche (plus large et plus longue)
+        painter.drawRect(10, 6, 4, 10)
+        # Pointe de la flèche (plus grande)
+        points = [
+            QPoint(12, 21), QPoint(6, 14), QPoint(18, 14)
+        ]
+        painter.drawPolygon(points)
+        painter.end()
+        icon_export_pairwise = QIcon(pixmap_export_pairwise)
+        action_export_pairwise = QAction(icon_export_pairwise, "Exporter le batch .job (Analyse paire par paire)", self)
+        action_export_pairwise.triggered.connect(self.export_pairwise_job_dialog)
+        toolbar.addAction(action_export_pairwise)
         
         main_layout.addWidget(toolbar)
         # Tabs
@@ -1045,8 +1087,183 @@ class PhotogrammetryGUI(QWidget):
         new_layout.addWidget(self.new_summary_label)
         new_layout.addStretch(1)
         tabs.addTab(new_tab, "Analyse")
+        
+        # Onglet 4 : Analyse paire par paire
+        pairwise_tab = QWidget()
+        pairwise_layout = QVBoxLayout(pairwise_tab)
+        
+        # Titre
+        pairwise_layout.addWidget(QLabel("Analyse paire par paire"))
+        
+        # Type d'analyse (Radio buttons)
+        pairwise_analysis_type_group = QGroupBox("Type d'analyse")
+        pairwise_analysis_type_layout = QVBoxLayout(pairwise_analysis_type_group)
+        
+        self.pairwise_analysis_radio_group = QButtonGroup()
+        
+        self.pairwise_mnt_radio = QRadioButton("MNT")
+        self.pairwise_mnt_radio.setChecked(True)
+        self.pairwise_ortho_radio = QRadioButton("Ortho")
+        self.pairwise_mnt_ortho_radio = QRadioButton("MNT et Ortho")
+        
+        self.pairwise_analysis_radio_group.addButton(self.pairwise_mnt_radio, 0)
+        self.pairwise_analysis_radio_group.addButton(self.pairwise_ortho_radio, 1)
+        self.pairwise_analysis_radio_group.addButton(self.pairwise_mnt_ortho_radio, 2)
+        
+        pairwise_analysis_type_layout.addWidget(self.pairwise_mnt_radio)
+        pairwise_analysis_type_layout.addWidget(self.pairwise_ortho_radio)
+        pairwise_analysis_type_layout.addWidget(self.pairwise_mnt_ortho_radio)
+        pairwise_layout.addWidget(pairwise_analysis_type_group)
+        
+        # Liste des orthos
+        models_group = QGroupBox("Orthoimages à comparer")
+        models_layout = QVBoxLayout(models_group)
+        
+        # Liste des fichiers (orthos ou MNTs selon le type)
+        self.pairwise_models_list = QTextEdit()
+        self.pairwise_models_list.setPlaceholderText("Un chemin de fichier par ligne\nExemple:\nC:/chemin/ortho1.tif\nC:/chemin/ortho2.tif\nC:/chemin/ortho3.tif")
+        self.pairwise_models_list.setMaximumHeight(150)
+        models_layout.addWidget(QLabel("Chemins des orthoimages (un par ligne):"))
+        models_layout.addWidget(self.pairwise_models_list)
+        
+        # Bouton pour charger depuis fichiers
+        models_browse_btn = QPushButton("Parcourir et ajouter des fichiers")
+        models_browse_btn.clicked.connect(self.browse_pairwise_models)
+        models_layout.addWidget(models_browse_btn)
+        
+        pairwise_layout.addWidget(models_group)
+        
+        # Liste des MNTs (si mnt_ortho)
+        self.pairwise_mnts_group = QGroupBox("MNTs (requis pour 'MNT et Ortho')")
+        pairwise_mnts_layout = QVBoxLayout(self.pairwise_mnts_group)
+        
+        self.pairwise_mnts_list = QTextEdit()
+        self.pairwise_mnts_list.setPlaceholderText("Un chemin de fichier MNT par ligne (même ordre que les orthoimages)")
+        self.pairwise_mnts_list.setMaximumHeight(150)
+        pairwise_mnts_layout.addWidget(QLabel("Chemins des MNTs (un par ligne, même ordre que les orthoimages):"))
+        pairwise_mnts_layout.addWidget(self.pairwise_mnts_list)
+        
+        mnts_browse_btn = QPushButton("Parcourir et ajouter des fichiers MNT")
+        mnts_browse_btn.clicked.connect(self.browse_pairwise_mnts)
+        pairwise_mnts_layout.addWidget(mnts_browse_btn)
+        
+        self.pairwise_mnts_group.setVisible(False)  # Masqué par défaut
+        pairwise_layout.addWidget(self.pairwise_mnts_group)
+        
+        # Résolution
+        resolution_layout = QHBoxLayout()
+        resolution_layout.addWidget(QLabel("Résolution d'analyse:"))
+        self.pairwise_resolution_spin = QDoubleSpinBox()
+        self.pairwise_resolution_spin.setRange(0.001, 1000.0)
+        self.pairwise_resolution_spin.setValue(0.17)
+        self.pairwise_resolution_spin.setSuffix(" m")
+        self.pairwise_resolution_spin.setDecimals(3)
+        resolution_layout.addWidget(self.pairwise_resolution_spin)
+        resolution_layout.addStretch(1)
+        pairwise_layout.addLayout(resolution_layout)
+        
+        # Paramètres Farneback
+        self.pairwise_farneback_group = QGroupBox("Paramètres Farneback")
+        pairwise_farneback_layout = QVBoxLayout(self.pairwise_farneback_group)
+        
+        # Pyr_scale
+        pairwise_pyr_scale_layout = QHBoxLayout()
+        self.pairwise_pyr_scale_spin = QDoubleSpinBox()
+        self.pairwise_pyr_scale_spin.setRange(0.1, 0.9)
+        self.pairwise_pyr_scale_spin.setValue(0.8)
+        self.pairwise_pyr_scale_spin.setDecimals(1)
+        self.pairwise_pyr_scale_spin.setSingleStep(0.1)
+        pairwise_pyr_scale_layout.addWidget(QLabel("Pyr_scale :"))
+        pairwise_pyr_scale_layout.addWidget(self.pairwise_pyr_scale_spin)
+        pairwise_pyr_scale_layout.addStretch(1)
+        pairwise_farneback_layout.addLayout(pairwise_pyr_scale_layout)
+        
+        # Levels
+        pairwise_levels_layout = QHBoxLayout()
+        self.pairwise_levels_spin = QSpinBox()
+        self.pairwise_levels_spin.setRange(1, 10)
+        self.pairwise_levels_spin.setValue(5)
+        pairwise_levels_layout.addWidget(QLabel("Levels :"))
+        pairwise_levels_layout.addWidget(self.pairwise_levels_spin)
+        pairwise_levels_layout.addStretch(1)
+        pairwise_farneback_layout.addLayout(pairwise_levels_layout)
+        
+        # Winsize (calculé automatiquement)
+        pairwise_winsize_layout = QHBoxLayout()
+        self.pairwise_winsize_spin = QSpinBox()
+        self.pairwise_winsize_spin.setRange(3, 1000)
+        self.pairwise_winsize_spin.setValue(101)
+        self.pairwise_winsize_spin.setSingleStep(2)
+        self.pairwise_winsize_spin.setReadOnly(True)
+        self.pairwise_winsize_spin.setToolTip("Winsize calculé automatiquement selon la résolution")
+        pairwise_winsize_layout.addWidget(QLabel("Winsize (auto) :"))
+        pairwise_winsize_layout.addWidget(self.pairwise_winsize_spin)
+        pairwise_winsize_layout.addStretch(1)
+        pairwise_farneback_layout.addLayout(pairwise_winsize_layout)
+        
+        # Iterations
+        pairwise_iterations_layout = QHBoxLayout()
+        self.pairwise_iterations_spin = QSpinBox()
+        self.pairwise_iterations_spin.setRange(1, 20)
+        self.pairwise_iterations_spin.setValue(10)
+        pairwise_iterations_layout.addWidget(QLabel("Iterations :"))
+        pairwise_iterations_layout.addWidget(self.pairwise_iterations_spin)
+        pairwise_iterations_layout.addStretch(1)
+        pairwise_farneback_layout.addLayout(pairwise_iterations_layout)
+        
+        # Poly_n
+        pairwise_poly_n_layout = QHBoxLayout()
+        self.pairwise_poly_n_spin = QSpinBox()
+        self.pairwise_poly_n_spin.setRange(5, 7)
+        self.pairwise_poly_n_spin.setValue(7)
+        pairwise_poly_n_layout.addWidget(QLabel("Poly_n :"))
+        pairwise_poly_n_layout.addWidget(self.pairwise_poly_n_spin)
+        pairwise_poly_n_layout.addStretch(1)
+        pairwise_farneback_layout.addLayout(pairwise_poly_n_layout)
+        
+        # Poly_sigma
+        pairwise_poly_sigma_layout = QHBoxLayout()
+        self.pairwise_poly_sigma_spin = QDoubleSpinBox()
+        self.pairwise_poly_sigma_spin.setRange(0.5, 2.0)
+        self.pairwise_poly_sigma_spin.setValue(1.2)
+        self.pairwise_poly_sigma_spin.setDecimals(1)
+        self.pairwise_poly_sigma_spin.setSingleStep(0.1)
+        pairwise_poly_sigma_layout.addWidget(QLabel("Poly_sigma :"))
+        pairwise_poly_sigma_layout.addWidget(self.pairwise_poly_sigma_spin)
+        pairwise_poly_sigma_layout.addStretch(1)
+        pairwise_farneback_layout.addLayout(pairwise_poly_sigma_layout)
+        
+        self.pairwise_farneback_group.setVisible(False)  # Masqué par défaut (visible seulement pour ortho/mnt_ortho)
+        pairwise_layout.addWidget(self.pairwise_farneback_group)
+        
+        # Dossier de sortie
+        output_layout = QHBoxLayout()
+        self.pairwise_output_dir_edit = QLineEdit()
+        self.pairwise_output_dir_edit.setPlaceholderText("Dossier de sortie (laisser vide pour pairwise_analysis_results)")
+        pairwise_output_browse_btn = QPushButton()
+        pairwise_output_browse_btn.setIcon(self.create_folder_icon())
+        pairwise_output_browse_btn.setToolTip("Parcourir")
+        pairwise_output_browse_btn.clicked.connect(self.browse_pairwise_output_dir)
+        output_layout.addWidget(QLabel("Dossier de sortie:"))
+        output_layout.addWidget(self.pairwise_output_dir_edit)
+        output_layout.addWidget(pairwise_output_browse_btn)
+        pairwise_layout.addLayout(output_layout)
+        
+        # Ligne de commande CLI équivalente
+        self.pairwise_cmd_label = QLabel("Ligne de commande CLI équivalente :")
+        pairwise_layout.addWidget(self.pairwise_cmd_label)
+        self.pairwise_cmd_line = QLineEdit()
+        self.pairwise_cmd_line.setReadOnly(True)
+        self.pairwise_cmd_line.setStyleSheet("font-family: monospace;")
+        pairwise_layout.addWidget(self.pairwise_cmd_line)
+        
+        # Résumé et stretch
+        self.pairwise_summary_label = QLabel("")
+        pairwise_layout.addWidget(self.pairwise_summary_label)
+        pairwise_layout.addStretch(1)
+        tabs.addTab(pairwise_tab, "Analyse paire par paire")
 
-        # Onglet 4 : logs
+        # Onglet 5 : logs
         log_tab = QWidget()
         log_layout = QVBoxLayout(log_tab)
         log_layout.addWidget(QLabel("Logs :"))
@@ -1063,6 +1280,31 @@ class PhotogrammetryGUI(QWidget):
         # Initialisation du winsize automatique et de l'interface d'analyse
         self.update_winsize_auto()
         self.update_analysis_ui()
+        self.update_pairwise_analysis_ui()
+        
+        # Connexions pour l'analyse paire par paire
+        self.pairwise_mnt_radio.toggled.connect(self.update_pairwise_analysis_ui)
+        self.pairwise_ortho_radio.toggled.connect(self.update_pairwise_analysis_ui)
+        self.pairwise_mnt_ortho_radio.toggled.connect(self.update_pairwise_analysis_ui)
+        self.pairwise_resolution_spin.valueChanged.connect(self.update_pairwise_winsize_auto)
+        
+        # Connexions pour la mise à jour de la ligne de commande CLI
+        self.pairwise_mnt_radio.toggled.connect(self.update_pairwise_cmd_line)
+        self.pairwise_ortho_radio.toggled.connect(self.update_pairwise_cmd_line)
+        self.pairwise_mnt_ortho_radio.toggled.connect(self.update_pairwise_cmd_line)
+        self.pairwise_models_list.textChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_mnts_list.textChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_resolution_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_pyr_scale_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_levels_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_winsize_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_iterations_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_poly_n_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_poly_sigma_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_output_dir_edit.textChanged.connect(self.update_pairwise_cmd_line)
+        
+        # Initialiser la ligne de commande
+        self.update_pairwise_cmd_line()
         
         # Connexions
         self.dir_edit.textChanged.connect(self.update_cmd_line)
@@ -1623,10 +1865,14 @@ class PhotogrammetryGUI(QWidget):
         if hasattr(self, 'analysis_thread') and self.analysis_thread and self.analysis_thread.isRunning():
             self.analysis_thread.terminate()
             self.analysis_thread.wait()
+        if hasattr(self, 'pairwise_analysis_thread') and self.pairwise_analysis_thread and self.pairwise_analysis_thread.isRunning():
+            self.pairwise_analysis_thread.terminate()
+            self.pairwise_analysis_thread.wait()
             self.append_log("<span style='color:red'>Pipeline d'analyse arrêté par l'utilisateur.</span>")
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
         self.action_new.setEnabled(True)
+        self.action_pairwise.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def pipeline_finished(self, success, message):
@@ -1637,6 +1883,7 @@ class PhotogrammetryGUI(QWidget):
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
         self.action_new.setEnabled(True)
+        self.action_pairwise.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def launch_geodetic_pipeline(self):
@@ -1748,6 +1995,7 @@ class PhotogrammetryGUI(QWidget):
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
         self.action_new.setEnabled(True)
+        self.action_pairwise.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def export_job_dialog(self):
@@ -1913,6 +2161,7 @@ class PhotogrammetryGUI(QWidget):
         self.action_run.setEnabled(True)
         self.action_geodetic.setEnabled(True)
         self.action_new.setEnabled(True)
+        self.action_pairwise.setEnabled(True)
         self.action_stop.setEnabled(False)
 
     def update_analysis_ui(self, checked=None):
@@ -2112,6 +2361,11 @@ module load micmac
             modules = """module purge
 # L'exécutable Python est détecté automatiquement par le script
 # Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""
+        elif pipeline_type == "pairwise":
+            # Pour le pipeline d'analyse paire par paire
+            modules = """module purge
+# L'exécutable Python est détecté automatiquement par le script
+# Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""
         else:
             # Pour le pipeline MicMac
             modules = """module purge
@@ -2130,4 +2384,301 @@ module load micmac
 {modules}
 
 {vals['cli_cmd']}
-""" 
+"""
+    
+    def browse_pairwise_models(self):
+        """Ouvre un dialogue pour sélectionner plusieurs orthoimages"""
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Sélectionner les orthoimages", "",
+            "Fichiers images (*.tif *.tiff *.TIF *.TIFF);;Tous les fichiers (*.*)"
+        )
+        if files:
+            current_text = self.pairwise_models_list.toPlainText()
+            new_files = "\n".join(files)
+            if current_text:
+                self.pairwise_models_list.setPlainText(current_text + "\n" + new_files)
+            else:
+                self.pairwise_models_list.setPlainText(new_files)
+    
+    def browse_pairwise_mnts(self):
+        """Ouvre un dialogue pour sélectionner plusieurs fichiers MNT"""
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Sélectionner les fichiers MNT", "",
+            "Fichiers images (*.tif *.tiff *.TIF *.TIFF);;Tous les fichiers (*.*)"
+        )
+        if files:
+            current_text = self.pairwise_mnts_list.toPlainText()
+            new_files = "\n".join(files)
+            if current_text:
+                self.pairwise_mnts_list.setPlainText(current_text + "\n" + new_files)
+            else:
+                self.pairwise_mnts_list.setPlainText(new_files)
+    
+    def browse_pairwise_output_dir(self):
+        """Ouvre un dialogue pour sélectionner le dossier de sortie"""
+        dir_path = QFileDialog.getExistingDirectory(self, "Sélectionner le dossier de sortie")
+        if dir_path:
+            self.pairwise_output_dir_edit.setText(dir_path)
+    
+    def update_pairwise_analysis_ui(self, checked=None):
+        """Met à jour l'interface selon le type d'analyse paire par paire sélectionné"""
+        is_mnt = self.pairwise_mnt_radio.isChecked()
+        is_ortho = self.pairwise_ortho_radio.isChecked()
+        is_mnt_ortho = self.pairwise_mnt_ortho_radio.isChecked()
+        
+        # Afficher/masquer le groupe MNTs
+        self.pairwise_mnts_group.setVisible(is_mnt_ortho)
+        
+        # Afficher/masquer le groupe Farneback (visible pour ortho et mnt_ortho)
+        self.pairwise_farneback_group.setVisible(is_ortho or is_mnt_ortho)
+        
+        # Mettre à jour le winsize automatiquement
+        self.update_pairwise_winsize_auto()
+    
+    def update_pairwise_winsize_auto(self):
+        """Met à jour automatiquement le winsize selon la résolution pour l'analyse paire par paire"""
+        resolution_m = self.pairwise_resolution_spin.value()
+        
+        # Configuration de référence optimisée pour 0.01m (10mm)
+        base_winsize = 101
+        base_resolution = 0.01  # 10mm
+        
+        # Calcul du winsize adapté
+        ratio = base_resolution / resolution_m
+        adapted_winsize = max(3, int(base_winsize * ratio))
+        
+        # S'assurer que winsize est impair (requis par OpenCV)
+        if adapted_winsize % 2 == 0:
+            adapted_winsize += 1
+        
+        # Mise à jour du spinbox (sans déclencher le signal valueChanged)
+        self.pairwise_winsize_spin.blockSignals(True)
+        self.pairwise_winsize_spin.setValue(adapted_winsize)
+        self.pairwise_winsize_spin.blockSignals(False)
+        
+        # Mise à jour du tooltip
+        self.pairwise_winsize_spin.setToolTip(f"Winsize calculé automatiquement: {adapted_winsize} (référence: {base_winsize} pour {base_resolution*1000:.0f}mm)")
+    
+    def update_pairwise_cmd_line(self):
+        """Met à jour la ligne de commande CLI pour l'analyse paire par paire"""
+        # Type d'analyse
+        if self.pairwise_mnt_radio.isChecked():
+            analysis_type = "mnt"
+        elif self.pairwise_ortho_radio.isChecked():
+            analysis_type = "ortho"
+        else:  # pairwise_mnt_ortho_radio.isChecked()
+            analysis_type = "mnt_ortho"
+        
+        # Modèles (orthos)
+        models_text = self.pairwise_models_list.toPlainText().strip()
+        model_paths = [line.strip() for line in models_text.split('\n') if line.strip()]
+        
+        # MNTs (si nécessaire)
+        mnts_text = self.pairwise_mnts_list.toPlainText().strip()
+        mnt_paths = [line.strip() for line in mnts_text.split('\n') if line.strip()] if mnts_text else []
+        
+        # Résolution
+        resolution = self.pairwise_resolution_spin.value()
+        
+        # Dossier de sortie
+        output_dir = self.pairwise_output_dir_edit.text().strip()
+        
+        # Paramètres Farneback (si nécessaire)
+        pyr_scale = self.pairwise_pyr_scale_spin.value()
+        levels = self.pairwise_levels_spin.value()
+        winsize = self.pairwise_winsize_spin.value()
+        iterations = self.pairwise_iterations_spin.value()
+        poly_n = self.pairwise_poly_n_spin.value()
+        poly_sigma = self.pairwise_poly_sigma_spin.value()
+        
+        # Construction de la commande
+        cmd_parts = ["python", "photogeoalign.py", "--pairwise-analysis", "--no-gui"]
+        cmd_parts.append(f"--type={analysis_type}")
+        cmd_parts.append(f"--resolution={resolution}")
+        
+        # Ajouter les modèles
+        if model_paths:
+            cmd_parts.append("--models")
+            cmd_parts.extend([f'"{path}"' for path in model_paths])
+        
+        # Ajouter les MNTs si nécessaire
+        if analysis_type == "mnt_ortho" and mnt_paths:
+            cmd_parts.append("--mnts")
+            cmd_parts.extend([f'"{path}"' for path in mnt_paths])
+        
+        # Ajout du dossier de sortie si spécifié
+        if output_dir:
+            cmd_parts.append(f"--output-dir \"{output_dir}\"")
+        
+        # Ajout des paramètres Farneback (si nécessaire)
+        if analysis_type in ('ortho', 'mnt_ortho'):
+            cmd_parts.append(f"--pyr-scale={pyr_scale}")
+            cmd_parts.append(f"--levels={levels}")
+            cmd_parts.append(f"--winsize={winsize}")
+            cmd_parts.append(f"--iterations={iterations}")
+            cmd_parts.append(f"--poly-n={poly_n}")
+            cmd_parts.append(f"--poly-sigma={poly_sigma}")
+        
+        cmd = " ".join(cmd_parts)
+        self.pairwise_cmd_line.setText(cmd)
+    
+    def export_pairwise_job_dialog(self):
+        """Exporte le job pour l'analyse paire par paire"""
+        import sys
+        import os
+        
+        cli_cmd = self.pairwise_cmd_line.text().strip()
+        
+        if not cli_cmd:
+            QMessageBox.warning(self, "Erreur", "Aucune commande CLI disponible. Veuillez remplir les paramètres de l'analyse paire par paire.")
+            return
+        
+        parts = cli_cmd.split()
+        # On retire le premier mot (python ou exe)
+        args = parts[1:]
+        # On retire tout photogeoalign.py
+        filtered_args = [arg for arg in args if not arg.endswith('photogeoalign.py') and not arg.endswith('photogeoalign.py"')]
+        
+        if getattr(sys, 'frozen', False):
+            # Cas exécutable PyInstaller - utiliser sys.executable (chemin réel exe)
+            exe_path = sys.executable
+            cmd = [exe_path] + filtered_args
+        else:
+            # Cas Python - utiliser le script principal
+            exe_path = sys.executable
+            # Trouver photogeoalign.py dans le répertoire parent du projet
+            current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            script_path = os.path.join(current_dir, 'photogeoalign.py')
+            cmd = [exe_path, script_path] + filtered_args
+        
+        cli_cmd = " ".join(cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_PairwiseAnalysis", output="PhotoGeoAlign_PairwiseAnalysis.out", ntasks=self.parallel_workers_spin.value(), cli_cmd=cli_cmd)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            vals = dialog.get_values()
+            job_content = self.generate_job_script(vals, "pairwise")
+            file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "pairwise_analysis.job", "Fichiers batch (*.out *.job *.sh)")
+            if file_path:
+                try:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(job_content)
+                    QMessageBox.information(self, "Export réussi", f"Script batch exporté :\n{file_path}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
+    
+    def launch_pairwise_analysis(self):
+        """Lance le pipeline d'analyse paire par paire"""
+        # Vider les logs avant de commencer (comme les autres pipelines)
+        self.log_text.clear()
+        self.pairwise_summary_label.setText("")
+        
+        # Récupérer les chemins des orthoimages
+        models_text = self.pairwise_models_list.toPlainText().strip()
+        if not models_text:
+            QMessageBox.warning(self, "Erreur", "Veuillez spécifier au moins deux orthoimages à comparer.")
+            return
+        
+        model_paths = [line.strip() for line in models_text.split('\n') if line.strip()]
+        if len(model_paths) < 2:
+            QMessageBox.warning(self, "Erreur", "Veuillez spécifier au moins deux orthoimages à comparer.")
+            return
+        
+        # Vérifier que les fichiers existent
+        for path in model_paths:
+            if not os.path.exists(path):
+                QMessageBox.warning(self, "Erreur", f"Le fichier n'existe pas : {path}")
+                return
+        
+        # Déterminer le type d'analyse
+        if self.pairwise_mnt_radio.isChecked():
+            analysis_type = "mnt"
+        elif self.pairwise_ortho_radio.isChecked():
+            analysis_type = "ortho"
+        else:
+            analysis_type = "mnt_ortho"
+        
+        # Récupérer les MNTs si nécessaire
+        mnt_paths = None
+        if analysis_type == "mnt_ortho":
+            mnts_text = self.pairwise_mnts_list.toPlainText().strip()
+            if not mnts_text:
+                QMessageBox.warning(self, "Erreur", "Veuillez spécifier les fichiers MNT pour le mode 'MNT et Ortho'.")
+                return
+            
+            mnt_paths = [line.strip() for line in mnts_text.split('\n') if line.strip()]
+            if len(mnt_paths) != len(model_paths):
+                QMessageBox.warning(self, "Erreur", f"Le nombre de MNTs ({len(mnt_paths)}) doit être égal au nombre d'orthoimages ({len(model_paths)}).")
+                return
+            
+            # Vérifier que les fichiers MNT existent
+            for path in mnt_paths:
+                if not os.path.exists(path):
+                    QMessageBox.warning(self, "Erreur", f"Le fichier MNT n'existe pas : {path}")
+                    return
+        
+        # Récupérer la résolution
+        resolution = self.pairwise_resolution_spin.value()
+        
+        # Mettre à jour le winsize automatiquement selon la résolution avant de lancer l'analyse
+        if analysis_type in ('ortho', 'mnt_ortho'):
+            self.update_pairwise_winsize_auto()
+        
+        # Paramètres Farneback (si nécessaire)
+        farneback_params = None
+        if analysis_type in ('ortho', 'mnt_ortho'):
+            farneback_params = {
+                'pyr_scale': self.pairwise_pyr_scale_spin.value(),
+                'levels': self.pairwise_levels_spin.value(),
+                'winsize': self.pairwise_winsize_spin.value(),  # Utilise le winsize mis à jour automatiquement
+                'iterations': self.pairwise_iterations_spin.value(),
+                'poly_n': self.pairwise_poly_n_spin.value(),
+                'poly_sigma': self.pairwise_poly_sigma_spin.value()
+            }
+        
+        # Dossier de sortie
+        output_dir = self.pairwise_output_dir_edit.text().strip()
+        if not output_dir:
+            output_dir = os.path.join(os.path.dirname(model_paths[0]), "pairwise_analysis_results")
+        
+        # Créer le thread d'analyse paire par paire
+        self.pairwise_analysis_thread = PairwiseAnalysisThread(
+            model_paths, analysis_type, resolution, output_dir,
+            farneback_params=farneback_params, mnt_paths=mnt_paths, parallel=True
+        )
+        
+        self.pairwise_analysis_thread.log_signal.connect(self.append_log)
+        self.pairwise_analysis_thread.finished_signal.connect(self.pairwise_analysis_pipeline_finished)
+        self.pairwise_analysis_thread.start()
+        
+        # Désactiver les boutons
+        self.action_run.setEnabled(False)
+        self.action_geodetic.setEnabled(False)
+        self.action_new.setEnabled(False)
+        self.action_pairwise.setEnabled(False)
+        self.action_stop.setEnabled(True)
+        
+        self.pairwise_summary_label.setText("<span style='color:blue'>Analyse paire par paire en cours...</span>")
+        self.append_log(f"<span style='color:blue'>Démarrage de l'analyse paire par paire</span>")
+        self.append_log(f"<span style='color:blue'>Nombre d'orthoimages: {len(model_paths)}</span>")
+        self.append_log(f"<span style='color:blue'>Type d'analyse: {analysis_type}</span>")
+        self.append_log(f"<span style='color:blue'>Résolution: {resolution} m</span>")
+        self.append_log(f"<span style='color:blue'>Dossier de sortie: {output_dir}</span>")
+    
+    def pairwise_analysis_pipeline_finished(self, success, message):
+        """Appelé quand le pipeline d'analyse paire par paire se termine"""
+        if success:
+            self.pairwise_summary_label.setText(f"<span style='color:green'>{message}</span>")
+            
+            # Affichage des résultats si disponibles
+            if self.pairwise_analysis_thread and self.pairwise_analysis_thread.get_results():
+                results = self.pairwise_analysis_thread.get_results()
+                n_comparisons = results.get('n_comparisons', 'N/A')
+                self.append_log(f"<span style='color:green'>Nombre de comparaisons effectuées: {n_comparisons}</span>")
+                self.append_log(f"<span style='color:green'>Résultats sauvegardés dans: {results.get('output_dir', 'N/A')}</span>")
+        else:
+            self.pairwise_summary_label.setText(f"<span style='color:red'>{message}</span>")
+        
+        self.action_run.setEnabled(True)
+        self.action_geodetic.setEnabled(True)
+        self.action_new.setEnabled(True)
+        self.action_pairwise.setEnabled(True)
+        self.action_stop.setEnabled(False) 

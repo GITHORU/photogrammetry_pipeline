@@ -293,6 +293,11 @@ if __name__ == "__main__":
         parser.add_argument('--poly-sigma', type=float, default=1.2, help='Écart-type du filtre polynomial (défaut: 1.2)')
         parser.add_argument('--output-dir', default='', help='Dossier de sortie pour les résultats d\'analyse (défaut: analysis_results dans le dossier de l\'image 1)')
         
+        # Arguments pour le pipeline d'analyse paire par paire
+        parser.add_argument('--pairwise-analysis', action='store_true', help='Lancer le pipeline d\'analyse paire par paire')
+        parser.add_argument('--models', nargs='+', default=[], help='Liste des chemins vers les orthoimages pour l\'analyse paire par paire')
+        parser.add_argument('--mnts', nargs='+', default=[], help='Liste des chemins vers les MNTs pour l\'analyse paire par paire (requis si --type=mnt_ortho)')
+        
         args = parser.parse_args()
         if args.geodetic:
             # Mode transformations géodésiques
@@ -464,6 +469,102 @@ if __name__ == "__main__":
                 print("Pipeline d'analyse terminé avec succès !")
             except Exception as e:
                 print(f"Erreur lors de l'exécution du pipeline d'analyse : {str(e)}")
+                sys.exit(1)
+        elif args.pairwise_analysis:
+            # Mode pipeline d'analyse paire par paire
+            if not args.models or len(args.models) < 2:
+                print("Erreur : veuillez spécifier au moins 2 modèles avec --models.")
+                sys.exit(1)
+            
+            # Vérifier que tous les modèles existent
+            for model_path in args.models:
+                if not os.path.exists(model_path):
+                    print(f"Erreur : modèle introuvable : {model_path}")
+                    sys.exit(1)
+            
+            # Validation spécifique pour le mode mnt_ortho
+            if args.type == 'mnt_ortho':
+                if not args.mnts or len(args.mnts) != len(args.models):
+                    print(f"Erreur : veuillez spécifier {len(args.models)} MNTs avec --mnts pour le mode mnt_ortho.")
+                    sys.exit(1)
+                for mnt_path in args.mnts:
+                    if not os.path.exists(mnt_path):
+                        print(f"Erreur : MNT introuvable : {mnt_path}")
+                        sys.exit(1)
+            
+            # Déterminer le dossier de sortie
+            if args.output_dir:
+                output_dir = args.output_dir
+            else:
+                output_dir = os.path.join(os.path.dirname(args.models[0]), 'pairwise_analysis_results')
+            
+            log_path = os.path.join(output_dir, 'pairwise_analysis_pipeline.log')
+            logger = setup_logger(log_path)
+            
+            print(f"Début du pipeline d'analyse paire par paire")
+            print(f"Nombre de modèles: {len(args.models)}")
+            print(f"Type d'analyse: {args.type}")
+            print(f"Résolution: {args.resolution} m")
+            if args.type == 'mnt_ortho':
+                print(f"Nombre de MNTs: {len(args.mnts)}")
+            
+            try:
+                from modules.core.analysis import run_pairwise_analysis_pipeline
+                
+                analysis_type = args.type
+                model_paths = args.models
+                mnt_paths = args.mnts if args.type == 'mnt_ortho' else None
+                resolution = args.resolution
+                
+                # Paramètres Farneback (seulement si spécifiés explicitement)
+                farneback_params = None
+                if (args.pyr_scale != 0.8 or args.levels != 5 or args.winsize != 101 or 
+                    args.iterations != 10 or args.poly_n != 7 or args.poly_sigma != 1.2):
+                    # Paramètres personnalisés fournis
+                    farneback_params = {
+                        'pyr_scale': args.pyr_scale,
+                        'levels': args.levels,
+                        'winsize': args.winsize,  # Sera adapté automatiquement
+                        'iterations': args.iterations,
+                        'poly_n': args.poly_n,
+                        'poly_sigma': args.poly_sigma
+                    }
+                
+                if farneback_params:
+                    print(f"Paramètres Farneback personnalisés : {farneback_params}")
+                else:
+                    print("Paramètres Farneback : Configuration optimale automatique")
+                    # Afficher les paramètres optimisés qui seront utilisés
+                    base_config = {
+                        'pyr_scale': 0.8, 'levels': 5, 'winsize': 101,
+                        'iterations': 10, 'poly_n': 7, 'poly_sigma': 1.2
+                    }
+                    ratio = 0.01 / resolution
+                    adapted_winsize = max(3, int(101 * ratio))
+                    if adapted_winsize % 2 == 0:
+                        adapted_winsize += 1
+                    print(f"  - pyr_scale: {base_config['pyr_scale']} (constant)")
+                    print(f"  - levels: {base_config['levels']} (constant)")
+                    print(f"  - winsize: {adapted_winsize} (adapté: 101 * {ratio:.2f} = {101 * ratio:.0f})")
+                    print(f"  - iterations: {base_config['iterations']} (constant)")
+                    print(f"  - poly_n: {base_config['poly_n']} (constant)")
+                    print(f"  - poly_sigma: {base_config['poly_sigma']} (constant)")
+                
+                # Exécution du pipeline d'analyse paire par paire
+                results = run_pairwise_analysis_pipeline(
+                    model_paths, analysis_type, resolution, output_dir,
+                    farneback_params, mnt_paths, parallel=True
+                )
+                
+                if results:
+                    print(f"Nombre de comparaisons: {results.get('n_comparisons', 'N/A')}")
+                    print(f"Résultats sauvegardés dans: {output_dir}")
+                
+                print("Pipeline d'analyse paire par paire terminé avec succès !")
+            except Exception as e:
+                print(f"Erreur lors de l'exécution du pipeline d'analyse paire par paire : {str(e)}")
+                import traceback
+                traceback.print_exc()
                 sys.exit(1)
         elif args.no_gui:
             # Mode pipeline photogrammétrique
