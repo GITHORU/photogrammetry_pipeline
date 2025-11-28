@@ -21,7 +21,7 @@ class PairwiseAnalysisThread(QThread):
     
     def __init__(self, model_paths: list, analysis_type: str, resolution: float,
                  output_dir: str, farneback_params: dict = None, mnt_paths: list = None,
-                 parallel: bool = True):
+                 parallel: bool = True, max_workers: int = None):
         super().__init__()
         
         self.model_paths = model_paths
@@ -31,6 +31,7 @@ class PairwiseAnalysisThread(QThread):
         self.farneback_params = farneback_params or {}
         self.mnt_paths = mnt_paths
         self.parallel = parallel
+        self.max_workers = max_workers
         
         # Configuration du logger
         self.logger = logging.getLogger(f"PairwiseAnalysisPipeline_{id(self)}")
@@ -73,7 +74,8 @@ class PairwiseAnalysisThread(QThread):
                 self.output_dir,
                 self.farneback_params,
                 self.mnt_paths,
-                self.parallel
+                self.parallel,
+                self.max_workers
             )
             
             if self.results:

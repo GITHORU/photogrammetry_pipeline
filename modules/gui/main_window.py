@@ -1240,6 +1240,19 @@ class PhotogrammetryGUI(QWidget):
         self.pairwise_farneback_group.setVisible(False)  # Masqué par défaut (visible seulement pour ortho/mnt_ortho)
         pairwise_layout.addWidget(self.pairwise_farneback_group)
         
+        # Paramètres de parallélisation
+        pairwise_parallel_group = QGroupBox("Parallélisation")
+        pairwise_parallel_layout = QHBoxLayout(pairwise_parallel_group)
+        self.pairwise_max_workers_spin = QSpinBox()
+        self.pairwise_max_workers_spin.setMinimum(1)
+        self.pairwise_max_workers_spin.setMaximum(128)
+        self.pairwise_max_workers_spin.setValue(4)
+        self.pairwise_max_workers_spin.setToolTip("Nombre maximum de comparaisons à traiter en parallèle (défaut: utilise tous les CPUs disponibles)")
+        pairwise_parallel_layout.addWidget(QLabel("Workers parallèles max :"))
+        pairwise_parallel_layout.addWidget(self.pairwise_max_workers_spin)
+        pairwise_parallel_layout.addStretch(1)
+        pairwise_layout.addWidget(pairwise_parallel_group)
+        
         # Dossier de sortie
         output_layout = QHBoxLayout()
         self.pairwise_output_dir_edit = QLineEdit()
@@ -1452,6 +1465,7 @@ class PhotogrammetryGUI(QWidget):
         self.pairwise_iterations_spin.valueChanged.connect(self.update_pairwise_cmd_line)
         self.pairwise_poly_n_spin.valueChanged.connect(self.update_pairwise_cmd_line)
         self.pairwise_poly_sigma_spin.valueChanged.connect(self.update_pairwise_cmd_line)
+        self.pairwise_max_workers_spin.valueChanged.connect(self.update_pairwise_cmd_line)
         self.pairwise_output_dir_edit.textChanged.connect(self.update_pairwise_cmd_line)
         
         # Initialiser la ligne de commande
@@ -2642,6 +2656,9 @@ module load micmac
         poly_n = self.pairwise_poly_n_spin.value()
         poly_sigma = self.pairwise_poly_sigma_spin.value()
         
+        # Nombre de workers parallèles
+        max_workers_value = self.pairwise_max_workers_spin.value()
+        
         # Construction de la commande
         cmd_parts = ["python", "photogeoalign.py", "--pairwise-analysis", "--no-gui"]
         cmd_parts.append(f"--type={analysis_type}")
@@ -2660,6 +2677,10 @@ module load micmac
         # Ajout du dossier de sortie si spécifié
         if output_dir:
             cmd_parts.append(f"--output-dir \"{output_dir}\"")
+        
+        # Ajout du nombre de workers parallèles (si différent de 128 = auto)
+        if max_workers_value != 128:
+            cmd_parts.append(f"--max-workers={max_workers_value}")
         
         # Ajout des paramètres Farneback (si nécessaire)
         if analysis_type in ('ortho', 'mnt_ortho'):
@@ -2790,10 +2811,15 @@ module load micmac
         if not output_dir:
             output_dir = os.path.join(os.path.dirname(model_paths[0]), "pairwise_analysis_results")
         
+        # Récupérer le nombre de workers parallèles (None = auto)
+        max_workers_value = self.pairwise_max_workers_spin.value()
+        max_workers = None if max_workers_value == 128 else max_workers_value  # 128 = valeur max, considérée comme "auto"
+        
         # Créer le thread d'analyse paire par paire
         self.pairwise_analysis_thread = PairwiseAnalysisThread(
             model_paths, analysis_type, resolution, output_dir,
-            farneback_params=farneback_params, mnt_paths=mnt_paths, parallel=True
+            farneback_params=farneback_params, mnt_paths=mnt_paths, parallel=True,
+            max_workers=max_workers
         )
         
         self.pairwise_analysis_thread.log_signal.connect(self.append_log)

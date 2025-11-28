@@ -1491,7 +1491,7 @@ def calculate_pairwise_metrics_on_mask(displacement_x: np.ndarray, displacement_
 
 def run_pairwise_analysis_pipeline(model_paths: list, analysis_type: str, resolution: float,
                                   output_dir: str, farneback_params: dict = None,
-                                  mnt_paths: list = None, parallel: bool = True) -> Dict[str, Any]:
+                                  mnt_paths: list = None, parallel: bool = True, max_workers: int = None) -> Dict[str, Any]:
     """
     Pipeline d'analyse paire par paire pour N modèles.
     
@@ -1503,6 +1503,7 @@ def run_pairwise_analysis_pipeline(model_paths: list, analysis_type: str, resolu
         farneback_params: Paramètres pour la méthode de Farneback
         mnt_paths: Liste des chemins vers les MNTs (requis si analysis_type='mnt_ortho')
         parallel: Utiliser le parallélisme (défaut: True)
+        max_workers: Nombre maximum de workers parallèles (défaut: None = utilise os.cpu_count())
         
     Returns:
         Dictionnaire contenant tous les résultats
@@ -1879,8 +1880,11 @@ def run_pairwise_analysis_pipeline(model_paths: list, analysis_type: str, resolu
     # Traitement des paires (parallèle ou séquentiel)
     all_comparisons = []
     if parallel:
-        max_workers = min(os.cpu_count() or 1, n_comparisons)
-        logger.info(f"Traitement parallèle avec {max_workers} workers")
+        if max_workers is None:
+            max_workers = min(os.cpu_count() or 1, n_comparisons)
+        else:
+            max_workers = min(max_workers, n_comparisons)  # Ne pas dépasser le nombre de comparaisons
+        logger.info(f"Traitement parallèle avec {max_workers} workers (sur {n_comparisons} comparaisons)")
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(process_pair, idx, i, j): (idx, i, j) 
                       for idx, (i, j) in enumerate(pairs)}
