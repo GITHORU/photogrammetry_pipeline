@@ -24,6 +24,60 @@ sns.set_style("whitegrid")
 sns.set_palette("husl")
 
 
+def load_data_if_needed(data_or_path: Any) -> Optional[np.ndarray]:
+    """
+    Charge les données raster si un chemin est fourni, sinon retourne les données.
+    
+    Cette fonction permet un chargement à la demande des données raster pour économiser la mémoire.
+    
+    Args:
+        data_or_path: Chemin de fichier (str) ou données numpy (np.ndarray)
+        
+    Returns:
+        Array numpy ou None si erreur
+    """
+    if isinstance(data_or_path, str) and os.path.exists(data_or_path):
+        try:
+            with rasterio.open(data_or_path) as src:
+                return src.read(1)
+        except Exception as e:
+            logger.warning(f"Erreur lors du chargement de {data_or_path}: {e}")
+            return None
+    elif data_or_path is not None:
+        # C'est déjà des données (compatibilité avec ancien code)
+        return data_or_path
+    return None
+
+
+def load_metadata_if_needed(filepath: str) -> Optional[Dict[str, Any]]:
+    """
+    Charge uniquement les métadonnées d'un fichier raster (sans charger les données).
+    
+    Args:
+        filepath: Chemin vers le fichier raster
+        
+    Returns:
+        Dictionnaire avec les métadonnées ou None si erreur
+    """
+    if not isinstance(filepath, str) or not os.path.exists(filepath):
+        return None
+    
+    try:
+        with rasterio.open(filepath) as src:
+            # Sérialiser les métadonnées en format simple (pas d'objets rasterio)
+            transform = src.transform
+            return {
+                'transform': [transform.a, transform.b, transform.c, 
+                             transform.d, transform.e, transform.f],
+                'crs': str(src.crs) if src.crs else None,
+                'width': src.width,
+                'height': src.height
+            }
+    except Exception as e:
+        logger.warning(f"Erreur lors du chargement des métadonnées de {filepath}: {e}")
+        return None
+
+
 def load_pairwise_results(output_dir: str) -> Optional[Dict[str, Any]]:
     """
     Charge les résultats d'analyse paire par paire depuis le dossier de sortie.
@@ -121,18 +175,10 @@ def load_pairwise_results(output_dir: str) -> Optional[Dict[str, Any]]:
                                 # Stocker le chemin au lieu de charger les données
                                 comparisons[pair_id][key] = filepath  # Stocker le chemin
                                 
-                                # Charger uniquement les métadonnées pour displacement_x
+                                # Stocker aussi le chemin pour les métadonnées (chargement à la demande)
+                                # On stocke le chemin du fichier X pour charger les métadonnées plus tard si nécessaire
                                 if key == 'displacement_x':
-                                    try:
-                                        with rasterio.open(filepath) as src:
-                                            comparisons[pair_id]['metadata'] = {
-                                                'transform': src.transform,
-                                                'crs': src.crs,
-                                                'width': src.width,
-                                                'height': src.height
-                                            }
-                                    except Exception as e:
-                                        logger.warning(f"Erreur lors du chargement des métadonnées de {filepath}: {e}")
+                                    comparisons[pair_id]['_metadata_file'] = filepath
                                 
                                 data_loaded = True
                                 break
@@ -148,7 +194,7 @@ def load_pairwise_results(output_dir: str) -> Optional[Dict[str, Any]]:
             'n_models': len(model_mapping)
         }
         
-        logger.info(f"Résultats chargés: {len(matrices)} matrices, {len(comparisons)} comparaisons")
+        logger.info(f"Résultats chargés: {len(matrices)} matrices, {len(comparisons)} comparaisons (chemins seulement pour les rasters, chargement à la demande)")
         return results
         
     except Exception as e:
@@ -172,22 +218,6 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
     Returns:
         Figure matplotlib
     """
-    # Fonction helper pour charger les données à la demande
-    def load_data_if_needed(data_or_path):
-        """Charge les données si c'est un chemin, sinon retourne les données"""
-        if isinstance(data_or_path, str) and os.path.exists(data_or_path):
-            # C'est un chemin, charger les données
-            try:
-                with rasterio.open(data_or_path) as src:
-                    return src.read(1)
-            except Exception as e:
-                logger.warning(f"Erreur lors du chargement de {data_or_path}: {e}")
-                return None
-        elif data_or_path is not None:
-            # C'est déjà des données (compatibilité avec ancien code)
-            return data_or_path
-        return None
-    
     # Créer une nouvelle figure explicitement pour éviter les conflits avec Qt
     fig = Figure(figsize=(14, 12))
     axes = fig.subplots(2, 2)
@@ -326,20 +356,6 @@ def plot_displacement_vectors(comparison_data: Dict[str, Any], pair_id: str,
     Returns:
         Figure matplotlib
     """
-    # Fonction helper pour charger les données à la demande
-    def load_data_if_needed(data_or_path):
-        """Charge les données si c'est un chemin, sinon retourne les données"""
-        if isinstance(data_or_path, str) and os.path.exists(data_or_path):
-            try:
-                with rasterio.open(data_or_path) as src:
-                    return src.read(1)
-            except Exception as e:
-                logger.warning(f"Erreur lors du chargement de {data_or_path}: {e}")
-                return None
-        elif data_or_path is not None:
-            return data_or_path
-        return None
-    
     # Créer une nouvelle figure explicitement pour éviter les conflits avec Qt
     fig = Figure(figsize=(12, 10))
     ax = fig.add_subplot(111)
@@ -427,11 +443,13 @@ def plot_displacement_histograms(comparison_data: Dict[str, Any], pair_id: str,
     ax4 = fig.add_subplot(2, 2, 4)
     axes = np.array([[ax1, ax2], [ax3, ax4]])
     
-    valid_mask = comparison_data.get('valid_mask')
+    valid_mask_path_or_data = comparison_data.get('valid_mask')
+    valid_mask = load_data_if_needed(valid_mask_path_or_data) if valid_mask_path_or_data else None
     
     # Histogramme X
     ax = axes[0, 0]
-    dx = comparison_data.get('displacement_x')
+    dx_path_or_data = comparison_data.get('displacement_x')
+    dx = load_data_if_needed(dx_path_or_data) if dx_path_or_data else None
     if dx is not None:
         # Appliquer le masque d'abord pour obtenir les valeurs valides
         if valid_mask is not None:
@@ -498,7 +516,8 @@ def plot_displacement_histograms(comparison_data: Dict[str, Any], pair_id: str,
     
     # Histogramme Y
     ax = axes[0, 1]
-    dy = comparison_data.get('displacement_y')
+    dy_path_or_data = comparison_data.get('displacement_y')
+    dy = load_data_if_needed(dy_path_or_data) if dy_path_or_data else None
     if dy is not None:
         # Appliquer le masque d'abord
         if valid_mask is not None:
@@ -554,7 +573,8 @@ def plot_displacement_histograms(comparison_data: Dict[str, Any], pair_id: str,
     
     # Histogramme Z
     ax = axes[1, 0]
-    dz = comparison_data.get('displacement_z')
+    dz_path_or_data = comparison_data.get('displacement_z')
+    dz = load_data_if_needed(dz_path_or_data) if dz_path_or_data else None
     if dz is not None:
         # Appliquer le masque d'abord
         if valid_mask is not None:
@@ -610,7 +630,8 @@ def plot_displacement_histograms(comparison_data: Dict[str, Any], pair_id: str,
     
     # Histogramme Magnitude (3D pour mnt_ortho, 2D pour ortho seul)
     ax = axes[1, 1]
-    mag = comparison_data.get('displacement_magnitude')
+    mag_path_or_data = comparison_data.get('displacement_magnitude')
+    mag = load_data_if_needed(mag_path_or_data) if mag_path_or_data else None
     if mag is not None:
         # Appliquer le masque d'abord
         if valid_mask is not None:
@@ -657,7 +678,7 @@ def plot_displacement_histograms(comparison_data: Dict[str, Any], pair_id: str,
                     ax.legend(handles=legend_elements[:len(legend_labels)], fontsize=9, loc='best')
                 
             # Déterminer si c'est 3D ou 2D selon la présence de Z
-            if comparison_data.get('displacement_z') is not None:
+            if comparison_data.get('displacement_z') is not None:  # Peut être un chemin ou None
                 ax.set_xlabel('Magnitude 3D (m)')
                 ax.set_title('Distribution Magnitude 3D', fontsize=12, fontweight='bold')
             else:
