@@ -341,7 +341,8 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
 
 
 def plot_displacement_vectors(comparison_data: Dict[str, Any], pair_id: str,
-                              subsample: int = 10, output_path: Optional[str] = None) -> Figure:
+                              subsample: int = 10, scale_factor: float = 1.0,
+                              output_path: Optional[str] = None) -> Figure:
     """
     Trace un quiver plot des vecteurs de déplacement horizontaux (X, Y).
     
@@ -350,7 +351,8 @@ def plot_displacement_vectors(comparison_data: Dict[str, Any], pair_id: str,
     Args:
         comparison_data: Données de comparaison pour une paire (peut contenir des chemins ou des arrays)
         pair_id: Identifiant de la paire
-        subsample: Facteur de sous-échantillonnage pour les vecteurs
+        subsample: Facteur de sous-échantillonnage pour les vecteurs (résolution)
+        scale_factor: Facteur multiplicatif d'exagération (1.0 = taille normale, 10.0 = 10x plus grandes)
         output_path: Chemin pour sauvegarder la figure (optionnel)
         
     Returns:
@@ -393,9 +395,15 @@ def plot_displacement_vectors(comparison_data: Dict[str, Any], pair_id: str,
     # Calculer la magnitude 2D pour la couleur
     magnitude_2d = np.sqrt(dx_sub**2 + dy_sub**2)
     
-    # Quiver plot (scale réduit par 100 pour rendre les vecteurs plus visibles)
+    # Convertir le facteur multiplicatif en scale matplotlib (inversé)
+    # Scale de base = 0.01, donc scale_factor = 1.0 donne scale = 0.01
+    # scale_factor = 10.0 donne scale = 0.01 / 10 = 0.001 (flèches 10x plus grandes)
+    base_scale = 0.01
+    matplotlib_scale = base_scale / scale_factor if scale_factor > 0 else base_scale
+    
+    # Quiver plot avec paramètres configurables
     quiver = ax.quiver(x, y, dx_sub, dy_sub, magnitude_2d, 
-                       cmap='viridis', angles='xy', scale_units='xy', scale=0.01,
+                       cmap='viridis', angles='xy', scale_units='xy', scale=matplotlib_scale,
                        width=0.003, headwidth=3, headlength=4)
     
     ax.set_title(f'Vecteurs de déplacement (X, Y) - Paire {pair_id}', fontsize=14, fontweight='bold')

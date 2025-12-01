@@ -1091,7 +1091,7 @@ class PhotogrammetryGUI(QWidget):
         new_layout.addWidget(self.new_summary_label)
         new_layout.addStretch(1)
         tabs.addTab(new_tab, "Analyse")
-        
+
         # Onglet 4 : Analyse paire par paire
         pairwise_tab = QWidget()
         pairwise_layout = QVBoxLayout(pairwise_tab)
@@ -1397,6 +1397,36 @@ class PhotogrammetryGUI(QWidget):
         
         self.colorbar_group.setLayout(colorbar_layout)
         control_layout.addWidget(self.colorbar_group)
+        
+        # Contrôles pour les paramètres du quiver plot (pour les vecteurs)
+        self.quiver_params_group = QGroupBox("Paramètres des vecteurs")
+        quiver_params_layout = QVBoxLayout()
+        
+        # Facteur de sous-échantillonnage (résolution)
+        subsample_layout = QHBoxLayout()
+        subsample_layout.addWidget(QLabel("Résolution (subsample) :"))
+        self.quiver_subsample_spin = QSpinBox()
+        self.quiver_subsample_spin.setRange(1, 1000)
+        self.quiver_subsample_spin.setValue(10)
+        self.quiver_subsample_spin.setToolTip("Facteur de sous-échantillonnage : plus grand = moins de flèches affichées")
+        subsample_layout.addWidget(self.quiver_subsample_spin)
+        quiver_params_layout.addLayout(subsample_layout)
+        
+        # Facteur multiplicatif d'exagération
+        scale_layout = QHBoxLayout()
+        scale_layout.addWidget(QLabel("Facteur d'exagération :"))
+        self.quiver_scale_spin = QDoubleSpinBox()
+        self.quiver_scale_spin.setRange(0.1, 10000.0)
+        self.quiver_scale_spin.setValue(1.0)
+        self.quiver_scale_spin.setSingleStep(1.0)
+        self.quiver_scale_spin.setDecimals(1)
+        self.quiver_scale_spin.setToolTip("Facteur multiplicatif : 1.0 = taille normale, 10.0 = flèches 10x plus grandes")
+        scale_layout.addWidget(self.quiver_scale_spin)
+        quiver_params_layout.addLayout(scale_layout)
+        
+        self.quiver_params_group.setLayout(quiver_params_layout)
+        self.quiver_params_group.setVisible(False)
+        control_layout.addWidget(self.quiver_params_group)
         
         # Bouton pour générer le plot
         generate_plot_btn = QPushButton("Générer la visualisation")
@@ -2549,7 +2579,7 @@ module load micmac
 {modules}
 
 {vals['cli_cmd']}
-"""
+""" 
     
     def browse_pairwise_models(self):
         """Ouvre un dialogue pour sélectionner plusieurs orthoimages"""
@@ -2885,14 +2915,17 @@ module load micmac
             self.pair_selection_group.setVisible(False)
             self.matrix_selection_group.setVisible(True)
             self.colorbar_group.setVisible(False)
+            self.quiver_params_group.setVisible(False)
         elif viz_type == "Cartes de déplacement":
             self.pair_selection_group.setVisible(True)
             self.matrix_selection_group.setVisible(False)
             self.colorbar_group.setVisible(True)
-        else:
+            self.quiver_params_group.setVisible(False)
+        else:  # Vecteurs de déplacement
             self.pair_selection_group.setVisible(True)
             self.matrix_selection_group.setVisible(False)
             self.colorbar_group.setVisible(False)
+            self.quiver_params_group.setVisible(True)
     
     def generate_visualization(self):
         """Génère la visualisation selon les paramètres sélectionnés"""
@@ -2954,7 +2987,11 @@ module load micmac
                     QMessageBox.warning(self, "Erreur", f"Données non disponibles pour la paire {pair_id}.")
                     return
                 
-                fig = plot_displacement_vectors(comparison_data, pair_id)
+                # Récupérer les paramètres du quiver plot
+                subsample = self.quiver_subsample_spin.value()
+                scale_factor = self.quiver_scale_spin.value()
+                
+                fig = plot_displacement_vectors(comparison_data, pair_id, subsample=subsample, scale_factor=scale_factor)
                 self.visualization_canvas = FigureCanvas(fig)
                 self.visualization_scroll_area.setWidget(self.visualization_canvas)
                 
