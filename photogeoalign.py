@@ -11,6 +11,14 @@ import subprocess
 import multiprocessing
 import traceback
 
+# Forcer le unbuffering de stdout/stderr pour garantir l'écriture immédiate des logs
+# (particulièrement important sur les clusters où stdout n'est pas un TTY)
+os.environ['PYTHONUNBUFFERED'] = '1'
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(line_buffering=True)
+
 # Protection contre les conflits PROJ/GDAL système sur cluster
 if getattr(sys, 'frozen', False):
     # Si on est dans un exécutable PyInstaller, nettoyer les variables d'environnement système

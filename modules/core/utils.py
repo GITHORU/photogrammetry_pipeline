@@ -24,20 +24,49 @@ def setup_logger(log_path=None):
 
 def run_command(cmd, logger, cwd=None):
     logger.info(f"Commande lancée : {' '.join(cmd)}")
+    # Forcer le flush immédiat des logs
+    for handler in logger.handlers:
+        handler.flush()
+    
     try:
         creationflags = 0
         if os.name == 'nt':
             import subprocess as sp
             creationflags = sp.CREATE_NO_WINDOW
+        
+        # Préparer l'environnement avec unbuffering forcé
+        env = dict(os.environ)
+        env['PYTHONUNBUFFERED'] = '1'
+        
+        # Sur Linux/Unix, essayer d'utiliser stdbuf pour forcer le unbuffering des processus externes
+        # (notamment pour MicMac qui peut bufferiser ses sorties)
+        original_cmd = cmd
+        if os.name != 'nt':  # Pas sur Windows
+            # Vérifier si stdbuf est disponible
+            try:
+                subprocess.run(['stdbuf', '--version'], 
+                             stdout=subprocess.PIPE, 
+                             stderr=subprocess.PIPE, 
+                             timeout=1)
+                # stdbuf disponible, l'utiliser pour forcer unbuffering
+                cmd = ['stdbuf', '-o0', '-e0'] + list(cmd)
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                # stdbuf non disponible, continuer sans
+                pass
+        
         process = subprocess.Popen(
             cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, universal_newlines=True,
+            text=True, bufsize=0, universal_newlines=True,  # bufsize=0 = unbuffered
             creationflags=creationflags,
-            stdin=subprocess.PIPE
+            stdin=subprocess.PIPE,
+            env=env
         )
         if process.stdout is not None:
             for line in process.stdout:
                 logger.info(line.rstrip())
+                # Forcer le flush immédiat après chaque ligne pour garantir l'écriture
+                for handler in logger.handlers:
+                    handler.flush()
                 if 'Warn tape enter to continue' in line:
                     try:
                         if process.stdin is not None:
@@ -46,12 +75,18 @@ def run_command(cmd, logger, cwd=None):
                     except Exception:
                         pass
         process.wait()
+        # Flush final pour s'assurer que tous les logs sont écrits
+        for handler in logger.handlers:
+            handler.flush()
         if process.returncode != 0:
-            logger.error(f"Erreur lors de l'exécution de la commande : {' '.join(cmd)} (code {process.returncode})")
-            raise subprocess.CalledProcessError(process.returncode, cmd)
+            logger.error(f"Erreur lors de l'exécution de la commande : {' '.join(original_cmd)} (code {process.returncode})")
+            raise subprocess.CalledProcessError(process.returncode, original_cmd)
     except subprocess.CalledProcessError as e:
-        logger.error(f"Erreur lors de l'exécution de la commande : {' '.join(cmd)}")
+        logger.error(f"Erreur lors de l'exécution de la commande : {' '.join(original_cmd)}")
         logger.error(f"Code retour : {e.returncode}")
+        # Flush final en cas d'erreur
+        for handler in logger.handlers:
+            handler.flush()
         raise
 
 def to_micmac_path(path):
