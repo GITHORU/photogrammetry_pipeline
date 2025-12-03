@@ -2578,7 +2578,8 @@ module load micmac
 
 {modules}
 
-{vals['cli_cmd']}
+# Rediriger stderr vers stdout pour capturer tous les logs dans le fichier .out
+{vals['cli_cmd']} 2>&1
 """ 
     
     def browse_pairwise_models(self):

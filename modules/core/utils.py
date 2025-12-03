@@ -8,8 +8,8 @@ def setup_logger(log_path=None):
     logger = logging.getLogger("PhotogrammetryPipeline")
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    # Console handler (INFO et plus)
-    ch = logging.StreamHandler()
+    # Console handler (INFO et plus) - écrire vers stdout pour que SLURM capture les logs dans le fichier .out
+    ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
     if not logger.handlers:
