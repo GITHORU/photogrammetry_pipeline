@@ -4,6 +4,7 @@ Thread de travail pour le pipeline d'analyse paire par paire
 """
 
 import os
+import sys
 import logging
 from PySide6.QtCore import QThread, Signal
 from ..core.analysis import run_pairwise_analysis_pipeline
@@ -36,6 +37,12 @@ class PairwiseAnalysisThread(QThread):
         # Configuration du logger
         self.logger = logging.getLogger(f"PairwiseAnalysisPipeline_{id(self)}")
         self.logger.setLevel(logging.INFO)
+        
+        # Handler pour écrire dans stdout (capturé par SLURM dans le fichier .out)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        self.logger.addHandler(console_handler)
         
         # Handler pour envoyer les logs vers l'interface
         self.qt_handler = QtLogHandler(self.log_signal)

@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from PySide6.QtCore import QThread, Signal
 from ..core.micmac import (
     run_micmac_tapioca, run_micmac_tapas, run_micmac_c3dc,
@@ -41,6 +42,21 @@ class PipelineThread(QThread):
         logger = logging.getLogger(f"PhotogrammetryPipeline_{id(self)}")
         logger.setLevel(logging.DEBUG)
         logger.handlers = []
+        
+        # Handler pour écrire dans stdout (capturé par SLURM dans le fichier .out)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(console_handler)
+        
+        # Handler pour écrire dans le fichier .log
+        log_path = os.path.join(self.input_dir, 'photogrammetry_pipeline.log')
+        file_handler = logging.FileHandler(log_path, encoding='utf-8')
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+        
+        # Handler pour l'interface graphique (Qt)
         qt_handler = QtLogHandler(self.log_signal)
         qt_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logger.addHandler(qt_handler)
