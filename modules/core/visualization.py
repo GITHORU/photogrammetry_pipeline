@@ -236,7 +236,7 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
             else:
                 dx_masked = dx
             
-            im = ax.imshow(dx_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
+            im = ax.imshow(dx_masked, cmap='RdBu_r', aspect='equal', vmin=vmin, vmax=vmax)
             ax.set_title('Déplacement X (m)', fontsize=12, fontweight='bold')
             ax.set_xlabel('Colonne (pixels)')
             ax.set_ylabel('Ligne (pixels)')
@@ -261,7 +261,7 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
             else:
                 dy_masked = dy
             
-            im = ax.imshow(dy_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
+            im = ax.imshow(dy_masked, cmap='RdBu_r', aspect='equal', vmin=vmin, vmax=vmax)
             ax.set_title('Déplacement Y (m)', fontsize=12, fontweight='bold')
             ax.set_xlabel('Colonne (pixels)')
             ax.set_ylabel('Ligne (pixels)')
@@ -286,7 +286,7 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
             else:
                 dz_masked = dz
             
-            im = ax.imshow(dz_masked, cmap='RdBu_r', aspect='auto', vmin=vmin, vmax=vmax)
+            im = ax.imshow(dz_masked, cmap='RdBu_r', aspect='equal', vmin=vmin, vmax=vmax)
             ax.set_title('Déplacement Z (m)', fontsize=12, fontweight='bold')
             ax.set_xlabel('Colonne (pixels)')
             ax.set_ylabel('Ligne (pixels)')
@@ -311,7 +311,7 @@ def plot_displacement_maps(comparison_data: Dict[str, Any], pair_id: str,
             else:
                 mag_masked = mag
             
-            im = ax.imshow(mag_masked, cmap='viridis', aspect='auto', vmin=vmin, vmax=vmax)
+            im = ax.imshow(mag_masked, cmap='viridis', aspect='equal', vmin=vmin, vmax=vmax)
             # Déterminer si c'est 3D ou 2D selon la présence de Z
             dz_path_or_data = comparison_data.get('displacement_z')
             if dz_path_or_data is not None:

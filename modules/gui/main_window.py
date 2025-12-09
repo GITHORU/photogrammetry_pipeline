@@ -1428,6 +1428,11 @@ class PhotogrammetryGUI(QWidget):
         self.quiver_params_group.setVisible(False)
         control_layout.addWidget(self.quiver_params_group)
         
+        # Option pour générer tous les graphiques
+        self.generate_all_plots_cb = QCheckBox("Générer tous les graphiques")
+        self.generate_all_plots_cb.setToolTip("Si coché, génère tous les graphiques disponibles (toutes les paires et toutes les matrices) en un seul job")
+        control_layout.addWidget(self.generate_all_plots_cb)
+        
         # Bouton pour générer le plot
         generate_plot_btn = QPushButton("Générer la visualisation")
         generate_plot_btn.clicked.connect(self.generate_visualization)
@@ -1451,6 +1456,19 @@ class PhotogrammetryGUI(QWidget):
         splitter.setSizes([300, 700])
         
         visualization_layout.addWidget(splitter)
+        
+        # Ligne de commande CLI équivalente
+        self.plot_cmd_label = QLabel("Ligne de commande CLI équivalente :")
+        visualization_layout.addWidget(self.plot_cmd_label)
+        self.plot_cmd_line = QLineEdit()
+        self.plot_cmd_line.setReadOnly(True)
+        self.plot_cmd_line.setStyleSheet("font-family: monospace;")
+        visualization_layout.addWidget(self.plot_cmd_line)
+        
+        # Bouton pour exporter le job script
+        export_plot_job_btn = QPushButton("Exporter le batch .job")
+        export_plot_job_btn.clicked.connect(self.export_plot_job_dialog)
+        visualization_layout.addWidget(export_plot_job_btn)
         
         # Stockage des résultats chargés
         self.visualization_results = None
@@ -1500,6 +1518,19 @@ class PhotogrammetryGUI(QWidget):
         
         # Initialiser la ligne de commande
         self.update_pairwise_cmd_line()
+        
+        # Connexions pour la mise à jour de la ligne de commande CLI des plots
+        self.viz_type_combo.currentIndexChanged.connect(self.update_plot_cmd_line)
+        self.pair_combo.currentTextChanged.connect(self.update_plot_cmd_line)
+        self.matrix_combo.currentTextChanged.connect(self.update_plot_cmd_line)
+        self.visualization_results_dir_edit.textChanged.connect(self.update_plot_cmd_line)
+        self.colorbar_min_spin.valueChanged.connect(self.update_plot_cmd_line)
+        self.colorbar_max_spin.valueChanged.connect(self.update_plot_cmd_line)
+        self.colorbar_min_checkbox.toggled.connect(self.update_plot_cmd_line)
+        self.colorbar_max_checkbox.toggled.connect(self.update_plot_cmd_line)
+        self.quiver_subsample_spin.valueChanged.connect(self.update_plot_cmd_line)
+        self.quiver_scale_spin.valueChanged.connect(self.update_plot_cmd_line)
+        self.generate_all_plots_cb.toggled.connect(self.update_plot_cmd_line)
         
         # Connexions
         self.dir_edit.textChanged.connect(self.update_cmd_line)
@@ -2561,6 +2592,11 @@ module load micmac
             modules = """module purge
 # L'exécutable Python est détecté automatiquement par le script
 # Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""
+        elif pipeline_type == "plot":
+            # Pour les visualisations
+            modules = """module purge
+# L'exécutable Python est détecté automatiquement par le script
+# Pas besoin de module load python/3.9 car on utilise un venv ou un exécutable"""
         else:
             # Pour le pipeline MicMac
             modules = """module purge
@@ -2768,6 +2804,126 @@ module load micmac
                 except Exception as e:
                     QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
     
+    def update_plot_cmd_line(self):
+        """Met à jour la ligne de commande CLI pour les visualisations"""
+        if not self.visualization_results_dir_edit.text().strip():
+            self.plot_cmd_line.setText("")
+            return
+        
+        results_dir = self.visualization_results_dir_edit.text().strip()
+        
+        cmd_parts = ["python", "photogeoalign.py", "--plot", "--no-gui"]
+        cmd_parts.append(f"--results-dir=\"{results_dir}\"")
+        
+        # Si "Générer tous les graphiques" est coché
+        if self.generate_all_plots_cb.isChecked():
+            cmd_parts.append("--all")
+            # Ajouter les paramètres généraux qui s'appliquent à tous les graphiques
+            if not self.colorbar_min_checkbox.isChecked():
+                cmd_parts.append(f"--vmin={self.colorbar_min_spin.value()}")
+            if not self.colorbar_max_checkbox.isChecked():
+                cmd_parts.append(f"--vmax={self.colorbar_max_spin.value()}")
+            cmd_parts.append(f"--quiver-subsample={self.quiver_subsample_spin.value()}")
+            cmd_parts.append(f"--quiver-scale={self.quiver_scale_spin.value()}")
+        else:
+            # Mode normal : un seul type de graphique
+            viz_type = self.viz_type_combo.currentText()
+            
+            # Type de visualisation
+            if viz_type == "Cartes de déplacement":
+                cmd_parts.append("--plot-type=maps")
+                pair_id = self.pair_combo.currentText()
+                if pair_id:
+                    cmd_parts.append(f"--pair-id=\"{pair_id}\"")
+                # Bornes de couleur
+                if not self.colorbar_min_checkbox.isChecked():
+                    cmd_parts.append(f"--vmin={self.colorbar_min_spin.value()}")
+                if not self.colorbar_max_checkbox.isChecked():
+                    cmd_parts.append(f"--vmax={self.colorbar_max_spin.value()}")
+            elif viz_type == "Vecteurs de déplacement":
+                cmd_parts.append("--plot-type=vectors")
+                pair_id = self.pair_combo.currentText()
+                if pair_id:
+                    cmd_parts.append(f"--pair-id=\"{pair_id}\"")
+                cmd_parts.append(f"--quiver-subsample={self.quiver_subsample_spin.value()}")
+                cmd_parts.append(f"--quiver-scale={self.quiver_scale_spin.value()}")
+            elif viz_type == "Matrices de comparaison":
+                cmd_parts.append("--plot-type=matrix")
+                matrix_name = self.matrix_combo.currentText()
+                # Mapping des noms vers les clés
+                matrix_key_map = {
+                    "Déplacement 3D - Moyenne": "displacement_mean_3d",
+                    "Déplacement 3D - Médiane": "displacement_median_3d",
+                    "Déplacement 3D - Écart-type": "displacement_std_3d",
+                    "Déplacement 3D - Maximum": "displacement_max_3d",
+                    "Déplacement 3D - P95": "displacement_p95_3d",
+                    "Déplacement 3D - P99": "displacement_p99_3d",
+                    "Déplacement X - Moyenne": "displacement_x_mean",
+                    "Déplacement Y - Moyenne": "displacement_y_mean",
+                    "Déplacement Z - Moyenne": "displacement_z_mean",
+                    "Déplacement X - Médiane": "displacement_x_median",
+                    "Déplacement Y - Médiane": "displacement_y_median",
+                    "Déplacement Z - Médiane": "displacement_z_median",
+                    "Déplacement X - Écart-type": "displacement_x_std",
+                    "Déplacement Y - Écart-type": "displacement_y_std",
+                    "Déplacement Z - Écart-type": "displacement_z_std",
+                    "RMSE": "rmse",
+                    "MAE": "mae",
+                    "Couverture": "coverage",
+                }
+                matrix_key = matrix_key_map.get(matrix_name)
+                if matrix_key:
+                    cmd_parts.append(f"--matrix-key=\"{matrix_key}\"")
+        
+        # Dossier de sortie pour les PNG (par défaut le même que results_dir)
+        cmd_parts.append(f"--output-dir=\"{results_dir}\"")
+        
+        cmd = " ".join(cmd_parts)
+        self.plot_cmd_line.setText(cmd)
+    
+    def export_plot_job_dialog(self):
+        """Exporte le job pour les visualisations"""
+        import sys
+        import os
+        
+        cli_cmd = self.plot_cmd_line.text().strip()
+        
+        if not cli_cmd:
+            QMessageBox.warning(self, "Erreur", "Veuillez d'abord charger les résultats et configurer la visualisation.")
+            return
+        
+        parts = cli_cmd.split()
+        # On retire le premier mot (python ou exe)
+        args = parts[1:]
+        # On retire tout photogeoalign.py
+        filtered_args = [arg for arg in args if not arg.endswith('photogeoalign.py') and not arg.endswith('photogeoalign.py"')]
+        
+        if getattr(sys, 'frozen', False):
+            # Cas exécutable PyInstaller - utiliser sys.executable (chemin réel exe)
+            exe_path = sys.executable
+            cmd = [exe_path] + filtered_args
+        else:
+            # Cas Python - utiliser le script principal
+            exe_path = sys.executable
+            # Trouver photogeoalign.py dans le répertoire parent du projet
+            current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            script_path = os.path.join(current_dir, 'photogeoalign.py')
+            cmd = [exe_path, script_path] + filtered_args
+        
+        cli_cmd = " ".join(cmd)
+        dialog = JobExportDialog(self, job_name="PhotoGeoAlign_Plot", output="PhotoGeoAlign_Plot.out", ntasks=1, cli_cmd=cli_cmd)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            vals = dialog.get_values()
+            job_content = self.generate_job_script(vals, "plot")
+            file_path, _ = QFileDialog.getSaveFileName(self, "Enregistrer le script .job", "plot.job", "Fichiers batch (*.out *.job *.sh)")
+            if file_path:
+                try:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(job_content)
+                    QMessageBox.information(self, "Export réussi", f"Script batch exporté :\n{file_path}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur", f"Erreur lors de l'export : {e}")
+    
     def launch_pairwise_analysis(self):
         """Lance le pipeline d'analyse paire par paire"""
         # Vider les logs avant de commencer (comme les autres pipelines)
@@ -2903,6 +3059,9 @@ module load micmac
             QMessageBox.information(self, "Succès", 
                                   f"Résultats chargés : {len(self.visualization_results.get('comparisons', {}))} comparaisons, "
                                   f"{len(self.visualization_results.get('matrices', {}))} matrices disponibles.")
+            
+            # Mettre à jour la ligne de commande CLI
+            self.update_plot_cmd_line()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Erreur lors du chargement des résultats : {str(e)}")
             import traceback
@@ -2912,6 +3071,7 @@ module load micmac
         """Met à jour les contrôles selon le type de visualisation sélectionné"""
         viz_type = self.viz_type_combo.currentText()
         
+        # La checkbox "Générer tous les graphiques" n'affecte que l'export du job, pas l'interface
         if viz_type == "Matrices de comparaison":
             self.pair_selection_group.setVisible(False)
             self.matrix_selection_group.setVisible(True)

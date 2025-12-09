@@ -307,6 +307,18 @@ if __name__ == "__main__":
         parser.add_argument('--mnts', nargs='+', default=[], help='Liste des chemins vers les MNTs pour l\'analyse paire par paire (requis si --type=mnt_ortho)')
         parser.add_argument('--pairwise-max-workers', type=int, default=None, help='Nombre maximum de workers parallèles pour l\'analyse paire par paire (défaut: utilise tous les CPUs disponibles)')
         
+        # Arguments pour les visualisations
+        parser.add_argument('--plot', action='store_true', help='Générer des visualisations à partir des résultats d\'analyse')
+        parser.add_argument('--results-dir', default='', help='Dossier contenant les résultats d\'analyse paire par paire')
+        parser.add_argument('--all', action='store_true', help='Générer tous les graphiques disponibles (toutes les paires et toutes les matrices)')
+        parser.add_argument('--plot-type', choices=['maps', 'vectors', 'matrix'], default='maps', help='Type de visualisation (défaut: maps)')
+        parser.add_argument('--pair-id', default='', help='Identifiant de la paire pour les cartes/vecteurs (ex: "0_vs_1")')
+        parser.add_argument('--matrix-key', default='', help='Clé de la matrice pour les matrices de comparaison')
+        parser.add_argument('--vmin', type=float, default=None, help='Valeur minimale pour l\'échelle de couleur')
+        parser.add_argument('--vmax', type=float, default=None, help='Valeur maximale pour l\'échelle de couleur')
+        parser.add_argument('--quiver-subsample', type=int, default=10, help='Facteur de sous-échantillonnage pour les vecteurs (défaut: 10)')
+        parser.add_argument('--quiver-scale', type=float, default=1.0, help='Facteur d\'exagération pour les vecteurs (défaut: 1.0)')
+        
         args = parser.parse_args()
         if args.geodetic:
             # Mode transformations géodésiques
@@ -576,6 +588,159 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
                 sys.exit(1)
+        elif args.plot:
+            # Mode génération de visualisations
+            if not args.results_dir or not os.path.isdir(args.results_dir):
+                print("Erreur : veuillez spécifier un dossier de résultats valide.")
+                sys.exit(1)
+            
+            from modules.core.visualization import (
+                load_pairwise_results, plot_displacement_maps,
+                plot_displacement_vectors, plot_comparison_matrix
+            )
+            
+            # Charger les résultats
+            results = load_pairwise_results(args.results_dir)
+            if results is None:
+                print("Erreur : impossible de charger les résultats depuis le dossier spécifié.")
+                sys.exit(1)
+            
+            # Déterminer le dossier de sortie
+            output_dir = args.output_dir if args.output_dir else args.results_dir
+            
+            import matplotlib.pyplot as plt
+            
+            # Si --all est activé, générer tous les graphiques
+            if args.all:
+                print("Génération de tous les graphiques disponibles...")
+                
+                # Générer toutes les cartes de déplacement pour toutes les paires
+                comparisons = results.get('comparisons', {})
+                if comparisons:
+                    print(f"\nGénération des cartes de déplacement ({len(comparisons)} paires)...")
+                    for pair_id in sorted(comparisons.keys()):
+                        comparison_data = comparisons.get(pair_id)
+                        if comparison_data is None:
+                            print(f"  ⚠ Paire {pair_id} : données non disponibles, ignorée")
+                            continue
+                        
+                        output_path = os.path.join(output_dir, f"displacement_maps_{pair_id}.png")
+                        try:
+                            fig = plot_displacement_maps(comparison_data, pair_id, 
+                                                         output_path=output_path,
+                                                         vmin=args.vmin, vmax=args.vmax)
+                            print(f"  ✓ Carte de déplacement sauvegardée : {output_path}")
+                            plt.close(fig)
+                        except Exception as e:
+                            print(f"  ✗ Erreur pour la paire {pair_id} : {e}")
+                    
+                    # Générer tous les vecteurs de déplacement pour toutes les paires
+                    print(f"\nGénération des vecteurs de déplacement ({len(comparisons)} paires)...")
+                    for pair_id in sorted(comparisons.keys()):
+                        comparison_data = comparisons.get(pair_id)
+                        if comparison_data is None:
+                            print(f"  ⚠ Paire {pair_id} : données non disponibles, ignorée")
+                            continue
+                        
+                        output_path = os.path.join(output_dir, f"displacement_vectors_{pair_id}.png")
+                        try:
+                            fig = plot_displacement_vectors(comparison_data, pair_id,
+                                                           subsample=args.quiver_subsample,
+                                                           scale_factor=args.quiver_scale,
+                                                           output_path=output_path)
+                            print(f"  ✓ Vecteurs de déplacement sauvegardés : {output_path}")
+                            plt.close(fig)
+                        except Exception as e:
+                            print(f"  ✗ Erreur pour la paire {pair_id} : {e}")
+                else:
+                    print("  ⚠ Aucune comparaison disponible")
+                
+                # Générer toutes les matrices de comparaison
+                matrices = results.get('matrices', {})
+                if matrices:
+                    print(f"\nGénération des matrices de comparaison ({len(matrices)} matrices)...")
+                    model_mapping = results.get('model_mapping', {})
+                    n_models = len(model_mapping)
+                    model_labels = [f"Modèle {i}" for i in range(n_models)]
+                    
+                    for matrix_key in sorted(matrices.keys()):
+                        matrix = matrices.get(matrix_key)
+                        if matrix is None:
+                            print(f"  ⚠ Matrice {matrix_key} : données non disponibles, ignorée")
+                            continue
+                        
+                        output_path = os.path.join(output_dir, f"matrix_{matrix_key}.png")
+                        try:
+                            fig = plot_comparison_matrix(matrix, matrix_key, model_labels,
+                                                        output_path=output_path)
+                            print(f"  ✓ Matrice sauvegardée : {output_path}")
+                            plt.close(fig)
+                        except Exception as e:
+                            print(f"  ✗ Erreur pour la matrice {matrix_key} : {e}")
+                else:
+                    print("  ⚠ Aucune matrice disponible")
+                
+                print("\n✓ Génération de tous les graphiques terminée avec succès !")
+            else:
+                # Mode normal : un seul type de graphique
+                if args.plot_type == "maps":
+                    if not args.pair_id:
+                        print("Erreur : --pair-id est requis pour --plot-type=maps")
+                        sys.exit(1)
+                    
+                    comparison_data = results['comparisons'].get(args.pair_id)
+                    if comparison_data is None:
+                        print(f"Erreur : données non disponibles pour la paire {args.pair_id}")
+                        sys.exit(1)
+                    
+                    output_path = os.path.join(output_dir, f"displacement_maps_{args.pair_id}.png")
+                    fig = plot_displacement_maps(comparison_data, args.pair_id, 
+                                                 output_path=output_path,
+                                                 vmin=args.vmin, vmax=args.vmax)
+                    print(f"Visualisation sauvegardée : {output_path}")
+                    plt.close(fig)
+                    
+                elif args.plot_type == "vectors":
+                    if not args.pair_id:
+                        print("Erreur : --pair-id est requis pour --plot-type=vectors")
+                        sys.exit(1)
+                    
+                    comparison_data = results['comparisons'].get(args.pair_id)
+                    if comparison_data is None:
+                        print(f"Erreur : données non disponibles pour la paire {args.pair_id}")
+                        sys.exit(1)
+                    
+                    output_path = os.path.join(output_dir, f"displacement_vectors_{args.pair_id}.png")
+                    fig = plot_displacement_vectors(comparison_data, args.pair_id,
+                                                   subsample=args.quiver_subsample,
+                                                   scale_factor=args.quiver_scale,
+                                                   output_path=output_path)
+                    print(f"Visualisation sauvegardée : {output_path}")
+                    plt.close(fig)
+                    
+                elif args.plot_type == "matrix":
+                    if not args.matrix_key:
+                        print("Erreur : --matrix-key est requis pour --plot-type=matrix")
+                        sys.exit(1)
+                    
+                    matrices = results.get('matrices', {})
+                    matrix = matrices.get(args.matrix_key)
+                    if matrix is None:
+                        print(f"Erreur : matrice {args.matrix_key} non trouvée")
+                        sys.exit(1)
+                    
+                    # Générer les labels des modèles
+                    model_mapping = results.get('model_mapping', {})
+                    n_models = len(model_mapping)
+                    model_labels = [f"Modèle {i}" for i in range(n_models)]
+                    
+                    output_path = os.path.join(output_dir, f"matrix_{args.matrix_key}.png")
+                    fig = plot_comparison_matrix(matrix, args.matrix_key, model_labels,
+                                                output_path=output_path)
+                    print(f"Visualisation sauvegardée : {output_path}")
+                    plt.close(fig)
+                
+                print("Génération des visualisations terminée avec succès !")
         elif args.no_gui:
             # Mode pipeline photogrammétrique
             check_micmac_or_quit()
